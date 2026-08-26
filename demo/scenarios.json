@@ -1,0 +1,582 @@
+{
+  "captured_at": "2026-08-26T14:50:23.121041+00:00",
+  "note": "This file is a REAL, live-verified transcript of the actual system's output, captured by querying the running API (not hand-written). Conditions are dynamic: re-run scripts/generate_demo_scenarios.py before the real presentation to refresh these against current sea state. Never hardcode a response path in orca/api.py or orca/planner.py keyed off these query strings -- the API must always compute live from data/cache/, or this file becomes exactly the 'hardcoded string' failure the war plan warns about (S8.4).",
+  "health_at_capture": {
+    "status": "ok",
+    "offline_mode": false,
+    "cache_age_min": 11,
+    "cache_observation_count": 42
+  },
+  "scenarios": [
+    {
+      "query_zone": "Zone A",
+      "lat": 10.76,
+      "lon": 79.84,
+      "response": {
+        "id": "rec_0f831e71",
+        "action": "GO",
+        "reason": "Elevated chlorophyll (1.75 mg/m\u00b3) and warm SST (30.3\u00b0C) suggest fish aggregation",
+        "recommendation": "Go to Zone A. Elevated chlorophyll (1.75 mg/m\u00b3) and warm SST (30.3\u00b0C) suggest fish aggregation.",
+        "chosen_zone": {
+          "name": "Zone A",
+          "lat": 10.76,
+          "lon": 79.84
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.75225,
+            "unit": "mg m^-3",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-07-28T12:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:06.172368+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 41760,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.61):(10.91)][(79.69):(79.99000000000001)]",
+            "id": "obs_69a21ec9c9"
+          },
+          {
+            "variable": "sst_c",
+            "value": 30.3,
+            "unit": "\u00b0C",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_c97a9cce53"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.0,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_ecf89379b1"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 18.5,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_54084a9d58"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_1f13ffe28d"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.46,
+            "unit": "m",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7cdb151cbd"
+          }
+        ],
+        "offline_mode": false
+      }
+    },
+    {
+      "query_zone": "Zone B",
+      "lat": 10.85,
+      "lon": 79.95,
+      "response": {
+        "id": "rec_3600777c",
+        "action": "SAFER ALTERNATIVE",
+        "reason": "Wind 27.2 km/h, rain 0.0mm",
+        "recommendation": "Do not go to Zone B \u2014 Wind 27.2 km/h, rain 0.0mm. Go to Zone A instead.",
+        "chosen_zone": {
+          "name": "Zone A",
+          "lat": 10.76,
+          "lon": 79.84
+        },
+        "overridden": [
+          {
+            "agent": "eo_satellite_agent",
+            "reason": "Elevated chlorophyll (1.78 mg/m\u00b3) and warm SST (29.4\u00b0C) suggest fish aggregation"
+          },
+          {
+            "agent": "ocean_state_agent",
+            "reason": "SST 29.4\u00b0C within productive range, current 0.3 km/h"
+          }
+        ],
+        "evidence": [
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.7777863285714286,
+            "unit": "mg m^-3",
+            "lat": 10.85,
+            "lon": 79.95,
+            "valid_time": "2026-07-28T12:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:06.172368+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 41760,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.7):(11.0)][(79.8):(80.10000000000001)]",
+            "id": "obs_9ba1e90895"
+          },
+          {
+            "variable": "sst_c",
+            "value": 29.4,
+            "unit": "\u00b0C",
+            "lat": 10.85,
+            "lon": 79.95,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.85&longitude=79.95&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_e480b83968"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.3,
+            "unit": "km/h",
+            "lat": 10.85,
+            "lon": 79.95,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.85&longitude=79.95&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_f20246cc4e"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 27.2,
+            "unit": "km/h",
+            "lat": 10.85,
+            "lon": 79.95,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.85&longitude=79.95&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_cd25c1e87e"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 10.85,
+            "lon": 79.95,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.85&longitude=79.95&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_8ae3596611"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.52,
+            "unit": "m",
+            "lat": 10.85,
+            "lon": 79.95,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.85&longitude=79.95&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_a57ae34763"
+          },
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.75225,
+            "unit": "mg m^-3",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-07-28T12:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:06.172368+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 41760,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.61):(10.91)][(79.69):(79.99000000000001)]",
+            "id": "obs_69a21ec9c9"
+          },
+          {
+            "variable": "sst_c",
+            "value": 30.3,
+            "unit": "\u00b0C",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_c97a9cce53"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.0,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_ecf89379b1"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 18.5,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_54084a9d58"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_1f13ffe28d"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.46,
+            "unit": "m",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7cdb151cbd"
+          }
+        ],
+        "offline_mode": false
+      }
+    },
+    {
+      "query_zone": "Zone C",
+      "lat": 11.5,
+      "lon": 80.2,
+      "response": {
+        "id": "rec_9ab6c516",
+        "action": "GO",
+        "reason": "SST 29.2\u00b0C within productive range, current 0.8 km/h",
+        "recommendation": "Go to Zone C. SST 29.2\u00b0C within productive range, current 0.8 km/h.",
+        "chosen_zone": {
+          "name": "Zone C",
+          "lat": 11.5,
+          "lon": 80.2
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "sst_c",
+            "value": 29.2,
+            "unit": "\u00b0C",
+            "lat": 11.5,
+            "lon": 80.2,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=11.5&longitude=80.2&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_1ba4397a43"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.8,
+            "unit": "km/h",
+            "lat": 11.5,
+            "lon": 80.2,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=11.5&longitude=80.2&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_9341bdabe6"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 23.6,
+            "unit": "km/h",
+            "lat": 11.5,
+            "lon": 80.2,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.5&longitude=80.2&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_090aa086db"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 11.5,
+            "lon": 80.2,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.5&longitude=80.2&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_94feaef866"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 1.32,
+            "unit": "m",
+            "lat": 11.5,
+            "lon": 80.2,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=11.5&longitude=80.2&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7ed43c94e2"
+          }
+        ],
+        "offline_mode": false
+      }
+    },
+    {
+      "query_zone": "Zone D",
+      "lat": 12.8,
+      "lon": 80.5,
+      "response": {
+        "id": "rec_78fac9a2",
+        "action": "SAFER ALTERNATIVE",
+        "reason": "Wind 25.0 km/h, rain 0.0mm",
+        "recommendation": "Do not go to Zone D \u2014 Wind 25.0 km/h, rain 0.0mm. Go to Zone A instead.",
+        "chosen_zone": {
+          "name": "Zone A",
+          "lat": 10.76,
+          "lon": 79.84
+        },
+        "overridden": [
+          {
+            "agent": "ocean_state_agent",
+            "reason": "SST 29.1\u00b0C within productive range, current 1.5 km/h"
+          }
+        ],
+        "evidence": [
+          {
+            "variable": "sst_c",
+            "value": 29.1,
+            "unit": "\u00b0C",
+            "lat": 12.8,
+            "lon": 80.5,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=12.8&longitude=80.5&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_e1a1976b30"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 1.5,
+            "unit": "km/h",
+            "lat": 12.8,
+            "lon": 80.5,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=12.8&longitude=80.5&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_db2fa971b0"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 25.0,
+            "unit": "km/h",
+            "lat": 12.8,
+            "lon": 80.5,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=12.8&longitude=80.5&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_01564e6465"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 12.8,
+            "lon": 80.5,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=12.8&longitude=80.5&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_76f94b6afb"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 1.54,
+            "unit": "m",
+            "lat": 12.8,
+            "lon": 80.5,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=12.8&longitude=80.5&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7a36762ce4"
+          },
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.75225,
+            "unit": "mg m^-3",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-07-28T12:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:06.172368+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 41760,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.61):(10.91)][(79.69):(79.99000000000001)]",
+            "id": "obs_69a21ec9c9"
+          },
+          {
+            "variable": "sst_c",
+            "value": 30.3,
+            "unit": "\u00b0C",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_c97a9cce53"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.0,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_ecf89379b1"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 18.5,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_54084a9d58"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_1f13ffe28d"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.46,
+            "unit": "m",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7cdb151cbd"
+          }
+        ],
+        "offline_mode": false
+      }
+    }
+  ]
+}

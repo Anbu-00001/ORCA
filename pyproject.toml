@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+markers = [
+    "integration: touches a real network service; skips itself if unreachable",
+]

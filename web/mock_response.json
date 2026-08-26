@@ -1,0 +1,44 @@
+{
+  "id": "rec_123456",
+  "action": "SAFER ALTERNATIVE",
+  "reason": "Opportunity overridden by hazard: significant wave height 3.1 m at Zone A exceeds safety threshold (2.5 m).",
+  "recommendation": "Do not go to Zone A. Go to Zone B — lower expected catch, wave height 1.4 m.",
+  "chosen_zone": {
+    "name": "Zone B",
+    "lat": 10.85,
+    "lon": 79.95
+  },
+  "overridden": [
+    {
+      "agent": "ocean_state_agent",
+      "reason": "Zone A recommended based on SST (28.4°C) & high chlorophyll"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "obs_wave_01",
+      "variable": "wave_height_m",
+      "value": 3.1,
+      "unit": "m",
+      "lat": 10.76,
+      "lon": 79.84,
+      "valid_time": "2026-08-26T04:00:00Z",
+      "source": "Open-Meteo Marine",
+      "confidence": 0.71,
+      "provenance": "https://marine-api.open-meteo.com/v1/marine"
+    },
+    {
+      "id": "obs_sst_01",
+      "variable": "sst_c",
+      "value": 28.4,
+      "unit": "°C",
+      "lat": 10.76,
+      "lon": 79.84,
+      "valid_time": "2026-08-26T04:00:00Z",
+      "source": "Open-Meteo Marine",
+      "confidence": 0.9,
+      "provenance": "https://marine-api.open-meteo.com/v1/marine"
+    }
+  ],
+  "offline_mode": false
+}

@@ -1,0 +1,12 @@
+{
+  "name": "orca-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright e2e tests for ORCA's web/index.html against the real FastAPI backend",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

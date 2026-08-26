@@ -1,0 +1,86 @@
+"""FastAPI surface: POST /ask, GET /evidence/{id}, GET /health.
+
+Matches API_CONTRACT.md. Every number in every response traces to a
+MarineObservation id via /evidence/{id} (CLAUDE.md rule 3). This module
+reads only from data/cache/ through orca.planner — it makes no network
+calls itself (CLAUDE.md rule 8; data/fetch.py is the only file allowed
+to touch the network).
+
+Does not modify orca/schema.py or orca/policy.py.
+"""
+from __future__ import annotations
+
+import socket
+from datetime import datetime, timezone
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from orca.planner import build_recommendation, load_cached_observations, observation_id
+
+app = FastAPI(title="ORCA", description="Marine advisory reasoning layer")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class AskRequest(BaseModel):
+    query: str
+    lat: float
+    lon: float
+
+
+def _is_reachable(host: str = "marine-api.open-meteo.com", port: int = 443, timeout: float = 0.75) -> bool:
+    """Best-effort connectivity probe for the /health "offline_mode" badge
+    ONLY. Never used to change what /ask or /evidence serve — both always
+    read data/cache/ regardless of this result (CLAUDE.md rule 8).
+    """
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+        return False  # reachable => not offline
+    except OSError:
+        return True
+
+
+@app.post("/ask")
+def ask(request: AskRequest) -> dict:
+    observations = load_cached_observations()
+    offline = _is_reachable()
+    try:
+        recommendation = build_recommendation(
+            request.query, request.lat, request.lon, observations=observations, offline_mode=offline
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return recommendation.to_dict()
+
+
+@app.get("/evidence/{observation_id_}")
+def get_evidence(observation_id_: str) -> dict:
+    observations = load_cached_observations()
+    for obs in observations:
+        if observation_id(obs) == observation_id_:
+            return {**obs.to_dict(), "id": observation_id_}
+    raise HTTPException(status_code=404, detail=f"No observation with id {observation_id_!r}")
+
+
+@app.get("/health")
+def health() -> dict:
+    observations = load_cached_observations()
+    now = datetime.now(timezone.utc)
+    if observations:
+        newest_fetch = max(o.fetched_at for o in observations)
+        cache_age_min = max(0, int((now - newest_fetch).total_seconds() // 60))
+    else:
+        cache_age_min = 0
+    return {
+        "status": "ok",
+        "offline_mode": _is_reachable(),
+        "cache_age_min": cache_age_min,
+        "cache_observation_count": len(observations),
+    }

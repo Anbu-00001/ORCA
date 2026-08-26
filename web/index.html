@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ORCA — Marine Advisory</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root {
+    --ink: #10241f;
+    --paper: #f6f4ee;
+    --panel: #ffffff;
+    --line: #d9d4c6;
+    --accent: #0f6e5c;
+    --danger: #a4321d;
+    --amber-bg: #fff3d6;
+    --amber-border: #c98a12;
+    --muted: #6b6558;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  header h1 { font-size: 1.15rem; margin: 0; letter-spacing: 0.02em; }
+  header h1 span { color: var(--accent); }
+  #offline-badge {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #eef1ee;
+    color: var(--muted);
+  }
+  #offline-badge.online { background: #e4f4ec; color: var(--accent); border-color: #bfe3d2; }
+  #offline-badge.offline { background: var(--amber-bg); color: var(--danger); border-color: var(--amber-border); }
+
+  main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  #map-wrap { flex: 0 0 60%; position: relative; background: #dce7e3; min-width: 0; }
+  #map { position: absolute; inset: 0; }
+  #map-fallback {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #bcd9ea 0%, #9fc9dd 45%, #2f6b53 46%, #1c4d3a 100%);
+  }
+  #map-fallback.visible { display: flex; }
+  #map-fallback svg { width: 90%; height: 90%; }
+  .zone-dot { fill: #ffffff; stroke: var(--ink); stroke-width: 1.5; }
+  .zone-label { font-size: 11px; fill: var(--ink); font-weight: 600; }
+
+  aside {
+    flex: 0 0 40%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    overflow-y: auto;
+    padding: 1rem 1.1rem;
+    gap: 0.85rem;
+  }
+
+  #answer-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem;
+    background: #fbfbf7;
+  }
+  #answer-action {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    background: #e4f4ec;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  #answer-action.action-do-not-go { background: #fbe3dc; color: var(--danger); }
+  #answer-action.action-safer-alternative { background: var(--amber-bg); color: #7a5606; }
+  #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
+  #answer-placeholder { color: var(--muted); font-style: italic; }
+
+  #override-banner {
+    border: 1px solid var(--amber-border);
+    background: var(--amber-bg);
+    color: #6b4a05;
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+  #override-banner.hidden { display: none; }
+  #override-banner strong { display: block; margin-bottom: 0.25rem; }
+
+  #evidence-panel h3 { margin: 0 0 0.4rem 0; font-size: 0.95rem; }
+  #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .evidence-item {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+    cursor: pointer;
+    background: #fff;
+  }
+  .evidence-summary { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.92rem; }
+  .evidence-summary .var-name { color: var(--muted); }
+  .evidence-summary .var-value { font-weight: 700; }
+  .evidence-detail { display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+  .evidence-detail.expanded { display: block; }
+  .evidence-detail dt { font-weight: 600; color: var(--ink); display: inline; }
+  .evidence-detail dd { display: inline; margin: 0 0.8rem 0 0.3rem; }
+  .evidence-detail a { color: var(--accent); word-break: break-all; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  footer input[type="text"] { flex: 1 1 260px; padding: 0.55rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; font-size: 0.95rem; }
+  footer input.coord { flex: 0 0 90px; padding: 0.55rem 0.5rem; border: 1px solid var(--line); border-radius: 8px; font-size: 0.85rem; }
+  footer button {
+    padding: 0.55rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  footer button.secondary { background: white; color: var(--accent); }
+  footer label { font-size: 0.72rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.15rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ORCA <span>— marine advisory</span></h1>
+  <div id="offline-badge" data-testid="offline-badge">…</div>
+</header>
+
+<main>
+  <div id="map-wrap">
+    <div id="map" data-testid="map"></div>
+    <div id="map-fallback">
+      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <circle class="zone-dot" data-zone="Zone A" cx="90" cy="120" r="6"></circle>
+        <text class="zone-label" x="100" y="124">Zone A</text>
+        <circle class="zone-dot" data-zone="Zone B" cx="130" cy="140" r="6"></circle>
+        <text class="zone-label" x="140" y="144">Zone B</text>
+        <circle class="zone-dot" data-zone="Zone C" cx="170" cy="90" r="6"></circle>
+        <text class="zone-label" x="180" y="94">Zone C</text>
+        <circle class="zone-dot" data-zone="Zone D" cx="220" cy="40" r="6"></circle>
+        <text class="zone-label" x="230" y="44">Zone D</text>
+      </svg>
+    </div>
+  </div>
+
+  <aside>
+    <div id="answer-card" data-testid="answer-card">
+      <div id="answer-action" data-testid="answer-action"></div>
+      <p id="answer-text" data-testid="answer-text"><span id="answer-placeholder">Ask a question below to get a recommendation.</span></p>
+    </div>
+
+    <div id="override-banner" class="hidden" data-testid="override-banner"></div>
+
+    <div id="evidence-panel" data-testid="evidence-panel">
+      <h3>Evidence</h3>
+      <ul id="evidence-list"></ul>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <input type="text" id="query-input" data-testid="query-input" placeholder="Should I go fishing in Zone A?" />
+  <label>lat <input type="text" class="coord" id="lat-input" data-testid="lat-input" value="10.76" /></label>
+  <label>lon <input type="text" class="coord" id="lon-input" data-testid="lon-input" value="79.84" /></label>
+  <button id="ask-button" data-testid="ask-button">Ask</button>
+  <button id="tamil-sample-button" class="secondary" data-testid="tamil-sample-button">🔊 Play sample Tamil query</button>
+  <audio id="tamil-audio" data-testid="tamil-audio" src="assets/tamil_sample.mp3" preload="none"></audio>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  const params = new URLSearchParams(window.location.search);
+  const MOCK_MODE = params.get("mock") === "1";
+  const API_BASE = params.get("api") || "http://localhost:8000";
+
+  // Mirrors data/fetch.py's ZONES -- display-only coordinates for the map,
+  // not a marine observation, so duplicating them here doesn't touch
+  // orca/schema.py's traceability rule.
+  const ZONES = [
+    { name: "Zone A", lat: 10.76, lon: 79.84 },
+    { name: "Zone B", lat: 10.85, lon: 79.95 },
+    { name: "Zone C", lat: 11.50, lon: 80.20 },
+    { name: "Zone D", lat: 12.80, lon: 80.50 },
+  ];
+
+  // A real, simple Tamil query and its transcription, used only for the
+  // "play sample query" demo button -- not marine data, just UI copy.
+  // (Team: please have a native speaker confirm the phrasing and record a
+  // real audio file at web/assets/tamil_sample.mp3 -- see MANUAL_TASKS.md.)
+  const TAMIL_SAMPLE_TEXT = "நாகப்பட்டினத்தில் இருந்து மீன்பிடிக்க போகலாமா?";
+
+  const offlineBadge = document.getElementById("offline-badge");
+  const answerAction = document.getElementById("answer-action");
+  const answerText = document.getElementById("answer-text");
+  const overrideBanner = document.getElementById("override-banner");
+  const evidenceList = document.getElementById("evidence-list");
+  const queryInput = document.getElementById("query-input");
+  const latInput = document.getElementById("lat-input");
+  const lonInput = document.getElementById("lon-input");
+  const askButton = document.getElementById("ask-button");
+  const tamilButton = document.getElementById("tamil-sample-button");
+  const tamilAudio = document.getElementById("tamil-audio");
+
+  function setOfflineBadge(offline) {
+    offlineBadge.textContent = offline ? "OFFLINE" : "ONLINE";
+    offlineBadge.classList.toggle("offline", !!offline);
+    offlineBadge.classList.toggle("online", !offline);
+    offlineBadge.title = offline
+      ? "Offline — cached evidence, confidence adjusted"
+      : "Live connectivity available";
+  }
+
+  function actionClass(action) {
+    if (action === "DO NOT GO") return "action-do-not-go";
+    if (action === "SAFER ALTERNATIVE") return "action-safer-alternative";
+    return "action-go";
+  }
+
+  function formatNumber(value) {
+    if (typeof value !== "number") return value;
+    // Round for display only -- the real value is still what's sent to
+    // /evidence/{id} and used in calculations; this never touches data.
+    const rounded = Math.round(value * 100) / 100;
+    return String(rounded);
+  }
+
+  function renderEvidence(evidence) {
+    evidenceList.innerHTML = "";
+    (evidence || []).forEach((obs) => {
+      const li = document.createElement("li");
+      li.className = "evidence-item";
+      li.setAttribute("data-testid", "evidence-item");
+
+      const summary = document.createElement("div");
+      summary.className = "evidence-summary";
+      summary.innerHTML =
+        '<span class="var-name">' + obs.variable + '</span>' +
+        '<span class="var-value">' + formatNumber(obs.value) + " " + (obs.unit || "") + "</span>";
+
+      const detail = document.createElement("dl");
+      detail.className = "evidence-detail";
+      detail.setAttribute("data-testid", "evidence-detail");
+      detail.innerHTML =
+        "<dt>source</dt><dd>" + obs.source + "</dd>" +
+        "<dt>valid_time</dt><dd>" + obs.valid_time + "</dd>" +
+        "<dt>confidence</dt><dd>" + obs.confidence + "</dd>" +
+        "<dt>provenance</dt><dd><a href=\"" + obs.provenance + "\" target=\"_blank\" rel=\"noopener\">" + obs.provenance + "</a></dd>";
+
+      li.appendChild(summary);
+      li.appendChild(detail);
+      li.addEventListener("click", () => {
+        detail.classList.toggle("expanded");
+      });
+      evidenceList.appendChild(li);
+    });
+  }
+
+  function renderRecommendation(data) {
+    answerAction.textContent = data.action;
+    answerAction.className = actionClass(data.action);
+    answerText.textContent = data.recommendation;
+
+    if (data.overridden && data.overridden.length > 0) {
+      overrideBanner.classList.remove("hidden");
+      const lines = data.overridden.map((o) => o.agent + ": " + o.reason).join("<br/>");
+      overrideBanner.innerHTML = "<strong>Overridden</strong>" + lines;
+    } else {
+      overrideBanner.classList.add("hidden");
+      overrideBanner.innerHTML = "";
+    }
+
+    renderEvidence(data.evidence);
+  }
+
+  async function submitQuery() {
+    const query = queryInput.value.trim();
+    const lat = parseFloat(latInput.value);
+    const lon = parseFloat(lonInput.value);
+    if (!query || Number.isNaN(lat) || Number.isNaN(lon)) return;
+
+    askButton.disabled = true;
+    try {
+      const resp = await fetch(API_BASE + "/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, lat, lon }),
+      });
+      if (!resp.ok) throw new Error("ORCA API error " + resp.status);
+      const data = await resp.json();
+      renderRecommendation(data);
+    } catch (err) {
+      answerAction.textContent = "ERROR";
+      answerAction.className = "action-do-not-go";
+      answerText.textContent = "Could not reach ORCA: " + err.message;
+      console.error(err);
+    } finally {
+      askButton.disabled = false;
+    }
+  }
+
+  async function refreshHealth() {
+    if (MOCK_MODE) {
+      setOfflineBadge(false);
+      return;
+    }
+    try {
+      const resp = await fetch(API_BASE + "/health");
+      const data = await resp.json();
+      setOfflineBadge(!!data.offline_mode);
+    } catch (err) {
+      setOfflineBadge(true);
+    }
+  }
+
+  askButton.addEventListener("click", submitQuery);
+  queryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitQuery();
+  });
+
+  tamilButton.addEventListener("click", () => {
+    queryInput.value = TAMIL_SAMPLE_TEXT;
+    tamilAudio.play().catch(() => {
+      // No audio file yet in this environment -- filling the transcription
+      // is still the documented, demo-safe behaviour (see MANUAL_TASKS.md).
+    });
+  });
+
+  function initMap() {
+    if (typeof maplibregl === "undefined") {
+      document.getElementById("map-fallback").classList.add("visible");
+      return;
+    }
+    try {
+      const map = new maplibregl.Map({
+        container: "map",
+        style: "https://demotiles.maplibre.org/style.json",
+        center: [80.1, 11.3],
+        zoom: 7,
+      });
+      map.on("error", () => {
+        document.getElementById("map-fallback").classList.add("visible");
+      });
+      map.on("load", () => {
+        ZONES.forEach((zone) => {
+          const el = document.createElement("div");
+          el.style.width = "14px";
+          el.style.height = "14px";
+          el.style.borderRadius = "50%";
+          el.style.background = "#fff";
+          el.style.border = "2px solid #10241f";
+          el.title = zone.name;
+          el.addEventListener("click", () => {
+            queryInput.value = zone.name;
+            latInput.value = zone.lat;
+            lonInput.value = zone.lon;
+            submitQuery();
+          });
+          new maplibregl.Marker({ element: el }).setLngLat([zone.lon, zone.lat]).addTo(map);
+        });
+      });
+    } catch (err) {
+      document.getElementById("map-fallback").classList.add("visible");
+    }
+  }
+
+  async function init() {
+    initMap();
+    await refreshHealth();
+    if (MOCK_MODE) {
+      const resp = await fetch("mock_response.json");
+      const data = await resp.json();
+      renderRecommendation(data);
+    }
+  }
+
+  init();
+})();
+</script>
+
+</body>
+</html>
