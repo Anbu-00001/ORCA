@@ -122,6 +122,12 @@ class Recommendation:
     overridden: list[Finding] = field(default_factory=list)
     evidence: list[MarineObservation] = field(default_factory=list)
     offline_mode: bool = False
+    # Full reasoning trace, additive to the API_CONTRACT.md shape above --
+    # existing consumers ignore unknown keys. Both fields surface
+    # computation build_recommendation() already does internally; nothing
+    # here is fabricated for the sake of a nicer chart (CLAUDE.md rule 1).
+    agent_findings: list[Finding] = field(default_factory=list)  # primary zone's 5 raw agent findings
+    zone_summaries: list[dict] = field(default_factory=list)  # one entry per evaluated zone
 
     def to_dict(self) -> dict:
         return {
@@ -133,6 +139,18 @@ class Recommendation:
             "overridden": [{"agent": f.agent_name, "reason": f.reason} for f in self.overridden],
             "evidence": [{**o.to_dict(), "id": observation_id(o)} for o in self.evidence],
             "offline_mode": self.offline_mode,
+            "agent_findings": [
+                {
+                    "agent": f.agent_name,
+                    "suggests_go": f.suggests_go,
+                    "risk_level": f.risk_level,
+                    "hard_deny": f.hard_deny,
+                    "reason": f.reason,
+                    "observation_ids": [observation_id(o) for o in f.observations],
+                }
+                for f in self.agent_findings
+            ],
+            "zone_summaries": self.zone_summaries,
         }
 
 
@@ -193,6 +211,23 @@ def build_recommendation(
         else None
     )
 
+    # Per-zone risk summary for the geospatial 3D view -- "worst" agent's
+    # risk_level at that zone (max, not average: a single hard hazard
+    # shouldn't get diluted by four calm agents). Every zone in `zones` is
+    # evaluated above regardless of which one gets chosen, so this is a
+    # real cross-zone picture, not just the primary/final pair.
+    zone_summaries = [
+        {
+            "name": zone["name"],
+            "lat": zone["lat"],
+            "lon": zone["lon"],
+            "action": decision.action,
+            "risk_level": max((f.risk_level for f in findings), default=0.0),
+            "hard_deny": any(f.hard_deny for f in findings),
+        }
+        for zone_name, (zone, decision, findings) in zone_results.items()
+    ]
+
     return Recommendation(
         id=f"rec_{uuid.uuid4().hex[:8]}",
         action=final_action,
@@ -202,4 +237,6 @@ def build_recommendation(
         overridden=overridden,
         evidence=_collect_evidence(evidence_findings),
         offline_mode=offline_mode,
+        agent_findings=p_findings,
+        zone_summaries=zone_summaries,
     )

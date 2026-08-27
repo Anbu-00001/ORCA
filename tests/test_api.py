@@ -119,3 +119,42 @@ def test_ask_different_zones_can_produce_different_actions():
         resp = client.post("/ask", json={"query": name, "lat": lat, "lon": lon})
         responses[name] = resp.json()
     assert all(r["action"] in VALID_ACTIONS for r in responses.values())
+
+
+# ---------------------------------------------------------------------------
+# agent_findings / zone_summaries on /ask, and GET /bathymetry -- backing
+# the 3D evidence-reasoning graph and geospatial risk-terrain views.
+# ---------------------------------------------------------------------------
+
+def test_ask_response_includes_agent_findings_and_zone_summaries():
+    resp = client.post("/ask", json={"query": "Zone A", "lat": 10.76, "lon": 79.84})
+    data = resp.json()
+    assert len(data["agent_findings"]) == 5
+    for f in data["agent_findings"]:
+        for required in ("agent", "suggests_go", "risk_level", "hard_deny", "reason", "observation_ids"):
+            assert required in f
+    assert len(data["zone_summaries"]) >= 2  # data/fetch.py ZONES has 4
+    for s in data["zone_summaries"]:
+        for required in ("name", "lat", "lon", "action", "risk_level", "hard_deny"):
+            assert required in s
+
+
+def test_bathymetry_returns_expected_shape():
+    resp = client.get("/bathymetry")
+    assert resp.status_code == 200
+    data = resp.json()
+    for required in ("source", "dataset_id", "provenance", "fetched_at", "bbox", "points"):
+        assert required in data
+    assert len(data["points"]) > 0
+    for required in ("lat", "lon", "elevation_m"):
+        assert required in data["points"][0]
+
+
+def test_bathymetry_missing_cache_returns_503_not_empty_200(monkeypatch):
+    """An absent bathymetry cache is an honest 503, never a fabricated or
+    silently-empty 200 (CLAUDE.md rule 1 applied to map context, too)."""
+    import orca.api as api_module
+
+    monkeypatch.setattr(api_module, "BATHYMETRY_CACHE_PATH", api_module.BATHYMETRY_CACHE_PATH.parent / "does-not-exist.json")
+    resp = client.get("/bathymetry")
+    assert resp.status_code == 503

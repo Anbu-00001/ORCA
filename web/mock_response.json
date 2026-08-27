@@ -38,7 +38,79 @@
       "source": "Open-Meteo Marine",
       "confidence": 0.9,
       "provenance": "https://marine-api.open-meteo.com/v1/marine"
+    },
+    {
+      "id": "obs_chl_01",
+      "variable": "chlorophyll_mg_m3",
+      "value": 2.3,
+      "unit": "mg m^-3",
+      "lat": 10.76,
+      "lon": 79.84,
+      "valid_time": "2026-08-25T12:00:00Z",
+      "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+      "confidence": 0.85,
+      "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv"
+    },
+    {
+      "id": "obs_wind_01",
+      "variable": "wind_speed_kmh",
+      "value": 12.0,
+      "unit": "km/h",
+      "lat": 10.76,
+      "lon": 79.84,
+      "valid_time": "2026-08-26T04:00:00Z",
+      "source": "Open-Meteo Forecast",
+      "confidence": 0.9,
+      "provenance": "https://api.open-meteo.com/v1/forecast"
     }
   ],
-  "offline_mode": false
+  "offline_mode": false,
+  "agent_findings": [
+    {
+      "agent": "eo_satellite_agent",
+      "suggests_go": true,
+      "risk_level": 0.0,
+      "hard_deny": false,
+      "reason": "Elevated chlorophyll (2.30 mg/m³) and warm SST (28.4°C) suggest fish aggregation",
+      "observation_ids": ["obs_chl_01", "obs_sst_01"]
+    },
+    {
+      "agent": "ocean_state_agent",
+      "suggests_go": true,
+      "risk_level": 0.0,
+      "hard_deny": false,
+      "reason": "SST 28.4°C within productive range",
+      "observation_ids": ["obs_sst_01"]
+    },
+    {
+      "agent": "weather_agent",
+      "suggests_go": false,
+      "risk_level": 0.3,
+      "hard_deny": false,
+      "reason": "Wind 12.0 km/h",
+      "observation_ids": ["obs_wind_01"]
+    },
+    {
+      "agent": "hazard_agent",
+      "suggests_go": false,
+      "risk_level": 1.0,
+      "hard_deny": true,
+      "reason": "Significant wave height 3.1 m exceeds 2.5 m safety limit",
+      "observation_ids": ["obs_wave_01"]
+    },
+    {
+      "agent": "geofence_agent",
+      "suggests_go": false,
+      "risk_level": 0.0,
+      "hard_deny": false,
+      "reason": "Outside restricted zones",
+      "observation_ids": ["obs_wave_01"]
+    }
+  ],
+  "zone_summaries": [
+    { "name": "Zone A", "lat": 10.76, "lon": 79.84, "action": "DO NOT GO", "risk_level": 1.0, "hard_deny": true },
+    { "name": "Zone B", "lat": 10.85, "lon": 79.95, "action": "GO", "risk_level": 0.3, "hard_deny": false },
+    { "name": "Zone C", "lat": 11.50, "lon": 80.20, "action": "GO", "risk_level": 0.2, "hard_deny": false },
+    { "name": "Zone D", "lat": 12.80, "lon": 80.50, "action": "GO", "risk_level": 0.25, "hard_deny": false }
+  ]
 }

@@ -24,7 +24,9 @@ test.describe('frontend in mock mode', () => {
 
   test('evidence items are collapsed by default and expand on click', async ({ page }) => {
     const items = page.getByTestId('evidence-item');
-    await expect(items).toHaveCount(2);
+    // mock_response.json carries 4 evidence items (wave, sst, chlorophyll,
+    // wind) so all 5 agent_findings below can each point at a real one.
+    await expect(items).toHaveCount(4);
 
     const first = items.first();
     // Source/confidence detail should not be visible before expanding.
@@ -46,5 +48,85 @@ test.describe('frontend in mock mode', () => {
     await button.click();
     const input = page.getByTestId('query-input');
     await expect(input).not.toHaveValue('');
+  });
+});
+
+// web/three-viz.js -- a per-query 3D reasoning graph and a geospatial
+// ocean diorama (real ETOPO 2022 bathymetry + risk columns), both driven
+// by the same mock_response.json / mock_bathymetry.json fixtures as the
+// rest of this file. See TEAM_STATUS.md for what each draws from.
+test.describe('3D visualizations (mock mode)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/index.html?mock=1');
+  });
+
+  test('3D Ocean toggle swaps views and renders a correctly-sized canvas', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await expect(page.getByTestId('view-toggle-2d')).toHaveClass(/active/);
+    await page.getByTestId('view-toggle-3d').click();
+    await expect(page.getByTestId('view-toggle-3d')).toHaveClass(/active/);
+    await expect(page.getByTestId('ocean3d-container')).toHaveClass(/visible/);
+    await expect(page.locator('#map-2d-layer')).toHaveClass(/hidden-view/);
+
+    // mock_bathymetry.json is a local static file -- this should resolve
+    // quickly and without the "awaiting" placeholder staying stuck.
+    await expect(page.getByTestId('ocean3d-container')).not.toHaveClass(/awaiting/, { timeout: 5000 });
+
+    const canvas = page.locator('#ocean3d-container canvas');
+    await expect(canvas).toBeAttached();
+    // Regression guard for a real bug caught during development: a stray
+    // inline `position: relative` on #ocean3d-container (written by a
+    // naive "ensure positioned" helper) silently overrides its CSS
+    // `position: absolute; inset: 0`, collapsing the canvas to ~0x0.
+    const box = await canvas.boundingBox();
+    expect(box.width).toBeGreaterThan(100);
+    expect(box.height).toBeGreaterThan(100);
+
+    expect(errors).toEqual([]);
+  });
+
+  test('switching back to 2D map restores it and pauses the 3D view', async ({ page }) => {
+    await page.getByTestId('view-toggle-3d').click();
+    await expect(page.getByTestId('ocean3d-container')).toHaveClass(/visible/);
+
+    await page.getByTestId('view-toggle-2d').click();
+    await expect(page.getByTestId('ocean3d-container')).not.toHaveClass(/visible/);
+    await expect(page.getByTestId('view-toggle-2d')).toHaveClass(/active/);
+    await expect(page.locator('#map-2d-layer')).not.toHaveClass(/hidden-view/);
+  });
+
+  test('reasoning graph toggle reveals a canvas built from agent_findings', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await expect(page.getByTestId('reasoning3d-container')).toHaveClass(/collapsed/);
+    await page.getByTestId('reasoning3d-toggle').click();
+    await expect(page.getByTestId('reasoning3d-container')).not.toHaveClass(/collapsed/);
+
+    const canvas = page.locator('#reasoning3d-container canvas');
+    await expect(canvas).toBeAttached();
+    const box = await canvas.boundingBox();
+    expect(box.width).toBeGreaterThan(50);
+    expect(box.height).toBeGreaterThan(50);
+
+    // Toggling it shut again should stop the render loop, not error out.
+    await page.getByTestId('reasoning3d-toggle').click();
+    await expect(page.getByTestId('reasoning3d-container')).toHaveClass(/collapsed/);
+
+    expect(errors).toEqual([]);
+  });
+
+  test('the 3D-to-query bridge (window.__ORCA_SELECT_ZONE__) drives the same inputs the 2D map markers do', async ({ page }) => {
+    // Exercises the actual integration boundary the ocean diorama's
+    // raycaster click handler calls, without depending on the exact
+    // projected screen position of a rotating 3D object (that coupling
+    // would make this test flaky for no real gain -- the thing worth
+    // proving is that the bridge function does the right thing).
+    await page.evaluate(() => window.__ORCA_SELECT_ZONE__('Zone C', 11.5, 80.2));
+    await expect(page.getByTestId('query-input')).toHaveValue('Zone C');
+    await expect(page.getByTestId('lat-input')).toHaveValue('11.5');
+    await expect(page.getByTestId('lon-input')).toHaveValue('80.2');
   });
 });

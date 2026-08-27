@@ -1,7 +1,7 @@
 # ORCA — Team Status
 
 **For:** other ICARUS teammates and their agents/assistants working on this repo.
-**Last updated:** 2026-08-27, after commit `e2818ff`.
+**Last updated:** 2026-08-27, 3D visualization feature added (post-war-plan, explicitly requested beyond S7).
 **Read this before touching the repo.** It tells you what's real, what's
 verified, what's still a manual/human job, and where not to step.
 
@@ -15,12 +15,19 @@ commit `4cdcb13`, all run against real data (no mocks feeding the app
 itself). A fresh `git clone` + `pip install -r requirements.txt` + `pytest`
 was verified to work standalone at that point.
 
-**⚠️ Right now the suite does NOT run**: a parallel edit to
-`orca/mcp_server.py` broke its import against the installed `mcp` package,
+**New, beyond the war plan:** two three.js 3D visualizations (a per-query
+reasoning graph, and a geospatial ocean diorama with real NOAA bathymetry +
+risk columns) — see "3D visualizations" below. Backend suite is now **114
+pytest tests, all green** (excluding `orca/mcp_server.py`, still broken —
+see below, unchanged); e2e is now **20 Playwright tests, all green**.
+
+**⚠️ `orca/mcp_server.py` still does not import** (unrelated to the 3D
+work below): a parallel edit broke it against the installed `mcp` package,
 and that one `ModuleNotFoundError` aborts collection for the *entire*
-pytest run (all 103 tests report as errored, not just the 5 MCP ones). See
+`pytest -q` run unless you `--ignore=tests/test_mcp_server.py`. See
 "Code-intelligence tooling" below for the exact error and the fix. Nothing
-else is known to be broken — this is one bad import in one file.
+else is known to be broken — this is one bad import in one file, and every
+count in this document already excludes it.
 
 **What you actually need to do before the real demo:** see
 [`MANUAL_TASKS.md`](MANUAL_TASKS.md). It's short. Read it.
@@ -69,15 +76,18 @@ file, `README.md`, and `MANUAL_TASKS.md`.
 | Frontend (map, answer, evidence panel, offline badge) | `web/index.html` | ✅ 12 Playwright e2e tests (incl. wifi-off simulation) |
 | MCP server wrapper (stretch, S6.2) | `orca/mcp_server.py` | ⚠️ 5 tests, real protocol-level — **currently broken, see below** |
 | Demo scenario transcript | `demo/scenarios.json` | ✅ generated from live output |
+| Real bathymetry fetcher + `GET /bathymetry` | `data/fetch.py`, `orca/api.py` | ✅ 7 + 2 tests, live-integration-tested |
+| Reasoning graph + ocean diorama (three.js) | `web/three-viz.js`, `web/three-viz-app.js` | ✅ 8 Playwright tests (mock + live) |
 
 Run everything yourself:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                    # currently errors on collection -- fix orca/mcp_server.py's
-                              # import first (see "Code-intelligence tooling" below), then 103 tests
+pytest -q --ignore=tests/test_mcp_server.py   # 114 tests, green
+                              # (fix orca/mcp_server.py's import -- see "Code-intelligence
+                              #  tooling" below -- to also get its 5 tests running)
 npm install && npx playwright install chromium
-npx playwright test          # 12 tests, boots real servers itself -- unaffected by the pytest issue
+npx playwright test          # 20 tests, boots real servers itself -- unaffected by the pytest issue
 ```
 
 Run the actual app:
@@ -151,6 +161,81 @@ building, and you should know the reasoning before "fixing" them.
    `/health`'s `offline_mode` is a best-effort connectivity probe used
    *only* to flip the frontend badge. Physically switching off wifi during
    the demo is safe to do live; it changes the badge and nothing else.
+
+---
+
+## 3D visualizations (new, beyond the war plan)
+
+Requested directly (not in S7): "make our outputs more enthusiastic and
+energetic for researchers to see." Two three.js views, both additive —
+nothing existing was replaced, and both degrade to an inert placeholder
+(never a fabricated one) if their data source is unavailable.
+
+1. **Reasoning graph** (`ReasoningGraph` in `web/three-viz.js`, toggled by
+   "View reasoning in 3D" under the evidence panel). A per-query 3D render
+   of the actual decision trace: the final action at the center, the 5
+   agents on a ring around it (sized/colored by `risk_level`, a red pulsing
+   ring if `hard_deny`), and each agent's own supporting
+   `MarineObservation`(s) one ring further out. Every node is real data
+   from the last `/ask` response's new `agent_findings` + `evidence`
+   fields (see API_CONTRACT.md) — nothing here is a separate computation
+   or an illustration; it's the same reasoning the answer card already
+   shows, laid out spatially. Layout is a fixed radial placement, not a
+   force simulation — the graph is small and constant-shaped (1 decision +
+   5 agents + ~4-10 observations), so a physics layout would only add
+   instability, not information.
+
+2. **Ocean diorama** (`OceanDiorama` in `web/three-viz.js`, toggled by the
+   "3D Ocean" / "2D Map" buttons over the map). Real seafloor/land relief
+   from `GET /bathymetry` (NOAA NCEI ETOPO 2022, 60 arc-second — see
+   `data/fetch.py`'s `ERDDAPBathymetryFetcher`), with a risk column at
+   each zone from the last `/ask` response's new `zone_summaries` field
+   (worst-agent `risk_level` + `hard_deny` per zone, computed by
+   `build_recommendation()` — every zone it evaluates, not just the
+   chosen one). Vertical scale is exaggerated 1/1200 for legibility (real
+   depths here range roughly -3700m to +560m within the BBOX) — clearly a
+   presentation choice, documented in the code, never applied to the
+   underlying numbers. Clicking a column calls the same
+   `window.__ORCA_SELECT_ZONE__` bridge the 2D map's markers use, so both
+   views drive one shared query flow.
+
+**Backend additions backing these** (both additive to API_CONTRACT.md,
+existing clients ignore unknown fields):
+- `Recommendation.agent_findings` / `.zone_summaries` (`orca/planner.py`)
+  — surfaces computation `build_recommendation()` already did internally
+  but previously discarded. Neither field is fabricated; see the tests
+  named `test_recommendation_*` in `tests/test_planner.py`.
+- `GET /bathymetry` (`orca/api.py`) — 503 if the cache isn't populated,
+  never a fabricated/empty 200.
+- `ERDDAPBathymetryFetcher` (`data/fetch.py`) — real ETOPO 2022 data from
+  `oceanwatch.pifsc.noaa.gov`'s ERDDAP (two other NOAA ERDDAP mirrors
+  timed out during research — see SCRATCH.md if you need a different
+  region/mirror). Cached to **`data/cache/bathymetry/`, a subdirectory** —
+  load-bearing detail: `orca/planner.py`'s `load_cached_observations()`
+  globs `data/cache/*.json` non-recursively and parses every match as a
+  list of `MarineObservation` dicts, so a bathymetry grid (one dict, a
+  `points` key, not a list) sitting directly in `data/cache/` would break
+  every `/ask` call. `tests/test_fetch.py`'s
+  `test_write_bathymetry_cache_is_not_swept_by_load_cached_observations`
+  guards this specifically — don't "clean up" that subdirectory into the
+  parent.
+
+**Checked and not used:** MOSDAC (ISRO's own ocean data portal) — every
+dataset needs an authenticated account, no anonymous endpoint exists (see
+SCRATCH.md for what was checked and why it's a post-hackathon item, not a
+blocker). A teammate-suggested coral-reef ML repo was also checked and
+isn't usable here — its data is explicitly synthetic (CLAUDE.md rule 1)
+and it has no 3D visualization to borrow from anyway.
+
+**Known trade-off, not fixed:** three.js itself is loaded from `unpkg.com`
+(pinned version, same convention as `maplibre-gl`), not vendored locally.
+Unlike MapLibre (which has a tested SVG fallback), the 3D views have no
+offline fallback yet — under the wifi-off scenario in S8.6, "3D Ocean" and
+"View reasoning in 3D" would fail to load (2D map, answer card, and
+evidence panel are completely unaffected — they don't depend on this).
+Not fixed because it wasn't asked for and the war plan's core demo doesn't
+route through either 3D view; vendoring `three.module.js` +
+`OrbitControls.js` locally would close this if it's ever wanted.
 
 ---
 

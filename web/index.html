@@ -6,6 +6,17 @@
 <title>ORCA — Marine Advisory</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<!-- three.js: pinned version (not "latest"), same convention as maplibre-gl
+     above. Only build/build/three.module.js is published from r150+, so
+     this has to be an import map + module scripts, not a plain global. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
 <style>
   :root {
     --ink: #10241f;
@@ -57,6 +68,8 @@
     min-height: 0;
   }
   #map-wrap { flex: 0 0 60%; position: relative; background: #dce7e3; min-width: 0; }
+  #map-2d-layer { position: absolute; inset: 0; }
+  #map-2d-layer.hidden-view { display: none; }
   #map { position: absolute; inset: 0; }
   #map-fallback {
     position: absolute; inset: 0; display: none;
@@ -67,6 +80,21 @@
   #map-fallback svg { width: 90%; height: 90%; }
   .zone-dot { fill: #ffffff; stroke: var(--ink); stroke-width: 1.5; }
   .zone-label { font-size: 11px; fill: var(--ink); font-weight: 600; }
+
+  .view-toggle-bar { position: absolute; top: 10px; left: 10px; z-index: 10; display: flex; gap: 0.4rem; }
+  .view-toggle-btn {
+    padding: 0.35rem 0.7rem; border-radius: 7px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.92); color: var(--ink); font-size: 0.78rem;
+    font-weight: 600; cursor: pointer;
+  }
+  .view-toggle-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #ocean3d-container { position: absolute; inset: 0; display: none; background: #0d2233; }
+  #ocean3d-container.visible { display: block; }
+  #ocean3d-container.awaiting::after {
+    content: "Loading seafloor relief…"; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #cfe3ee; font-size: 0.85rem; pointer-events: none;
+  }
 
   aside {
     flex: 0 0 40%;
@@ -113,6 +141,16 @@
   }
   #override-banner.hidden { display: none; }
   #override-banner strong { display: block; margin-bottom: 0.25rem; }
+
+  #reasoning3d-toggle {
+    width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--accent); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+  }
+  #reasoning3d-container {
+    position: relative; height: 280px; margin-top: 0.6rem;
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #faf9f4;
+  }
+  #reasoning3d-container.collapsed { display: none; }
 
   #evidence-panel h3 { margin: 0 0 0.4rem 0; font-size: 0.95rem; }
   #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
@@ -166,19 +204,29 @@
 
 <main>
   <div id="map-wrap">
-    <div id="map" data-testid="map"></div>
-    <div id="map-fallback">
-      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
-        <circle class="zone-dot" data-zone="Zone A" cx="90" cy="120" r="6"></circle>
-        <text class="zone-label" x="100" y="124">Zone A</text>
-        <circle class="zone-dot" data-zone="Zone B" cx="130" cy="140" r="6"></circle>
-        <text class="zone-label" x="140" y="144">Zone B</text>
-        <circle class="zone-dot" data-zone="Zone C" cx="170" cy="90" r="6"></circle>
-        <text class="zone-label" x="180" y="94">Zone C</text>
-        <circle class="zone-dot" data-zone="Zone D" cx="220" cy="40" r="6"></circle>
-        <text class="zone-label" x="230" y="44">Zone D</text>
-      </svg>
+    <div class="view-toggle-bar">
+      <button id="view-toggle-2d" class="view-toggle-btn active" data-testid="view-toggle-2d">2D Map</button>
+      <button id="view-toggle-3d" class="view-toggle-btn" data-testid="view-toggle-3d">3D Ocean</button>
     </div>
+    <div id="map-2d-layer">
+      <div id="map" data-testid="map"></div>
+      <div id="map-fallback">
+        <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+          <circle class="zone-dot" data-zone="Zone A" cx="90" cy="120" r="6"></circle>
+          <text class="zone-label" x="100" y="124">Zone A</text>
+          <circle class="zone-dot" data-zone="Zone B" cx="130" cy="140" r="6"></circle>
+          <text class="zone-label" x="140" y="144">Zone B</text>
+          <circle class="zone-dot" data-zone="Zone C" cx="170" cy="90" r="6"></circle>
+          <text class="zone-label" x="180" y="94">Zone C</text>
+          <circle class="zone-dot" data-zone="Zone D" cx="220" cy="40" r="6"></circle>
+          <text class="zone-label" x="230" y="44">Zone D</text>
+        </svg>
+      </div>
+    </div>
+    <!-- Real seafloor relief (GET /bathymetry) + per-zone risk columns,
+         rendered by web/three-viz.js. Populated lazily on first "3D Ocean"
+         click -- see web/three-viz-app.js. -->
+    <div id="ocean3d-container" class="awaiting" data-testid="ocean3d-container"></div>
   </div>
 
   <aside>
@@ -192,6 +240,14 @@
     <div id="evidence-panel" data-testid="evidence-panel">
       <h3>Evidence</h3>
       <ul id="evidence-list"></ul>
+    </div>
+
+    <div id="reasoning3d-panel">
+      <button id="reasoning3d-toggle" data-testid="reasoning3d-toggle">View reasoning in 3D ▾</button>
+      <!-- The 5 agents + their evidence + the final decision, as a 3D
+           graph -- a picture of the last /ask response's agent_findings,
+           not a separate computation. See web/three-viz.js ReasoningGraph. -->
+      <div id="reasoning3d-container" class="collapsed" data-testid="reasoning3d-container"></div>
     </div>
   </aside>
 </main>
@@ -295,7 +351,23 @@
     });
   }
 
+  // Bridge into web/three-viz-app.js (a separate <script type="module">,
+  // loaded after this one): buffered as a plain property (not just an
+  // event) so a 3D view constructed after this render still picks up the
+  // latest data instead of racing the event -- see that file's
+  // "check-then-subscribe" comment.
+  function selectZone(name, lat, lon) {
+    queryInput.value = name;
+    latInput.value = lat;
+    lonInput.value = lon;
+    submitQuery();
+  }
+  window.__ORCA_SELECT_ZONE__ = selectZone;
+
   function renderRecommendation(data) {
+    window.__ORCA_LAST_RECOMMENDATION__ = data;
+    window.dispatchEvent(new CustomEvent("orca:recommendation", { detail: data }));
+
     answerAction.textContent = data.action;
     answerAction.className = actionClass(data.action);
     answerText.textContent = data.recommendation;
@@ -389,12 +461,7 @@
           el.style.background = "#fff";
           el.style.border = "2px solid #10241f";
           el.title = zone.name;
-          el.addEventListener("click", () => {
-            queryInput.value = zone.name;
-            latInput.value = zone.lat;
-            lonInput.value = zone.lon;
-            submitQuery();
-          });
+          el.addEventListener("click", () => selectZone(zone.name, zone.lat, zone.lon));
           new maplibregl.Marker({ element: el }).setLngLat([zone.lon, zone.lat]).addTo(map);
         });
       });
@@ -416,6 +483,11 @@
   init();
 })();
 </script>
+
+<!-- Separate module script: three.js needs ES modules (see the import map
+     in <head>), which can't live inside the classic IIFE above. Talks to
+     it only through the small window.__ORCA_* bridge defined there. -->
+<script type="module" src="three-viz-app.js"></script>
 
 </body>
 </html>

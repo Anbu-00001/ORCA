@@ -22,12 +22,17 @@ from pathlib import Path
 import pytest
 
 from data.fetch import (
+    BBOX,
+    CACHE_DIR,
+    ERDDAPBathymetryFetcher,
     ERDDAPChlorophyllFetcher,
     OpenMeteoForecastFetcher,
     OpenMeteoMarineFetcher,
     fetch_all,
+    write_bathymetry_cache,
     write_cache,
 )
+from orca.planner import load_cached_observations
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ZONE_A = {"name": "Zone A", "lat": 10.76, "lon": 79.84}
@@ -43,6 +48,16 @@ def _network_reachable(host="marine-api.open-meteo.com", port=443, timeout=3) ->
 
 requires_network = pytest.mark.skipif(
     not _network_reachable(), reason="no network reachable from this sandbox"
+)
+
+# Separate, host-specific check: the ETOPO ERDDAP host has been flaky from
+# this sandbox even when marine-api.open-meteo.com is fine (two of three
+# NOAA ERDDAP mirrors timed out during research; oceanwatch.pifsc.noaa.gov
+# was the one that worked -- see SCRATCH.md), so bathymetry's own
+# integration test shouldn't ride on an unrelated host's reachability.
+requires_bathymetry_network = pytest.mark.skipif(
+    not _network_reachable(host="oceanwatch.pifsc.noaa.gov"),
+    reason="ETOPO ERDDAP host unreachable from this sandbox",
 )
 
 
@@ -229,3 +244,136 @@ def test_real_openmeteo_marine_fetch_integration():
     assert len(obs) > 0
     assert all(o.source == "Open-Meteo Marine" for o in obs)
     assert all(0.0 <= o.confidence <= 1.0 for o in obs)
+
+
+# ---------------------------------------------------------------------------
+# ERDDAPBathymetryFetcher -- real seafloor relief for the 3D ocean view.
+# Unlike the fetchers above, this is one grid covering the whole demo
+# region, not a per-zone MarineObservation -- it's map context (CLAUDE.md
+# rule 4: policy.py never sees a static 2022 seabed survey), so it's
+# parsed and cached differently, and the isolation from
+# orca.planner.load_cached_observations() is load-bearing (see test
+# below) -- get that wrong and every /ask response silently breaks.
+# ---------------------------------------------------------------------------
+
+def test_bathymetry_fetcher_parses_real_fixture_into_grid():
+    csv_text = (FIXTURES / "real_erddap_bathymetry_sample.csv").read_text()
+    points = ERDDAPBathymetryFetcher()._parse_csv(csv_text)
+
+    assert len(points) == 16
+    for p in points:
+        assert set(p.keys()) == {"lat", "lon", "elevation_m"}
+
+    # Ground truth from the real fixture (hand-verified): nearshore point is
+    # slightly above sea level (land), the deep offshore corner is far below.
+    nearshore = next(p for p in points if p["lat"] < 10.6 and p["lon"] < 79.6)
+    offshore = next(p for p in points if p["lat"] > 11.4 and p["lon"] > 80.4)
+    assert nearshore["elevation_m"] == pytest.approx(5.638, abs=0.01)
+    assert offshore["elevation_m"] == pytest.approx(-2207.19, abs=0.01)
+    assert offshore["elevation_m"] < 0 < nearshore["elevation_m"]
+
+
+def test_bathymetry_fetcher_skips_nan_pixels():
+    # Minimal hand-built CSV literal, only to exercise the cloud/no-data
+    # edge case -- never used to feed the app real data (see file docstring).
+    csv_text = (
+        "latitude,longitude,z\n"
+        "degrees_north,degrees_east,meters\n"
+        "10.5,79.5,NaN\n"
+        "10.5,79.6,-100.0\n"
+    )
+    points = ERDDAPBathymetryFetcher()._parse_csv(csv_text)
+    assert len(points) == 1
+    assert points[0]["elevation_m"] == -100.0
+
+
+def test_bathymetry_fetcher_build_url_uses_bracket_stride_syntax():
+    fetcher = ERDDAPBathymetryFetcher()
+    url = fetcher._build_url(BBOX)
+    assert url.startswith(fetcher.BASE_URL)
+    assert f"[({BBOX['min_lat']}):{fetcher.STRIDE}:({BBOX['max_lat']})]" in url
+    assert f"[({BBOX['min_lon']}):{fetcher.STRIDE}:({BBOX['max_lon']})]" in url
+
+
+def test_bathymetry_fetcher_raises_not_fabricates_on_zero_points(monkeypatch):
+    """fetch() must refuse to hand back an empty grid dressed up as real
+    data -- mirrors test_marine_fetcher_raises_on_network_error_does_not_fabricate
+    above, but for the "server answered, everything was NaN" case rather
+    than a network error.
+    """
+    empty_csv = "latitude,longitude,z\ndegrees_north,degrees_east,meters\n10.5,79.5,NaN\n"
+
+    class _FakeResponse:
+        text = empty_csv
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr("data.fetch.requests.get", lambda *a, **k: _FakeResponse())
+    with pytest.raises(ValueError):
+        ERDDAPBathymetryFetcher().fetch(BBOX)
+
+
+def test_write_bathymetry_cache_produces_contract_shaped_json(tmp_path):
+    csv_text = (FIXTURES / "real_erddap_bathymetry_sample.csv").read_text()
+    points = ERDDAPBathymetryFetcher()._parse_csv(csv_text)
+    grid = {
+        "source": ERDDAPBathymetryFetcher.SOURCE_NAME,
+        "dataset_id": ERDDAPBathymetryFetcher.DATASET_ID,
+        "provenance": "https://example.test/provenance",
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "bbox": BBOX,
+        "points": points,
+    }
+    path = write_bathymetry_cache(grid, cache_dir=tmp_path / "bathymetry")
+
+    assert path.exists()
+    data = json.loads(path.read_text())
+    for required in ("source", "dataset_id", "provenance", "fetched_at", "bbox", "points"):
+        assert required in data
+    assert len(data["points"]) == 16
+
+
+def test_write_bathymetry_cache_is_not_swept_by_load_cached_observations(tmp_path):
+    """The regression this guards against: load_cached_observations() globs
+    cache_dir/*.json non-recursively and parses every file as a list of
+    MarineObservation dicts. A bathymetry grid is a single dict with a
+    `points` key, not a list -- if it ever landed directly in data/cache/
+    (not a subdirectory), this call would crash with a TypeError deep
+    inside /ask, for every single query, until someone noticed.
+    """
+    csv_text = (FIXTURES / "real_erddap_bathymetry_sample.csv").read_text()
+    points = ERDDAPBathymetryFetcher()._parse_csv(csv_text)
+    grid = {
+        "source": ERDDAPBathymetryFetcher.SOURCE_NAME,
+        "dataset_id": ERDDAPBathymetryFetcher.DATASET_ID,
+        "provenance": "https://example.test/provenance",
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "bbox": BBOX,
+        "points": points,
+    }
+    write_bathymetry_cache(grid, cache_dir=tmp_path / "bathymetry")
+
+    # Also write one real, normal observation cache file directly in the
+    # parent dir, so this proves load_cached_observations still works
+    # normally alongside the (correctly isolated) bathymetry subdirectory.
+    raw = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
+    obs = OpenMeteoMarineFetcher()._parse_point(raw, ZONE_A, datetime.now(timezone.utc))
+    write_cache("Open-Meteo Marine", obs, cache_dir=tmp_path)
+
+    loaded = load_cached_observations(cache_dir=tmp_path)  # must not raise
+    assert len(loaded) == len(obs)
+
+
+@requires_bathymetry_network
+@pytest.mark.integration
+def test_real_bathymetry_fetch_integration():
+    fetcher = ERDDAPBathymetryFetcher()
+    grid = fetcher.fetch(BBOX)
+    assert len(grid["points"]) > 0
+    elevations = [p["elevation_m"] for p in grid["points"]]
+    # Sanity range for this coastal Bay of Bengal box: nowhere near
+    # Everest or the Mariana Trench, but real elevation/depth spread.
+    assert min(elevations) < 0  # some real seafloor in-box
+    assert max(elevations) > -8000
+    assert min(elevations) > -11000

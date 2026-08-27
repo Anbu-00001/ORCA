@@ -113,6 +113,63 @@ test.describe('frontend against the real live API', () => {
   });
 });
 
+// web/three-viz.js against the real backend: real GET /bathymetry (NOAA
+// ETOPO 2022, cached by data/fetch.py) and a real /ask response's
+// agent_findings/zone_summaries -- not fixtures this time.
+test.describe('3D visualizations against the real live API', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/index.html?api=${encodeURIComponent(API)}`);
+  });
+
+  test('GET /bathymetry itself returns a real, non-empty grid', async ({ request }) => {
+    const resp = await request.get(`${API}/bathymetry`);
+    expect(resp.ok()).toBeTruthy();
+    const data = await resp.json();
+    expect(data.points.length).toBeGreaterThan(0);
+    expect(data.points[0]).toHaveProperty('elevation_m');
+  });
+
+  test('3D Ocean view loads real relief from the running backend', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await page.getByTestId('view-toggle-3d').click();
+    await expect(page.getByTestId('ocean3d-container')).not.toHaveClass(/awaiting/, { timeout: 10000 });
+
+    const canvas = page.locator('#ocean3d-container canvas');
+    await expect(canvas).toBeAttached();
+    const box = await canvas.boundingBox();
+    expect(box.width).toBeGreaterThan(100);
+    expect(box.height).toBeGreaterThan(100);
+    expect(errors).toEqual([]);
+  });
+
+  test('reasoning graph reflects a real submitted query, not a stale/mock one', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await page.getByTestId('query-input').fill('Zone A');
+    await page.getByTestId('lat-input').fill('10.76');
+    await page.getByTestId('lon-input').fill('79.84');
+    await page.getByTestId('ask-button').click();
+    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
+
+    await page.getByTestId('reasoning3d-toggle').click();
+    const canvas = page.locator('#reasoning3d-container canvas');
+    await expect(canvas).toBeAttached();
+    const box = await canvas.boundingBox();
+    expect(box.width).toBeGreaterThan(50);
+    expect(errors).toEqual([]);
+  });
+
+  test('the 3D-to-query bridge round-trips through the real backend', async ({ page }) => {
+    await page.evaluate(() => window.__ORCA_SELECT_ZONE__('Zone D', 12.8, 80.5));
+    await expect(page.getByTestId('query-input')).toHaveValue('Zone D');
+    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
+    await expect(page.getByTestId('evidence-item').first()).toBeVisible();
+  });
+});
+
 // "Physically turn off the wifi. Don't simulate it." (S8.6) is a human
 // instruction for the real demo -- what we CAN verify from here is the
 // part that's actually risky: on a real laptop with wifi off, localhost

@@ -318,6 +318,98 @@ class ERDDAPChlorophyllFetcher:
         return max(0.3, 0.9 - 0.05 * staleness_days)
 
 
+class ERDDAPBathymetryFetcher:
+    """NOAA NCEI ETOPO 2022 (60 arc-second) global relief -- real seafloor
+    elevation for the 3D ocean/geospatial view, gridded once over the
+    whole demo BBOX.
+
+    Deliberately NOT a per-point MarineObservation stream like the
+    fetchers above: this is a static 2022 seabed/topography survey, not a
+    live advisory signal, so it never flows through orca/policy.py or
+    orca/agents.py (CLAUDE.md rule 4 -- the safety cascade only ever sees
+    real advisory evidence). It's cached to its own subdirectory for the
+    same reason -- see write_bathymetry_cache().
+
+    `z` is "positive up" (source: dataset .das attributes) -- positive
+    values are land elevation, negative values are depth below sea
+    level. We keep that sign convention and call the field `elevation_m`
+    rather than `depth_m` to avoid an inverted-sign bug down the line.
+    """
+
+    BASE_URL = "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/ETOPO_2022_v1_60s.csv"
+    DATASET_ID = "ETOPO_2022_v1_60s"
+    SOURCE_NAME = "NOAA NCEI ETOPO 2022 (60 arc-second)"
+    # Native resolution is 60 arc-second (~1.85 km at this latitude).
+    # Stride 4 -> ~7.4 km spacing: plenty smooth for a 3D relief mesh
+    # without a multi-thousand-point payload (verified against the real
+    # host: BBOX at stride 4 is ~1400 points, ~64 KB as CSV).
+    STRIDE = 4
+
+    def fetch(self, box: dict) -> dict:
+        query_url = self._build_url(box)
+        resp = requests.get(query_url, timeout=30)
+        resp.raise_for_status()
+
+        points = self._parse_csv(resp.text)
+        if not points:
+            raise ValueError(
+                "ETOPO bathymetry query returned no usable points -- refusing to "
+                "cache an empty grid as if it were real relief data"
+            )
+
+        return {
+            "source": self.SOURCE_NAME,
+            "dataset_id": self.DATASET_ID,
+            "provenance": query_url,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "bbox": box,
+            "stride": self.STRIDE,
+            "points": points,
+        }
+
+    def _build_url(self, box: dict) -> str:
+        return (
+            f"{self.BASE_URL}?z"
+            f"[({box['min_lat']}):{self.STRIDE}:({box['max_lat']})]"
+            f"[({box['min_lon']}):{self.STRIDE}:({box['max_lon']})]"
+        )
+
+    def _parse_csv(self, csv_text: str) -> list[dict]:
+        reader = csv.reader(io.StringIO(csv_text))
+        rows = list(reader)
+        if len(rows) < 3:
+            return []
+        data_rows = rows[2:]  # row 0 = names, row 1 = units
+
+        points: list[dict] = []
+        for row in data_rows:
+            if len(row) < 3:
+                continue
+            lat_str, lon_str, z_str = row[:3]
+            if z_str.strip().upper() == "NAN":
+                continue  # no fabricated fill value -- point is simply omitted
+            try:
+                points.append({"lat": float(lat_str), "lon": float(lon_str), "elevation_m": float(z_str)})
+            except ValueError:
+                continue
+        return points
+
+
+def write_bathymetry_cache(grid: dict, cache_dir: Path) -> Path:
+    """Writes to its own subdirectory (default data/cache/bathymetry/),
+    never data/cache/ directly -- orca/planner.py's load_cached_observations()
+    globs cache_dir/*.json non-recursively and parses every match as a
+    list of MarineObservation dicts; a bathymetry grid is a single dict
+    with a `points` key, not a list, and mixing them in the same
+    directory would break every /ask call. See tests/test_fetch.py.
+    """
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / "bathymetry_grid.json"
+    path.write_text(__import__("json").dumps(grid, indent=2))
+    return path
+
+
 def fetch_all(points: list[dict] | None = None) -> tuple[dict[str, list[MarineObservation]], dict[str, str]]:
     """Run every fetcher. Returns (results_by_source, errors_by_source).
 
@@ -376,6 +468,18 @@ def main() -> int:
 
     for source_name, error in errors.items():
         print(f"FAIL  {source_name}: {error}", file=sys.stderr)
+
+    # Bathymetry is map context, not advisory evidence (see
+    # ERDDAPBathymetryFetcher docstring) -- fetched and reported
+    # separately, and its failure never fails the advisory-critical run
+    # above or below (returned exit code still reflects `results`/`errors`
+    # from the point fetchers only).
+    try:
+        grid = ERDDAPBathymetryFetcher().fetch(BBOX)
+        path = write_bathymetry_cache(grid, cache_dir=CACHE_DIR / "bathymetry")
+        print(f"PASS  {ERDDAPBathymetryFetcher.SOURCE_NAME}: {len(grid['points'])} grid points -> {path}")
+    except Exception as exc:  # noqa: BLE001 — logged loudly, never swallowed
+        print(f"FAIL  {ERDDAPBathymetryFetcher.SOURCE_NAME}: {exc}", file=sys.stderr)
 
     return 1 if errors and not results else 0
 

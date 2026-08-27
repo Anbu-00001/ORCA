@@ -10,8 +10,10 @@ Does not modify orca/schema.py or orca/policy.py.
 """
 from __future__ import annotations
 
+import json
 import socket
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +22,13 @@ from pydantic import BaseModel
 from orca.planner import build_recommendation, load_cached_observations, observation_id
 
 app = FastAPI(title="ORCA", description="Marine advisory reasoning layer")
+
+# Seafloor relief for the geospatial 3D view -- map context, not advisory
+# evidence (see data/fetch.py ERDDAPBathymetryFetcher), so it's served
+# from its own cache file rather than through orca.planner.
+BATHYMETRY_CACHE_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "cache" / "bathymetry" / "bathymetry_grid.json"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +76,16 @@ def get_evidence(observation_id_: str) -> dict:
         if observation_id(obs) == observation_id_:
             return {**obs.to_dict(), "id": observation_id_}
     raise HTTPException(status_code=404, detail=f"No observation with id {observation_id_!r}")
+
+
+@app.get("/bathymetry")
+def bathymetry() -> dict:
+    if not BATHYMETRY_CACHE_PATH.exists():
+        raise HTTPException(
+            status_code=503,
+            detail="Bathymetry cache not populated -- run `python -m data.fetch` first",
+        )
+    return json.loads(BATHYMETRY_CACHE_PATH.read_text())
 
 
 @app.get("/health")

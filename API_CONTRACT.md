@@ -49,9 +49,37 @@ Submit a user query (e.g. location, target area, intent) and receive a determini
       "provenance": "https://marine-api.open-meteo.com/v1/marine"
     }
   ],
-  "offline_mode": true
+  "offline_mode": true,
+  "agent_findings": [
+    {
+      "agent": "hazard_agent",
+      "suggests_go": false,
+      "risk_level": 1.0,
+      "hard_deny": true,
+      "reason": "Significant wave height 3.1 m exceeds 2.5 m safety limit",
+      "observation_ids": ["obs_wave_01"]
+    }
+  ],
+  "zone_summaries": [
+    {
+      "name": "Zone A",
+      "lat": 10.76,
+      "lon": 79.84,
+      "action": "DO NOT GO",
+      "risk_level": 1.0,
+      "hard_deny": true
+    }
+  ]
 }
 ```
+
+`agent_findings` and `zone_summaries` are additive (existing clients can
+ignore them). `agent_findings` is the primary/queried zone's raw output
+from all 5 agents (not just the ones that got overridden) -- added for
+the 3D evidence-reasoning graph. `zone_summaries` is one entry per
+evaluated zone with a worst-agent `risk_level` and `hard_deny` -- added
+for the geospatial risk-terrain view. Both surface computation
+`build_recommendation()` already did internally; neither is fabricated.
 
 ---
 
@@ -78,7 +106,32 @@ Retrieve a specific observation by ID.
 
 ---
 
-### 3. `GET /health`
+### 3. `GET /bathymetry`
+Real seafloor relief for the region (NOAA NCEI ETOPO 2022, 60 arc-second),
+used only by the 3D geospatial view -- map context, not advisory evidence,
+so it never flows through the safety policy. 503 if the cache hasn't been
+populated yet (`python -m data.fetch`), never a fabricated/empty 200.
+
+#### Response Body
+```json
+{
+  "source": "NOAA NCEI ETOPO 2022 (60 arc-second)",
+  "dataset_id": "ETOPO_2022_v1_60s",
+  "provenance": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/ETOPO_2022_v1_60s.csv?...",
+  "fetched_at": "2026-08-27T04:36:00Z",
+  "bbox": { "min_lat": 10.5, "max_lat": 13.5, "min_lon": 79.5, "max_lon": 81.5 },
+  "stride": 4,
+  "points": [
+    { "lat": 10.76, "lon": 79.84, "elevation_m": -14.3 }
+  ]
+}
+```
+`elevation_m` is "positive up": positive is land elevation, negative is
+depth below sea level.
+
+---
+
+### 4. `GET /health`
 System status, offline status, and data cache freshness.
 
 #### Response Body

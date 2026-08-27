@@ -192,3 +192,83 @@ def test_recommendation_to_dict_matches_api_contract_shape():
 def test_build_recommendation_raises_on_zero_observations_everywhere():
     with pytest.raises(ValueError):
         build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=[])
+
+
+# ---------------------------------------------------------------------------
+# agent_findings / zone_summaries — full reasoning trace, for the 3D
+# evidence-reasoning graph and geospatial risk-terrain visualizations.
+# Nothing here is fabricated: both fields surface computation
+# build_recommendation already does internally (run_agents() per zone,
+# resolve() per zone) but previously discarded once the final answer was
+# picked. See orca/planner.py Recommendation docstring.
+# ---------------------------------------------------------------------------
+
+def test_recommendation_agent_findings_covers_all_five_agents():
+    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    names = {f.agent_name for f in rec.agent_findings}
+    assert names == {
+        "eo_satellite_agent", "ocean_state_agent", "weather_agent",
+        "hazard_agent", "geofence_agent",
+    }
+
+
+def test_recommendation_agent_findings_are_the_primary_zones_findings():
+    """agent_findings must reflect the queried (primary) zone, not whichever
+    zone ends up chosen after a SAFER ALTERNATIVE swap."""
+    obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
+    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    assert rec.chosen_zone["name"] == "Zone B"  # swapped
+
+    hazard = next(f for f in rec.agent_findings if f.agent_name == "hazard_agent")
+    assert hazard.hard_deny is True
+    assert any(o.lat == ZONE_A["lat"] for o in hazard.observations)
+
+
+def test_recommendation_to_dict_agent_findings_shape():
+    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    d = rec.to_dict()
+    assert "agent_findings" in d
+    assert len(d["agent_findings"]) == 5
+    evidence_ids = {o["id"] for o in d["evidence"]}
+    for f in d["agent_findings"]:
+        for required in ("agent", "suggests_go", "risk_level", "hard_deny", "reason", "observation_ids"):
+            assert required in f
+        # every referenced id must resolve to a real evidence entry --
+        # no dangling ids, no data invented just for the graph view.
+        for obs_id in f["observation_ids"]:
+            assert obs_id in evidence_ids
+
+
+def test_recommendation_zone_summaries_covers_every_zone():
+    obs = _clean_go_observations(ZONE_A) + _clean_go_observations(ZONE_B)
+    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    names = {s["name"] for s in rec.zone_summaries}
+    assert names == {z["name"] for z in ZONES}
+    for s in rec.zone_summaries:
+        for required in ("name", "lat", "lon", "action", "risk_level", "hard_deny"):
+            assert required in s
+
+
+def test_recommendation_zone_summaries_risk_level_reflects_worst_agent():
+    """Zone A has a hard-denying wave reading (3.1m > 2.5m limit) --
+    hazard_agent's risk_level for that is min(3.1/2.5, 1.0) == 1.0, and
+    that's the worst (max) of Zone A's five agents, so the summary must
+    surface it, not silently pick a calmer agent's number.
+    """
+    obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
+    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    zone_a_summary = next(s for s in rec.zone_summaries if s["name"] == "Zone A")
+    assert zone_a_summary["risk_level"] == pytest.approx(1.0)
+    assert zone_a_summary["hard_deny"] is True
+    assert zone_a_summary["action"] == "DO NOT GO"
+
+    zone_b_summary = next(s for s in rec.zone_summaries if s["name"] == "Zone B")
+    assert zone_b_summary["hard_deny"] is False
+    assert zone_b_summary["action"] == "GO"
+
+
+def test_recommendation_zone_summaries_in_to_dict():
+    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    d = rec.to_dict()
+    assert "zone_summaries" in d
+    assert len(d["zone_summaries"]) == len(ZONES)
