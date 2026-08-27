@@ -21,7 +21,7 @@ Submit a user query (e.g. location, target area, intent) and receive a determini
 ```json
 {
   "id": "rec_123456",
-  "action": "SAFER ALTERNATIVE", // "GO" | "DO NOT GO" | "SAFER ALTERNATIVE"
+  "action": "SAFER ALTERNATIVE", // "GO" | "DO NOT GO" | "SAFER ALTERNATIVE" | "CANNOT ASSESS"
   "reason": "Opportunity overridden by hazard: significant wave height 3.1 m at Nagapattinam exceeds safety threshold (2.5 m).",
   "recommendation": "Do not go to Nagapattinam. Go to Karaikal — lower expected catch, wave height 1.4 m.",
   "chosen_zone": {
@@ -78,9 +78,34 @@ Submit a user query (e.g. location, target area, intent) and receive a determini
   "time_frame": "now",
   "coverage_note": null,
   "lookup": null,
-  "primary_zone": { "name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449 }
+  "primary_zone": { "name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449 },
+  "severity": "hard_deny",
+  "blind_agents": []
 }
 ```
+
+#### `action` — the four values
+
+| Value | Meaning |
+|---|---|
+| `GO` | Conditions assessed and acceptable. |
+| `SAFER ALTERNATIVE` | Assessed and not clean. Either a real zone swap (`chosen_zone` is another zone) or a borderline verdict with no safer zone nearby (`chosen_zone` is `null`). |
+| `DO NOT GO` | Assessed, and a hard safety denial applies. `chosen_zone` is `null`. |
+| `CANNOT ASSESS` | **ORCA has no evidence for this zone** and is refusing to decide. Not a safety judgement — it is the absence of one. `evidence` is `[]` and `chosen_zone` is `null` unless a genuine alternative zone was found (see R-39b). |
+
+> **Enum widening — version note (v2.1, R-25).**
+> `CANNOT ASSESS` is a **new value in an existing enum**, which is *not* an
+> additive change: a client that switches on `action` lands in its default
+> branch. **A client that does not recognise this value MUST treat it as
+> non-permissive — never as `GO`.** Any consumer whose fallback branch is
+> "proceed" has a fail-open and must be fixed *before* this value can be
+> emitted. `web/index.html`'s `actionClass()` was exactly such a consumer
+> and is corrected in the same release.
+>
+> `CANNOT ASSESS` means *ORCA does not know*, deliberately distinguished from
+> `DO NOT GO`, which means *ORCA knows it is dangerous*. Collapsing the two
+> would teach users to discount the one verdict that must never be
+> discounted (PRD R-39).
 
 #### Optional request field: `history`
 `POST /ask` also accepts an optional `history` array for multi-turn
@@ -203,6 +228,30 @@ guarantee, not just a default. When configured and reachable:
   `DO NOT GO`. Anything resolving a follow-up pronoun ("what's the wave
   height *there*?") should use `primary_zone` — using `chosen_zone` made
   a Rameswaram question silently become a Chennai one.
+- `offline_mode` on **`/ask`** is always `true` (**R-54**). It states how the
+  answer was produced — read from `data/cache/`, which is unconditional —
+  rather than measuring the network. It used to echo a live socket connect
+  to `marine-api.open-meteo.com:443` made on every request, which put a
+  network call in the request path (N-6, N-7) whose DNS resolution was not
+  bounded by its timeout. **The live connectivity reading is `GET /health`'s
+  `offline_mode`, and that is what the UI badge renders.**
+- `severity` (**R-38**) makes the strength of a verdict recoverable without
+  parsing prose. `action` alone cannot carry it: a hard deny that was
+  rerouted to an alternative renders as `SAFER ALTERNATIVE`, today
+  indistinguishable from a mild wind override — and the control-room user
+  (PRD §2, P1) consumes this programmatically. One of:
+  `"none"` (a clean `GO`), `"advisory"` (a risk-threshold override),
+  `"hard_deny"` (a hard safety denial, wherever the user is ultimately
+  sent), or `"unknown"` (`CANNOT ASSESS` — no severity was established
+  because nothing was assessed). Strictly additive: it never overloads
+  `action`, and a client ignoring it sees exactly today's behaviour.
+- `blind_agents` (**R-40**) lists, by name, the decision-bearing agents that
+  had **no observations at all** at the answered zone — e.g.
+  `["eo_satellite_agent"]`. R-33 covers readings that are *stale*; nothing
+  covered readings that are *absent*, so a `GO` resting on SST alone read
+  identically to one backed by every source. `[]` means every agent had
+  something to look at. This names absence; it never invents a reading to
+  fill it (CLAUDE.md rule 1).
 
 ---
 
