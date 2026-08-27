@@ -20,23 +20,23 @@
     "semantic_hash": "fd222d94a72f2d796464fab88bc7421f"
   },
   "data/fetch.py": {
-    "mtime": 1787805984.765935,
-    "ast_hash": "6e58b62e226ffd6607762ba40ee9a435",
+    "mtime": 1787807890.4389775,
+    "ast_hash": "3911d05f93be8226c921c3c28b1530ea",
     "semantic_hash": ""
   },
   "demo/scenarios.json": {
-    "mtime": 1787755823.1228216,
-    "ast_hash": "574cfb2b9ff11283660395e428fc6ab3",
-    "semantic_hash": "574cfb2b9ff11283660395e428fc6ab3"
+    "mtime": 1787808735.1863236,
+    "ast_hash": "67dba101b42e98b22a65544ae003c5bc",
+    "semantic_hash": ""
   },
   "e2e/live.spec.js": {
-    "mtime": 1787806778.4085793,
-    "ast_hash": "ea6ee7f0eacca2e68eda0142787123e1",
+    "mtime": 1787808280.4473395,
+    "ast_hash": "753c0744dcb86afc9a84b1db0323520a",
     "semantic_hash": ""
   },
   "e2e/mock.spec.js": {
-    "mtime": 1787806765.1498523,
-    "ast_hash": "99cd2796387f0805ab65073a41505887",
+    "mtime": 1787808348.6579583,
+    "ast_hash": "16698d46eff012452025046d2460fb4c",
     "semantic_hash": ""
   },
   "orca/__init__.py": {
@@ -45,9 +45,9 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "orca/agents.py": {
-    "mtime": 1787755248.2243366,
-    "ast_hash": "9a341b64ce5e4c4442b9701c894c9042",
-    "semantic_hash": "9a341b64ce5e4c4442b9701c894c9042"
+    "mtime": 1787807910.3466783,
+    "ast_hash": "bbc2528d4d6b4c80b09b6118ddca8a35",
+    "semantic_hash": ""
   },
   "orca/api.py": {
     "mtime": 1787806099.8648524,
@@ -90,9 +90,9 @@
     "semantic_hash": "1a7fe5f7d2f331c7e37c2afc903e9030"
   },
   "scripts/generate_demo_scenarios.py": {
-    "mtime": 1787755815.901492,
-    "ast_hash": "612ffc7f89658b729358a98ef4441b9f",
-    "semantic_hash": "612ffc7f89658b729358a98ef4441b9f"
+    "mtime": 1787808715.9614687,
+    "ast_hash": "b6f4c4f8e8755b797d8cf35d0e18f748",
+    "semantic_hash": ""
   },
   "tests/__init__.py": {
     "mtime": 1787754360.9898374,
@@ -110,34 +110,34 @@
     "semantic_hash": "e8c89a476b2e5d07c7a558c35edd6cdc"
   },
   "tests/test_agents.py": {
-    "mtime": 1787755219.7399204,
-    "ast_hash": "bc646637c8ee4ede6f9776ed1e88014f",
-    "semantic_hash": "bc646637c8ee4ede6f9776ed1e88014f"
+    "mtime": 1787808164.0988953,
+    "ast_hash": "87f5ad82c9f4b42b0a1904bf32c11d66",
+    "semantic_hash": ""
   },
   "tests/test_api.py": {
-    "mtime": 1787806069.6604967,
-    "ast_hash": "cf660ffe385f741be7703bf484855f65",
+    "mtime": 1787808175.578252,
+    "ast_hash": "aaf6ce62fd2f4089cabbd319afef7f59",
     "semantic_hash": ""
   },
   "tests/test_fetch.py": {
-    "mtime": 1787805901.8084924,
-    "ast_hash": "9cc5ed815773cd5746e7adbf34f27889",
+    "mtime": 1787808161.1826167,
+    "ast_hash": "9e76a00bef45741435a89998fd7ca6c6",
     "semantic_hash": ""
   },
   "tests/test_mcp_server.py": {
-    "mtime": 1787763136.7693796,
-    "ast_hash": "9d9d1ed7b42f291238ce69babca69d62",
-    "semantic_hash": "9d9d1ed7b42f291238ce69babca69d62"
+    "mtime": 1787808153.938289,
+    "ast_hash": "f11aaf6255c06ffe1323bebb4605408c",
+    "semantic_hash": ""
   },
   "tests/test_planner.py": {
-    "mtime": 1787805636.2682757,
-    "ast_hash": "4c02e868924657b210920b3037f4155c",
+    "mtime": 1787808062.7996373,
+    "ast_hash": "a3710b512d97f02d835a3563a11f4ad4",
     "semantic_hash": ""
   },
   "tests/test_policy.py": {
-    "mtime": 1787754547.2345777,
-    "ast_hash": "ccd046f377814001d0a60ca126ecfa83",
-    "semantic_hash": "ccd046f377814001d0a60ca126ecfa83"
+    "mtime": 1787808158.7680235,
+    "ast_hash": "08bf7103c1181f0ecc2d9d538b7e2e6d",
+    "semantic_hash": ""
   },
   "tests/test_schema.py": {
     "mtime": 1787754373.555263,
@@ -145,13 +145,13 @@
     "semantic_hash": "725cd3dc40f334fb6a80e3ba6ac12932"
   },
   "web/mock_response.json": {
-    "mtime": 1787806261.6393373,
-    "ast_hash": "d737bc3445b7ecb03ed764075487e232",
+    "mtime": 1787808333.5361183,
+    "ast_hash": "1fa0a0bb300688f511714698c32c7897",
     "semantic_hash": ""
   },
   "API_CONTRACT.md": {
-    "mtime": 1787806147.7847316,
-    "ast_hash": "d0b4549097013b9a6e5fd763338d7151",
+    "mtime": 1787808777.1854541,
+    "ast_hash": "490c0e6b64b51fc74a9865644bb7716c",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
@@ -160,9 +160,9 @@
     "semantic_hash": "4f516bf63cd1f3c90c414737f95a6c64"
   },
   "MANUAL_TASKS.md": {
-    "mtime": 1787756861.7329507,
-    "ast_hash": "02a7f3e7b83973d8a817650607265faf",
-    "semantic_hash": "02a7f3e7b83973d8a817650607265faf"
+    "mtime": 1787808954.9310212,
+    "ast_hash": "935982cea0be2f1f46b8bf38fcfd32b7",
+    "semantic_hash": ""
   },
   "ORCA-32-HOUR-WAR-PLAN-v3.md": {
     "mtime": 1787753628.331188,
@@ -170,18 +170,18 @@
     "semantic_hash": "f575820d408edc8a0c5dab2b151fd3c0"
   },
   "README.md": {
-    "mtime": 1787756730.2965462,
-    "ast_hash": "8071296f18e0e9ece4e49dd56f3c1bea",
-    "semantic_hash": "8071296f18e0e9ece4e49dd56f3c1bea"
+    "mtime": 1787808806.8028724,
+    "ast_hash": "ed7590d2cbec6b163c61009f401451f9",
+    "semantic_hash": ""
   },
   "SCRATCH.md": {
-    "mtime": 1787806229.409048,
-    "ast_hash": "12f41da3a49c30fca881e0812e744a93",
+    "mtime": 1787809056.2798316,
+    "ast_hash": "a44d3d39a807485a4c3cb9e04ec2e2b6",
     "semantic_hash": ""
   },
   "TEAM_STATUS.md": {
-    "mtime": 1787806944.9073596,
-    "ast_hash": "7c07db8a22842e1b47c9f719c3bbd5aa",
+    "mtime": 1787809034.7369041,
+    "ast_hash": "5d2000aa3582b8e06a238e4cc06054e5",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -190,28 +190,28 @@
     "semantic_hash": "ce7c3b009b67ff1849eb7d880e8e813a"
   },
   "web/index.html": {
-    "mtime": 1787806622.7150095,
-    "ast_hash": "059a3b8e8c50855c77b6c382ef33e50e",
+    "mtime": 1787808437.0119662,
+    "ast_hash": "e13164aba49c242920be9a55f4e9d818",
     "semantic_hash": ""
   },
   "docs/screenshots/orca_live_demo.png": {
-    "mtime": 1787756846.4834113,
-    "ast_hash": "74e48aea4a94f417e0251c60ef7f4f03",
-    "semantic_hash": "74e48aea4a94f417e0251c60ef7f4f03"
+    "mtime": 1787808936.3844702,
+    "ast_hash": "739482239cd58bd68de78fcc5fb6b547",
+    "semantic_hash": ""
   },
   "data/cache/bathymetry/bathymetry_grid.json": {
-    "mtime": 1787806014.537014,
-    "ast_hash": "e4974083d0bce0e9b9ae9f6495b5b72e",
+    "mtime": 1787808573.1995196,
+    "ast_hash": "9cd81144e0b98f7e9aa3ce3b274acef4",
     "semantic_hash": ""
   },
   "data/cache/open-meteo-forecast_2026-08-27.json": {
-    "mtime": 1787806012.5007856,
-    "ast_hash": "c41f073a74778dd9d9e1d394c22052a8",
+    "mtime": 1787808565.6979237,
+    "ast_hash": "b6cd916e1b04473254d9e4394cb10499",
     "semantic_hash": ""
   },
   "data/cache/open-meteo-marine_2026-08-27.json": {
-    "mtime": 1787806012.500031,
-    "ast_hash": "6ac9f35b7ce8a565a49fbb25b1cbfd22",
+    "mtime": 1787808565.6969006,
+    "ast_hash": "f32d8f91c5cf9efe763b32da0eadae8b",
     "semantic_hash": ""
   },
   "web/mock_bathymetry.json": {
@@ -262,6 +262,11 @@
   ".serena/project.yml": {
     "mtime": 1787789393.0970285,
     "ast_hash": "e9a2369cfa0d8c9310892d099100fc18",
+    "semantic_hash": ""
+  },
+  "data/cache/noaa-coastwatch-erddap-viirs-chlorophyll-a_2026-08-27.json": {
+    "mtime": 1787808565.698279,
+    "ast_hash": "a1a6173476e0e8166da86f368b53d2e8",
     "semantic_hash": ""
   }
 }

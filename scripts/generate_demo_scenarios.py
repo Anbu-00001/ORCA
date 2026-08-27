@@ -1,7 +1,7 @@
 """Regenerate demo/scenarios.json from the REAL, currently running API.
 
 Run this the morning of the actual presentation (and any time you want
-to know what the four zones currently look like): sea state changes day
+to know what the real zones currently look like): sea state changes day
 to day, so which zone shows the "safety overrides opportunity" conflict
 can shift. This script never invents anything — it just calls the real
 /ask endpoint and records exactly what it says.
@@ -13,16 +13,14 @@ Usage:
 """
 import argparse
 import json
+import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-ZONES = [
-    ("Zone A", 10.76, 79.84),
-    ("Zone B", 10.85, 79.95),
-    ("Zone C", 11.50, 80.20),
-    ("Zone D", 12.80, 80.50),
-]
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from data.fetch import ZONES  # noqa: E402 -- single source of truth, not a second hand-kept copy
 
 OUT_PATH = Path(__file__).resolve().parent.parent / "demo" / "scenarios.json"
 
@@ -57,9 +55,10 @@ def main() -> None:
     args = parser.parse_args()
 
     scenarios = []
-    for name, lat, lon in ZONES:
+    for zone in ZONES:
+        name, lat, lon = zone["name"], zone["lat"], zone["lon"]
         response = _post(args.base_url, "/ask", {
-            "query": f"Should I go fishing in {name} from Nagapattinam?",
+            "query": f"Should I go fishing near {name}?",
             "lat": lat, "lon": lon,
         })
         scenarios.append({"query_zone": name, "lat": lat, "lon": lon, "response": response})

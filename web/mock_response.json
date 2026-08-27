@@ -1,17 +1,17 @@
 {
   "id": "rec_123456",
   "action": "SAFER ALTERNATIVE",
-  "reason": "Opportunity overridden by hazard: significant wave height 3.1 m at Zone A exceeds safety threshold (2.5 m).",
-  "recommendation": "Do not go to Zone A. Go to Zone B — lower expected catch, wave height 1.4 m.",
+  "reason": "Opportunity overridden by hazard: significant wave height 3.1 m at Nagapattinam exceeds safety threshold (2.5 m).",
+  "recommendation": "Do not go to Nagapattinam. Go to Karaikal — lower expected catch, wave height 1.4 m.",
   "chosen_zone": {
-    "name": "Zone B",
-    "lat": 10.85,
-    "lon": 79.95
+    "name": "Karaikal",
+    "lat": 10.9327,
+    "lon": 79.8319
   },
   "overridden": [
     {
       "agent": "ocean_state_agent",
-      "reason": "Zone A recommended based on SST (28.4°C) & high chlorophyll"
+      "reason": "Nagapattinam recommended based on SST (28.4°C) & high chlorophyll"
     }
   ],
   "evidence": [
@@ -20,8 +20,8 @@
       "variable": "wave_height_m",
       "value": 3.1,
       "unit": "m",
-      "lat": 10.76,
-      "lon": 79.84,
+      "lat": 10.7672,
+      "lon": 79.8449,
       "valid_time": "2026-08-26T04:00:00Z",
       "source": "Open-Meteo Marine",
       "confidence": 0.71,
@@ -32,8 +32,8 @@
       "variable": "sst_c",
       "value": 28.4,
       "unit": "°C",
-      "lat": 10.76,
-      "lon": 79.84,
+      "lat": 10.7672,
+      "lon": 79.8449,
       "valid_time": "2026-08-26T04:00:00Z",
       "source": "Open-Meteo Marine",
       "confidence": 0.9,
@@ -44,8 +44,8 @@
       "variable": "chlorophyll_mg_m3",
       "value": 2.3,
       "unit": "mg m^-3",
-      "lat": 10.76,
-      "lon": 79.84,
+      "lat": 10.7672,
+      "lon": 79.8449,
       "valid_time": "2026-08-25T12:00:00Z",
       "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
       "confidence": 0.85,
@@ -56,8 +56,8 @@
       "variable": "wind_speed_kmh",
       "value": 12.0,
       "unit": "km/h",
-      "lat": 10.76,
-      "lon": 79.84,
+      "lat": 10.7672,
+      "lon": 79.8449,
       "valid_time": "2026-08-26T04:00:00Z",
       "source": "Open-Meteo Forecast",
       "confidence": 0.9,
@@ -108,9 +108,15 @@
     }
   ],
   "zone_summaries": [
-    { "name": "Zone A", "lat": 10.76, "lon": 79.84, "action": "DO NOT GO", "risk_level": 1.0, "hard_deny": true },
-    { "name": "Zone B", "lat": 10.85, "lon": 79.95, "action": "GO", "risk_level": 0.3, "hard_deny": false },
-    { "name": "Zone C", "lat": 11.50, "lon": 80.20, "action": "GO", "risk_level": 0.2, "hard_deny": false },
-    { "name": "Zone D", "lat": 12.80, "lon": 80.50, "action": "GO", "risk_level": 0.25, "hard_deny": false }
+    { "name": "Chennai", "lat": 13.1251, "lon": 80.2955, "action": "GO", "risk_level": 0.18, "hard_deny": false },
+    { "name": "Cuddalore", "lat": 11.75, "lon": 79.75, "action": "GO", "risk_level": 0.22, "hard_deny": false },
+    { "name": "Karaikal", "lat": 10.9327, "lon": 79.8319, "action": "GO", "risk_level": 0.3, "hard_deny": false },
+    { "name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449, "action": "DO NOT GO", "risk_level": 1.0, "hard_deny": true },
+    { "name": "Point Calimere", "lat": 10.2845, "lon": 79.8241, "action": "GO", "risk_level": 0.15, "hard_deny": false },
+    { "name": "Mandapam", "lat": 9.28, "lon": 79.12, "action": "GO", "risk_level": 0.25, "hard_deny": false },
+    { "name": "Rameswaram", "lat": 9.2811, "lon": 79.3151, "action": "GO", "risk_level": 0.2, "hard_deny": false },
+    { "name": "Thoothukudi", "lat": 8.4730, "lon": 78.1215, "action": "GO", "risk_level": 0.17, "hard_deny": false },
+    { "name": "Kanyakumari", "lat": 8.0883, "lon": 77.5385, "action": "GO", "risk_level": 0.28, "hard_deny": false },
+    { "name": "Colachel", "lat": 8.1786, "lon": 77.2561, "action": "GO", "risk_level": 0.2, "hard_deny": false }
   ]
 }

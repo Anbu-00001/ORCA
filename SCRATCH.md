@@ -38,3 +38,45 @@
     three.js visualization. Not usable here — would violate CLAUDE.md
     rule 1 if any of its data touched this repo, and there's no
     visualization technique to borrow either.
+
+## 2026-08-27 — replacing the 4 mock zones with real ones: what was checked
+
+Direct feedback: "four mock zones ... THIS IS JUST CRAP, WE NEED ACTUAL
+DATA." Researched real, checkable coordinate sources for Tamil Nadu
+coastal fishing locations before touching `data/fetch.py`.
+
+- **CMFRI's GIS-based inventory of 1,278 fish landing centres (359 in
+  Tamil Nadu)** — eprints.cmfri.org.in/13606/ — is the right dataset in
+  principle (physically-verified GPS coordinates, purpose-built for
+  exactly this), but the actual coordinate PDF is "Restricted to
+  Registered users only." Not usable without emailing
+  cmfrilibrary@gmail.com and waiting. A real, scriptable public dataset
+  worth revisiting post-hackathon if that access comes through.
+- **INCOIS Potential Fishing Zone WebGIS** (incois.gov.in/MarineFisheries/
+  PfzWebGis, incois.gov.in/gisserver/PFZ/) — real, live, ~1223 advisory
+  nodes along the whole Indian coast, refreshed daily. WebFetch on these
+  pages returns only the page shell (client-side JS renders the actual
+  map/data), so no backend API endpoint was discoverable without
+  inspecting real network calls in an actual browser — not attempted.
+  This is the single most valuable real-time data source ORCA could ever
+  plug into (it's literally the same kind of advisory ORCA produces, from
+  the government agency that does it for real) — worth a manual
+  browser-network-tab investigation by a teammate, not something to
+  guess at.
+- **Protected Planet / WDPA API** (api.protectedplanet.net) — 401
+  Unauthorized without a token; the website's search/download UI didn't
+  expose a token-free path either. Used a real, specific, named feature
+  instead (Krusadai Island, 9.20°N 79.17°E, sourced from its own
+  Wikipedia article) rather than trying to approximate the Gulf of
+  Mannar park's full ~160km boundary without real boundary data — see
+  `orca/agents.py`'s `PROHIBITED_ZONE` comment.
+- **What worked:** every zone's coordinate is sourced from its own
+  Wikipedia article (a couple from the more specific *fishing harbour*
+  article, e.g. Rameswaram: 9.2811°N 79.3151°E specifically for "Rameswaram
+  Fishing Harbour and Boat Jetty", not just the town). Verifiable,
+  citable, real — just not from a single authoritative GIS dataset the
+  way CMFRI's would have been.
+- **OpenFreeMap** (openfreemap.org) confirmed working with zero
+  friction: no API key, no signup, `https://tiles.openfreemap.org/styles/
+  liberty` returns a real styled vector basemap. Replaced
+  `demotiles.maplibre.org` in `web/index.html`.

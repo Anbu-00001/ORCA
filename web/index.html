@@ -79,7 +79,7 @@
   #map-fallback.visible { display: flex; }
   #map-fallback svg { width: 90%; height: 90%; }
   .zone-dot { fill: #ffffff; stroke: var(--ink); stroke-width: 1.5; }
-  .zone-label { font-size: 11px; fill: var(--ink); font-weight: 600; }
+  .zone-label { font-size: 9px; fill: var(--ink); font-weight: 600; }
 
   .view-toggle-bar { position: absolute; top: 10px; left: 10px; z-index: 10; display: flex; gap: 0.4rem; }
   .view-toggle-btn {
@@ -211,15 +211,32 @@
     <div id="map-2d-layer">
       <div id="map" data-testid="map"></div>
       <div id="map-fallback">
+        <!-- Positions are a straight-line projection of each real zone's
+             actual lat/lon (data/fetch.py ZONES) onto this viewBox, north
+             at top -- an approximate sketch of the real Tamil Nadu coast
+             shape, not an arbitrary scatter. See #map-fallback's script
+             hookup below for the live marker equivalent. -->
         <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
-          <circle class="zone-dot" data-zone="Zone A" cx="90" cy="120" r="6"></circle>
-          <text class="zone-label" x="100" y="124">Zone A</text>
-          <circle class="zone-dot" data-zone="Zone B" cx="130" cy="140" r="6"></circle>
-          <text class="zone-label" x="140" y="144">Zone B</text>
-          <circle class="zone-dot" data-zone="Zone C" cx="170" cy="90" r="6"></circle>
-          <text class="zone-label" x="180" y="94">Zone C</text>
-          <circle class="zone-dot" data-zone="Zone D" cx="220" cy="40" r="6"></circle>
-          <text class="zone-label" x="230" y="44">Zone D</text>
+          <circle class="zone-dot" data-zone="Chennai" cx="240" cy="20" r="5"></circle>
+          <text class="zone-label" x="248" y="24">Chennai</text>
+          <circle class="zone-dot" data-zone="Cuddalore" cx="208" cy="91" r="5"></circle>
+          <text class="zone-label" x="216" y="95">Cuddalore</text>
+          <circle class="zone-dot" data-zone="Karaikal" cx="213" cy="133" r="5"></circle>
+          <text class="zone-label" x="221" y="130">Karaikal</text>
+          <circle class="zone-dot" data-zone="Nagapattinam" cx="213" cy="142" r="5"></circle>
+          <text class="zone-label" x="221" y="150">Nagapattinam</text>
+          <circle class="zone-dot" data-zone="Point Calimere" cx="212" cy="167" r="5"></circle>
+          <text class="zone-label" x="220" y="171">Pt. Calimere</text>
+          <circle class="zone-dot" data-zone="Mandapam" cx="170" cy="219" r="5"></circle>
+          <text class="zone-label" x="178" y="215">Mandapam</text>
+          <circle class="zone-dot" data-zone="Rameswaram" cx="182" cy="218" r="5"></circle>
+          <text class="zone-label" x="190" y="230">Rameswaram</text>
+          <circle class="zone-dot" data-zone="Thoothukudi" cx="111" cy="260" r="5"></circle>
+          <text class="zone-label" x="119" y="256">Thoothukudi</text>
+          <circle class="zone-dot" data-zone="Kanyakumari" cx="77" cy="280" r="5"></circle>
+          <text class="zone-label" x="30" y="272">Kanyakumari</text>
+          <circle class="zone-dot" data-zone="Colachel" cx="60" cy="275" r="5"></circle>
+          <text class="zone-label" x="18" y="290">Colachel</text>
         </svg>
       </div>
     </div>
@@ -253,9 +270,9 @@
 </main>
 
 <footer>
-  <input type="text" id="query-input" data-testid="query-input" placeholder="Should I go fishing in Zone A?" />
-  <label>lat <input type="text" class="coord" id="lat-input" data-testid="lat-input" value="10.76" /></label>
-  <label>lon <input type="text" class="coord" id="lon-input" data-testid="lon-input" value="79.84" /></label>
+  <input type="text" id="query-input" data-testid="query-input" placeholder="Should I go fishing near Nagapattinam?" />
+  <label>lat <input type="text" class="coord" id="lat-input" data-testid="lat-input" value="10.7672" /></label>
+  <label>lon <input type="text" class="coord" id="lon-input" data-testid="lon-input" value="79.8449" /></label>
   <button id="ask-button" data-testid="ask-button">Ask</button>
   <button id="tamil-sample-button" class="secondary" data-testid="tamil-sample-button">🔊 Play sample Tamil query</button>
   <audio id="tamil-audio" data-testid="tamil-audio" src="assets/tamil_sample.mp3" preload="none"></audio>
@@ -269,14 +286,22 @@
   const MOCK_MODE = params.get("mock") === "1";
   const API_BASE = params.get("api") || "http://localhost:8000";
 
-  // Mirrors data/fetch.py's ZONES -- display-only coordinates for the map,
-  // not a marine observation, so duplicating them here doesn't touch
-  // orca/schema.py's traceability rule.
+  // Mirrors data/fetch.py's ZONES -- real Tamil Nadu coastal fishing
+  // harbours/towns, north to south, each sourced from that place's
+  // Wikipedia article (see the comment there for details). Display-only
+  // coordinates for the map, not a marine observation, so duplicating
+  // them here doesn't touch orca/schema.py's traceability rule.
   const ZONES = [
-    { name: "Zone A", lat: 10.76, lon: 79.84 },
-    { name: "Zone B", lat: 10.85, lon: 79.95 },
-    { name: "Zone C", lat: 11.50, lon: 80.20 },
-    { name: "Zone D", lat: 12.80, lon: 80.50 },
+    { name: "Chennai", lat: 13.1251, lon: 80.2955 },
+    { name: "Cuddalore", lat: 11.75, lon: 79.75 },
+    { name: "Karaikal", lat: 10.9327, lon: 79.8319 },
+    { name: "Nagapattinam", lat: 10.7672, lon: 79.8449 },
+    { name: "Point Calimere", lat: 10.2845, lon: 79.8241 },
+    { name: "Mandapam", lat: 9.28, lon: 79.12 },
+    { name: "Rameswaram", lat: 9.2811, lon: 79.3151 },
+    { name: "Thoothukudi", lat: 8.4730, lon: 78.1215 },
+    { name: "Kanyakumari", lat: 8.0883, lon: 77.5385 },
+    { name: "Colachel", lat: 8.1786, lon: 77.2561 },
   ];
 
   // A real, simple Tamil query and its transcription, used only for the
@@ -445,9 +470,13 @@
     try {
       const map = new maplibregl.Map({
         container: "map",
-        style: "https://demotiles.maplibre.org/style.json",
-        center: [80.1, 11.3],
-        zoom: 7,
+        // OpenFreeMap: free, no API key, no request limits (openfreemap.org).
+        // "liberty" carries real place labels/coastline detail, unlike the
+        // generic demo tiles this used to point at -- worth it here since
+        // real coastal town names are the whole point of the map.
+        style: "https://tiles.openfreemap.org/styles/liberty",
+        center: [78.85, 10.6],
+        zoom: 6.3,
       });
       map.on("error", () => {
         document.getElementById("map-fallback").classList.add("visible");

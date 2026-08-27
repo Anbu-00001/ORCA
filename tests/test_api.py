@@ -29,7 +29,7 @@ def test_health_returns_expected_shape():
 
 
 def test_ask_returns_contract_shaped_recommendation():
-    resp = client.post("/ask", json={"query": "Should I go fishing in Zone A from Nagapattinam?", "lat": 10.76, "lon": 79.84})
+    resp = client.post("/ask", json={"query": "Should I go fishing near Nagapattinam?", "lat": 10.76, "lon": 79.84})
     assert resp.status_code == 200
     data = resp.json()
     for key in ("id", "action", "reason", "recommendation", "chosen_zone", "overridden", "evidence", "offline_mode"):
@@ -40,7 +40,7 @@ def test_ask_returns_contract_shaped_recommendation():
 
 
 def test_ask_every_evidence_number_carries_full_provenance():
-    resp = client.post("/ask", json={"query": "Zone A", "lat": 10.76, "lon": 79.84})
+    resp = client.post("/ask", json={"query": "Nagapattinam", "lat": 10.76, "lon": 79.84})
     data = resp.json()
     for obs in data["evidence"]:
         for required in ("id", "variable", "value", "unit", "source", "valid_time", "confidence", "provenance"):
@@ -48,7 +48,7 @@ def test_ask_every_evidence_number_carries_full_provenance():
 
 
 def test_ask_evidence_ids_resolve_through_evidence_endpoint():
-    resp = client.post("/ask", json={"query": "Zone A", "lat": 10.76, "lon": 79.84})
+    resp = client.post("/ask", json={"query": "Nagapattinam", "lat": 10.76, "lon": 79.84})
     evidence = resp.json()["evidence"]
     assert evidence, "expected at least one evidence item"
     for item in evidence:
@@ -61,12 +61,12 @@ def test_ask_evidence_ids_resolve_through_evidence_endpoint():
 
 
 def test_ask_missing_field_returns_422():
-    resp = client.post("/ask", json={"query": "Zone A", "lat": 10.76})  # missing lon
+    resp = client.post("/ask", json={"query": "Nagapattinam", "lat": 10.76})  # missing lon
     assert resp.status_code == 422
 
 
 def test_ask_wrong_type_returns_422():
-    resp = client.post("/ask", json={"query": "Zone A", "lat": "not-a-number", "lon": 79.84})
+    resp = client.post("/ask", json={"query": "Nagapattinam", "lat": "not-a-number", "lon": 79.84})
     assert resp.status_code == 422
 
 
@@ -89,7 +89,7 @@ def test_ask_and_evidence_are_unaffected_by_connectivity(monkeypatch):
     """
     import orca.api as api_module
 
-    online_resp = client.post("/ask", json={"query": "Zone A", "lat": 10.76, "lon": 79.84})
+    online_resp = client.post("/ask", json={"query": "Nagapattinam", "lat": 10.76, "lon": 79.84})
     assert online_resp.status_code == 200
 
     monkeypatch.setattr(api_module, "_is_reachable", lambda *a, **k: True)  # simulate offline
@@ -97,7 +97,7 @@ def test_ask_and_evidence_are_unaffected_by_connectivity(monkeypatch):
     offline_health = client.get("/health")
     assert offline_health.json()["offline_mode"] is True
 
-    offline_resp = client.post("/ask", json={"query": "Zone A", "lat": 10.76, "lon": 79.84})
+    offline_resp = client.post("/ask", json={"query": "Nagapattinam", "lat": 10.76, "lon": 79.84})
     assert offline_resp.status_code == 200
     online_data = online_resp.json()
     offline_data = offline_resp.json()
@@ -115,7 +115,7 @@ def test_ask_different_zones_can_produce_different_actions():
     returning one constant answer regardless of input.
     """
     responses = {}
-    for name, lat, lon in [("Zone A", 10.76, 79.84), ("Zone B", 10.85, 79.95)]:
+    for name, lat, lon in [("Nagapattinam", 10.76, 79.84), ("Karaikal", 10.85, 79.95)]:
         resp = client.post("/ask", json={"query": name, "lat": lat, "lon": lon})
         responses[name] = resp.json()
     assert all(r["action"] in VALID_ACTIONS for r in responses.values())
@@ -127,13 +127,13 @@ def test_ask_different_zones_can_produce_different_actions():
 # ---------------------------------------------------------------------------
 
 def test_ask_response_includes_agent_findings_and_zone_summaries():
-    resp = client.post("/ask", json={"query": "Zone A", "lat": 10.76, "lon": 79.84})
+    resp = client.post("/ask", json={"query": "Nagapattinam", "lat": 10.76, "lon": 79.84})
     data = resp.json()
     assert len(data["agent_findings"]) == 5
     for f in data["agent_findings"]:
         for required in ("agent", "suggests_go", "risk_level", "hard_deny", "reason", "observation_ids"):
             assert required in f
-    assert len(data["zone_summaries"]) >= 2  # data/fetch.py ZONES has 4
+    assert len(data["zone_summaries"]) >= 2  # data/fetch.py ZONES has 10
     for s in data["zone_summaries"]:
         for required in ("name", "lat", "lon", "action", "risk_level", "hard_deny"):
             assert required in s

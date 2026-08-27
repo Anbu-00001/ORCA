@@ -70,7 +70,7 @@ flowchart TD
         Findings --> PolicyRule1{"Rule 1: Hard Geofence / Dangerous Waves?"}
         PolicyRule1 -- "Yes" --> Deny["Action: DO NOT GO"]
         PolicyRule1 -- "No" --> PolicyRule2{"Rule 2: High Catch Opportunity AND Wave Risk >= 0.6?"}
-        PolicyRule2 -- "Yes" --> Override["Action: SAFER ALTERNATIVE\n(Override High-Risk Zone A -> Safe Zone B)"]
+        PolicyRule2 -- "Yes" --> Override["Action: SAFER ALTERNATIVE\n(Override High-Risk Zone -> Safe Zone)"]
         PolicyRule2 -- "No" --> SafeGo["Action: GO"]
     end
 
@@ -113,12 +113,12 @@ and `tests/test_planner.py::test_build_recommendation_flip_wave_height_changes_d
 verify mechanically — flipping wave height across the 2.5m line flips the
 decision, end to end:
 
-1. **Ocean State Agent**: Recommends **Zone A** (SST 28.4°C, high chlorophyll, strong aggregation).
-2. **Hazard Agent**: Flags **Zone A** with significant wave height of **3.1 meters** — exceeds the hard-deny threshold.
+1. **Ocean State Agent**: Recommends **Nagapattinam** (SST 28.4°C, high chlorophyll, strong aggregation).
+2. **Hazard Agent**: Flags **Nagapattinam** with significant wave height of **3.1 meters** — exceeds the hard-deny threshold.
 3. **Policy Engine Evaluation**:
    - Detects contradiction between catch opportunity and hazard risk.
-   - **Enforces Safety Override**: rejects Zone A, searches other zones.
-   - **Selects a clean alternative** (e.g. Zone B) if one resolves to GO.
+   - **Enforces Safety Override**: rejects Nagapattinam, searches other real zones.
+   - **Selects a clean alternative** (e.g. Karaikal, the nearest real fishing harbour) if one resolves to GO.
    - **Audit trail recorded**: which agent's opportunity finding was overridden and why.
 
 **Note on live data:** real wave heights sampled at our coastal points

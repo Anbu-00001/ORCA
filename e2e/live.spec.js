@@ -21,9 +21,9 @@ test.describe('frontend against the real live API', () => {
   });
 
   test('submitting a real query returns a real, evidence-backed answer', async ({ page }) => {
-    await page.getByTestId('query-input').fill('Should I go fishing in Zone A?');
-    await page.getByTestId('lat-input').fill('10.76');
-    await page.getByTestId('lon-input').fill('79.84');
+    await page.getByTestId('query-input').fill('Should I go fishing near Nagapattinam?');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
     await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/);
@@ -35,9 +35,9 @@ test.describe('frontend against the real live API', () => {
   });
 
   test('every rendered evidence number shows a real source and timestamp when expanded', async ({ page }) => {
-    await page.getByTestId('query-input').fill('Zone A');
-    await page.getByTestId('lat-input').fill('10.76');
-    await page.getByTestId('lon-input').fill('79.84');
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
     const first = page.getByTestId('evidence-item').first();
@@ -51,15 +51,15 @@ test.describe('frontend against the real live API', () => {
   });
 
   test('a zone with a real live conflict shows the amber override banner', async ({ page }) => {
-    // As of the last demo/scenarios.json capture, Zone B has a genuine
+    // As of the last demo/scenarios.json capture, Karaikal has a genuine
     // wind-risk-vs-opportunity conflict live. If sea state has changed by
     // the time this runs, re-run scripts/generate_demo_scenarios.py to
     // find which zone currently shows it -- this test asserts the
     // *mechanism* (banner appears exactly when overridden is non-empty),
     // not a specific frozen outcome.
-    await page.getByTestId('query-input').fill('Zone B');
-    await page.getByTestId('lat-input').fill('10.85');
-    await page.getByTestId('lon-input').fill('79.95');
+    await page.getByTestId('query-input').fill('Karaikal');
+    await page.getByTestId('lat-input').fill('10.9327');
+    await page.getByTestId('lon-input').fill('79.8319');
     await page.getByTestId('ask-button').click();
 
     await expect(page.getByTestId('answer-action')).toBeVisible({ timeout: 10000 });
@@ -90,9 +90,9 @@ test.describe('frontend against the real live API', () => {
     const badge = page.getByTestId('offline-badge');
     await expect(badge).toHaveText('OFFLINE');
 
-    await page.getByTestId('query-input').fill('Zone A');
-    await page.getByTestId('lat-input').fill('10.76');
-    await page.getByTestId('lon-input').fill('79.84');
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
     await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
@@ -100,9 +100,9 @@ test.describe('frontend against the real live API', () => {
   });
 
   test('a clean GO zone does NOT show the override banner', async ({ page }) => {
-    await page.getByTestId('query-input').fill('Zone A');
-    await page.getByTestId('lat-input').fill('10.76');
-    await page.getByTestId('lon-input').fill('79.84');
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
     await expect(page.getByTestId('answer-action')).toBeVisible({ timeout: 10000 });
@@ -148,9 +148,9 @@ test.describe('3D visualizations against the real live API', () => {
     const errors = [];
     page.on('pageerror', (err) => errors.push(err.message));
 
-    await page.getByTestId('query-input').fill('Zone A');
-    await page.getByTestId('lat-input').fill('10.76');
-    await page.getByTestId('lon-input').fill('79.84');
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
     await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
 
@@ -163,8 +163,8 @@ test.describe('3D visualizations against the real live API', () => {
   });
 
   test('the 3D-to-query bridge round-trips through the real backend', async ({ page }) => {
-    await page.evaluate(() => window.__ORCA_SELECT_ZONE__('Zone D', 12.8, 80.5));
-    await expect(page.getByTestId('query-input')).toHaveValue('Zone D');
+    await page.evaluate(() => window.__ORCA_SELECT_ZONE__('Thoothukudi', 8.4730, 78.1215));
+    await expect(page.getByTestId('query-input')).toHaveValue('Thoothukudi');
     await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
   });
@@ -198,9 +198,9 @@ test.describe('page behaviour with all external network blocked (wifi-off simula
 
     // The real backend is on localhost, so it's still reachable and the
     // core "ask a question, get an evidenced answer" flow keeps working.
-    await page.getByTestId('query-input').fill('Zone A');
-    await page.getByTestId('lat-input').fill('10.76');
-    await page.getByTestId('lon-input').fill('79.84');
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
     await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });

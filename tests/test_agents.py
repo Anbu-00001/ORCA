@@ -209,7 +209,7 @@ def test_geofence_point_inside_polygon_hard_denies():
 
 
 def test_geofence_point_outside_polygon_does_not_hard_deny():
-    obs = [_obs("wave_height_m", 0.5, "m", lat=10.76, lon=79.84)]  # Zone A, well outside
+    obs = [_obs("wave_height_m", 0.5, "m", lat=10.76, lon=79.84)]  # Nagapattinam, well outside
     finding = geofence_agent(obs)
     assert finding.hard_deny is False
 

@@ -35,7 +35,7 @@ from data.fetch import (
 from orca.planner import load_cached_observations
 
 FIXTURES = Path(__file__).parent / "fixtures"
-ZONE_A = {"name": "Zone A", "lat": 10.76, "lon": 79.84}
+ZONE_A = {"name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449}
 
 
 def _network_reachable(host="marine-api.open-meteo.com", port=443, timeout=3) -> bool:

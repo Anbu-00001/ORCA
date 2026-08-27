@@ -1,66 +1,78 @@
 # Graph Report - ORCA  (2026-08-27)
 
 ## Corpus Check
-- Corpus is ~26,962 words - fits in a single context window. You may not need a graph.
+- 49 files · ~61,492 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 362 nodes · 731 edges · 43 communities (16 shown, 27 thin omitted)
-- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 61 edges (avg confidence: 0.92)
-- Token cost: 192,333 input · 0 output
+- 452 nodes · 883 edges · 49 communities (18 shown, 31 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 40 edges (avg confidence: 0.78)
+- Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `81081410`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Data Fetchers (Open-Meteo/ERDDAP)
-- API Contract & Manual Tasks
-- Domain Agents
-- Planner & Recommendation
-- Safety Policy Tests
-- MCP Server & FastAPI Endpoints
-- CLAUDE.md Hard Rules
-- Prior Art & Rehearsal Logistics
-- MarineObservation Schema Tests
-- Demo Scenario Generation
-- API Endpoint Tests
-- Playwright Package Config
-- Roadmap & Scope Decisions
-- Live E2E Spec
-- Mock-Mode E2E Spec
-- Claude Code Prompting Discipline
-- ORCA Pitch
-- Playwright Config
-- Screen Recording Fallback
-- Copernicus Marine Library
-- Deck Fixes
+- fetch.py
+- planner.py
+- test_agents.py
+- test_planner.py
+- test_policy.py
+- test_mcp_server.py
+- CLAUDE.md Creation Directive (S3.4 / Prompt 0)
+- Prior Art Table (S12)
+- MarineObservation
+- three-viz.js
+- test_api.py
+- package.json
+- MOSDAC / INCOIS Registration
+- live.spec.js
+- mock.spec.js
+- Driving Claude Code — Core Discipline
+- Three Things That Make ORCA Not-Another-App
+- playwright.config.js
+- Screen Recording + Screenshots Fallback
+- copernicusmarine Library
+- Deck — Remaining Fixes (S14)
 - DGLL Lighthouses
-- Failure Modes & Fallbacks
-- geo-mcp-servers Registry
+- Failure Modes and Fallbacks (S13)
+- sparkgeo/geo-mcp-servers Registry
 - NIOT OMNI Buoys
 - NOAA Marine MCP Server
 - open-meteo-mcp Server
 - OpenDrift
 - Open-Meteo Marine API
-- PydanticAI LLM Boundary
+- PydanticAI at LLM Boundary
 - qgis-mcp Server
-- Presenter Role
-- QA/Runner Role
-- Stretch Scope List
-- Tech Stack Verdicts
+- Role: Presenter
+- Role: QA / Runner
+- Scope: STRETCH List (S7)
+- Tech Stack Verdicts (Jac, Mojo, Zig, JAX)
 - Executive Summary
-- httpx Dependency
-- pydantic Dependency
-- requests Dependency
-- uvicorn Dependency
+- httpx==0.28.1
+- pydantic==2.13.4
+- requests==2.34.2
+- uvicorn[standard]==0.52.4
+- Memory Maintenance
+- ORCA — core
+- ORCA — suggested commands
+- ORCA — tech stack
+- conventions.md
+- task_completion.md
 
 ## God Nodes (most connected - your core abstractions)
-1. `MarineObservation` - 47 edges
-2. `build_recommendation()` - 25 edges
+1. `MarineObservation` - 48 edges
+2. `build_recommendation()` - 29 edges
 3. `_obs()` - 21 edges
 4. `resolve()` - 20 edges
 5. `Repository Structure` - 18 edges
-6. `Finding` - 17 edges
-7. `_finding()` - 16 edges
-8. `OpenMeteoMarineFetcher` - 14 edges
-9. `hazard_agent()` - 13 edges
-10. `Repo Layout (S8.1)` - 13 edges
+6. `Finding` - 16 edges
+7. `_clean_go_observations()` - 16 edges
+8. `_finding()` - 16 edges
+9. `ERDDAPBathymetryFetcher` - 15 edges
+10. `OpenMeteoMarineFetcher` - 14 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `ORCA Marine Advisory Dashboard Screenshot` --conceptually_related_to--> `MarineObservation`  [AMBIGUOUS]
@@ -71,7 +83,7 @@
   data/fetch.py → orca/schema.py
 - `ERDDAPChlorophyllFetcher` --uses--> `MarineObservation`  [INFERRED]
   data/fetch.py → orca/schema.py
-- `fetch_all()` --uses--> `MarineObservation`  [INFERRED]
+- `ERDDAPBathymetryFetcher` --uses--> `MarineObservation`  [INFERRED]
   data/fetch.py → orca/schema.py
 
 ## Import Cycles
@@ -82,83 +94,91 @@
 - **MarineObservation Provenance Traceability Pattern** — claude_marineobservation_requirement, orca_schema, api_contract_post_ask, api_contract_get_evidence, readme_data_traceability_schema, web_index_renderevidence [INFERRED 0.85]
 - **Offline-First Cache Design Pattern** — claude_offline_only, orca_32_hour_war_plan_v3_offline_mode, team_status_offline_display_only, orca_api, web_index_refreshhealth [INFERRED 0.85]
 
-## Communities (43 total, 27 thin omitted)
+## Communities (49 total, 31 thin omitted)
 
-### Community 0 - "Data Fetchers (Open-Meteo/ERDDAP)"
-Cohesion: 0.07
-Nodes (39): _box_around(), ERDDAPChlorophyllFetcher, fetch_all(), main(), OpenMeteoForecastFetcher, OpenMeteoMarineFetcher, Path, Real marine data fetchers for the Nagapattinam/Chennai coast, Bay of Bengal… (+31 more)
+### Community 0 - "fetch.py"
+Cohesion: 0.05
+Nodes (55): _box_around(), ERDDAPBathymetryFetcher, ERDDAPChlorophyllFetcher, fetch_all(), main(), OpenMeteoForecastFetcher, OpenMeteoMarineFetcher, Path (+47 more)
 
-### Community 1 - "API Contract & Manual Tasks"
-Cohesion: 0.09
-Nodes (36): GET /evidence/{id} Endpoint, GET /health Endpoint, POST /ask Endpoint, Freeze schema.py and policy.py Rule, MarineObservation Provenance Requirement, ORCA Tech Stack, Record Real Tamil Audio Sample, Test on the Actual Presentation Laptop (+28 more)
+### Community 1 - "planner.py"
+Cohesion: 0.06
+Nodes (63): GET /evidence/{id} Endpoint, GET /health Endpoint, POST /ask Endpoint, BaseModel, Freeze schema.py and policy.py Rule, MarineObservation Provenance Requirement, ORCA Tech Stack, demo/scenarios.json (+55 more)
 
-### Community 2 - "Domain Agents"
+### Community 2 - "test_agents.py"
 Cohesion: 0.11
-Nodes (40): eo_satellite_agent(), _find(), geofence_agent(), hazard_agent(), ocean_state_agent(), _point_in_polygon(), Five independent agents, each answering one question about one zone. Each…, Standard ray-casting point-in-polygon test. (+32 more)
+Nodes (39): eo_satellite_agent(), _find(), geofence_agent(), hazard_agent(), ocean_state_agent(), _point_in_polygon(), Standard ray-casting point-in-polygon test., weather_agent() (+31 more)
 
-### Community 3 - "Planner & Recommendation"
-Cohesion: 0.13
-Nodes (32): build_recommendation(), _collect_evidence(), observation_id(), observations_for_zone(), query -> agents over cached evidence -> policy.resolve() -> structured answer.…, Recommendation, _render_text(), resolve_zone_from_query() (+24 more)
-
-### Community 4 - "Safety Policy Tests"
-Cohesion: 0.17
-Nodes (25): Decision, resolve(), _finding(), parametrize, Tests for orca/policy.py — the safety decision engine, written first. This is…, CLAUDE.md rule 4: orca/policy.py contains NO LLM calls. This is the project's…, Rule 1 must short-circuit before rule 2 is even considered., If the 'opportunity and danger' branch in resolve() is ever removed, this exact… (+17 more)
-
-### Community 5 - "MCP Server & FastAPI Endpoints"
+### Community 3 - "test_planner.py"
 Cohesion: 0.11
-Nodes (21): BaseModel, Expose ORCA as an MCP Server (S6.2), weather-mcp Server, ask(), AskRequest, health(), _is_reachable(), Best-effort connectivity probe for the /health "offline_mode" badge ONLY. Never… (+13 more)
+Nodes (39): build_recommendation(), _collect_evidence(), observation_id(), observations_for_zone(), Recommendation, resolve_zone_from_query(), run_agents(), Wave-Height Flip End-to-End Verification (+31 more)
 
-### Community 6 - "CLAUDE.md Hard Rules"
+### Community 4 - "test_policy.py"
+Cohesion: 0.16
+Nodes (26): _render_text(), Decision, resolve(), _finding(), parametrize, Tests for orca/policy.py — the safety decision engine, written first. This is…, CLAUDE.md rule 4: orca/policy.py contains NO LLM calls. This is the project's…, Rule 1 must short-circuit before rule 2 is even considered. (+18 more)
+
+### Community 5 - "test_mcp_server.py"
+Cohesion: 0.25
+Nodes (8): ask_marine_advisory(), get_evidence(), Get a fishing-safety recommendation for a location on the Nagapattinam/Chennai…, Look up a single marine observation by id, with full provenance., Tests for orca/mcp_server.py (war plan S6.2 stretch goal). Two layers: the…, test_ask_marine_advisory_returns_contract_shaped_dict(), test_get_evidence_resolves_a_real_id_from_ask(), test_get_evidence_unknown_id_returns_error_not_exception()
+
+### Community 6 - "CLAUDE.md Creation Directive (S3.4 / Prompt 0)"
 Cohesion: 0.11
 Nodes (23): Boring, Readable Code Rule, Definition of Done, No New Dependencies Rule, No Swallowed Exceptions Rule, No Synthetic Data Rule, No Network Access at Demo Rule, policy.py No-LLM Guarantee, ORCA Live Demo Screenshot (+15 more)
 
-### Community 7 - "Prior Art & Rehearsal Logistics"
+### Community 7 - "Prior Art Table (S12)"
 Cohesion: 0.11
 Nodes (21): Rehearsal Task, Sleep Task, Venue Logistics, DGLL NAVTEX, Fisher Friend (FFMA), GEMINI / DAT-SG, Hour-by-Hour Schedule (S10), INCOIS SAMUDRA (+13 more)
 
-### Community 8 - "MarineObservation Schema Tests"
+### Community 8 - "MarineObservation"
 Cohesion: 0.24
 Nodes (15): ORCA Marine Advisory Dashboard Screenshot, MarineObservation, pytest==9.1.1, _base_kwargs(), parametrize, Tests for orca/schema.py — written before the implementation. MarineObservation…, test_confidence_boundary_values_are_allowed(), test_confidence_out_of_range_raises() (+7 more)
 
-### Community 9 - "Demo Scenario Generation"
-Cohesion: 0.19
-Nodes (14): demo/scenarios.json, Backup the Deck, 5-Minute Demo Script (S9), Final Checklist T-2 (S15), Safety Policy resolve() Function (S8.4), get_evidence(), Scenario Example: Safety Override in Action, Wave-Height Flip End-to-End Verification (+6 more)
+### Community 9 - "three-viz.js"
+Cohesion: 0.09
+Nodes (19): ACTION_COLOR, AGENT_SHORT_NAMES, ensureOceanDiorama(), ensureReasoningGraph(), params, wireReasoningToggle(), wireViewToggle(), attachInteraction() (+11 more)
 
-### Community 10 - "API Endpoint Tests"
-Cohesion: 0.14
-Nodes (5): Tests for orca/api.py — written before the implementation. These run against…, Sanity: the endpoint is actually consulting real per-zone data, not returning…, The actual §8.6 guarantee: /ask and /evidence read only from data/cache/ and…, test_ask_and_evidence_are_unaffected_by_connectivity(), test_ask_different_zones_can_produce_different_actions()
+### Community 10 - "test_api.py"
+Cohesion: 0.11
+Nodes (7): Tests for orca/api.py — written before the implementation. These run against…, Sanity: the endpoint is actually consulting real per-zone data, not returning…, An absent bathymetry cache is an honest 503, never a fabricated or silently-…, The actual §8.6 guarantee: /ask and /evidence read only from data/cache/ and…, test_ask_and_evidence_are_unaffected_by_connectivity(), test_ask_different_zones_can_produce_different_actions(), test_bathymetry_missing_cache_returns_503_not_empty_200()
 
-### Community 11 - "Playwright Package Config"
+### Community 11 - "package.json"
 Cohesion: 0.20
 Nodes (9): description, devDependencies, @playwright/test, name, private, scripts, test:e2e, version (+1 more)
 
-### Community 12 - "Roadmap & Scope Decisions"
+### Community 12 - "MOSDAC / INCOIS Registration"
 Cohesion: 0.50
 Nodes (4): MOSDAC / INCOIS Registration, Data Source Decision (S8.2), Scope: DO NOT BUILD List (S7), What's NOT Built
+
+### Community 43 - "Memory Maintenance"
+Cohesion: 0.33
+Nodes (5): Add/update threshold, Discovery Model, Maintenance Actions, Memory Maintenance, Style
+
+### Community 44 - "ORCA — core"
+Cohesion: 0.40
+Nodes (4): Invariants, More, ORCA — core, Source map
 
 ## Ambiguous Edges - Review These
 - `MarineObservation` → `ORCA Marine Advisory Dashboard Screenshot`  [AMBIGUOUS]
   docs/screenshots/orca_live_demo.png · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **50 isolated node(s):** `{ test, expect }`, `{ test, expect }`, `name`, `private`, `version` (+45 more)
+- **67 isolated node(s):** `{ test, expect }`, `{ test, expect }`, `name`, `private`, `version` (+62 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **27 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **31 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **What is the exact relationship between `MarineObservation` and `ORCA Marine Advisory Dashboard Screenshot`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **Why does `MarineObservation` connect `MarineObservation Schema Tests` to `Data Fetchers (Open-Meteo/ERDDAP)`, `API Contract & Manual Tasks`, `Domain Agents`, `Planner & Recommendation`, `MCP Server & FastAPI Endpoints`?**
-  _High betweenness centrality (0.159) - this node is a cross-community bridge._
-- **Why does `Prior Art & Comparative Alignment Table` connect `Prior Art & Rehearsal Logistics` to `Data Fetchers (Open-Meteo/ERDDAP)`?**
-  _High betweenness centrality (0.091) - this node is a cross-community bridge._
-- **Why does `Repository Structure` connect `API Contract & Manual Tasks` to `Data Fetchers (Open-Meteo/ERDDAP)`, `Domain Agents`, `Planner & Recommendation`, `MCP Server & FastAPI Endpoints`, `Demo Scenario Generation`?**
-  _High betweenness centrality (0.055) - this node is a cross-community bridge._
-- **Are the 22 inferred relationships involving `MarineObservation` (e.g. with `ERDDAPChlorophyllFetcher` and `fetch_all()`) actually correct?**
-  _`MarineObservation` has 22 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 3 inferred relationships involving `build_recommendation()` (e.g. with `Decision` and `Finding`) actually correct?**
-  _`build_recommendation()` has 3 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `MarineObservation` connect `MarineObservation` to `fetch.py`, `planner.py`, `test_agents.py`, `test_planner.py`, `test_policy.py`?**
+  _High betweenness centrality (0.116) - this node is a cross-community bridge._
+- **Why does `Prior Art & Comparative Alignment Table` connect `Prior Art Table (S12)` to `fetch.py`?**
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Why does `build_recommendation()` connect `test_planner.py` to `MarineObservation`, `planner.py`, `test_policy.py`, `test_mcp_server.py`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
+- **Are the 7 inferred relationships involving `MarineObservation` (e.g. with `ERDDAPBathymetryFetcher` and `ERDDAPChlorophyllFetcher`) actually correct?**
+  _`MarineObservation` has 7 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 6 inferred relationships involving `datetime` (e.g. with `_obs()` and `test_erddap_fetcher_selects_the_most_recent_valid_day_not_the_newest_day()`) actually correct?**
   _`datetime` has 6 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `{ test, expect }`, `{ test, expect }`, `name` to the rest of the system?**
+  _67 weakly-connected nodes found - possible documentation gaps or missing edges._

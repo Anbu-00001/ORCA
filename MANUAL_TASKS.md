@@ -20,7 +20,8 @@ python scripts/generate_demo_scenarios.py --base-url http://127.0.0.1:<port>
 ```
 The second command also tells you **which zone currently shows a live
 safety-override conflict** — this changes with real weather, so check it
-rather than assuming Zone A/B like the war plan's illustrative example.
+rather than assuming Nagapattinam/Karaikal like the illustrative example
+in README.md/API_CONTRACT.md.
 
 ### 2. Record a real Tamil audio sample
 `web/index.html`'s "Play sample Tamil query" button currently:
@@ -48,9 +49,11 @@ equivalent. From the war plan (S14), still open:
   "Deterministic Safety Policy" if you want a reference for what the
   real mechanism looks like — could be redrawn into the deck.)
 - Add a real demo screenshot to slide 5 — `docs/screenshots/orca_live_demo.png`
-  is ready to use (captured from the live running system, real Zone B
-  wind-risk override, evidence panel expanded). Take a fresh one closer
-  to presentation day if you want current conditions instead.
+  is ready to use (captured 2026-08-27 from the live running system after
+  the real-zones/basemap overhaul: real Mandapam wind-risk override,
+  evidence panel expanded, real OpenFreeMap coastline in the background).
+  Take a fresh one closer to presentation day if you want current
+  conditions instead.
 - Verify "Miscellaneous" is a valid SIH 2026 theme for this ISRO PS.
 - Confirm team name matches registration everywhere.
 

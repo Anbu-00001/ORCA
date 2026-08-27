@@ -47,15 +47,25 @@ logger = logging.getLogger("orca.fetch")
 
 CACHE_DIR = Path(__file__).parent / "cache"
 
-BBOX = {"min_lat": 10.5, "max_lat": 13.5, "min_lon": 79.5, "max_lon": 81.5}
+BBOX = {"min_lat": 7.8, "max_lat": 13.4, "min_lon": 76.9, "max_lon": 80.6}
 
-# Named sample points across the region. Zone A/B coordinates match the
-# worked example in API_CONTRACT.md so the whole system stays consistent.
+# Real, named Tamil Nadu coastal fishing harbours/towns, north to south --
+# not arbitrary/equally-spaced points. Coordinates are each sourced from
+# that place's Wikipedia article (a couple, marked below, from the more
+# specific *fishing harbour* article where one exists, not just the town
+# centroid). This spans the whole ~1076 km coastline (Chennai to
+# Colachel), not a small cluster near one town.
 ZONES = [
-    {"name": "Zone A", "lat": 10.76, "lon": 79.84},
-    {"name": "Zone B", "lat": 10.85, "lon": 79.95},
-    {"name": "Zone C", "lat": 11.50, "lon": 80.20},
-    {"name": "Zone D", "lat": 12.80, "lon": 80.50},
+    {"name": "Chennai", "lat": 13.1251, "lon": 80.2955},       # Kasimedu fishing harbour
+    {"name": "Cuddalore", "lat": 11.75, "lon": 79.75},
+    {"name": "Karaikal", "lat": 10.9327, "lon": 79.8319},
+    {"name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449},
+    {"name": "Point Calimere", "lat": 10.2845, "lon": 79.8241},  # Kodiakkarai
+    {"name": "Mandapam", "lat": 9.28, "lon": 79.12},
+    {"name": "Rameswaram", "lat": 9.2811, "lon": 79.3151},      # fishing harbour & boat jetty
+    {"name": "Thoothukudi", "lat": 8.4730, "lon": 78.1215},     # V.O. Chidambaranar Port
+    {"name": "Kanyakumari", "lat": 8.0883, "lon": 77.5385},
+    {"name": "Colachel", "lat": 8.1786, "lon": 77.2561},
 ]
 
 _FORBIDDEN_SOURCE_WORDS = ("mock", "sample", "synthetic", "dummy", "fake")

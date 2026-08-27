@@ -13,7 +13,7 @@ test.describe('frontend in mock mode', () => {
 
   test('renders the answer card from the mock response', async ({ page }) => {
     await expect(page.getByTestId('answer-action')).toHaveText('SAFER ALTERNATIVE');
-    await expect(page.getByTestId('answer-text')).toContainText('Zone B');
+    await expect(page.getByTestId('answer-text')).toContainText('Karaikal');
   });
 
   test('shows the amber override banner because overridden is non-empty', async ({ page }) => {
@@ -124,9 +124,9 @@ test.describe('3D visualizations (mock mode)', () => {
     // projected screen position of a rotating 3D object (that coupling
     // would make this test flaky for no real gain -- the thing worth
     // proving is that the bridge function does the right thing).
-    await page.evaluate(() => window.__ORCA_SELECT_ZONE__('Zone C', 11.5, 80.2));
-    await expect(page.getByTestId('query-input')).toHaveValue('Zone C');
-    await expect(page.getByTestId('lat-input')).toHaveValue('11.5');
-    await expect(page.getByTestId('lon-input')).toHaveValue('80.2');
+    await page.evaluate(() => window.__ORCA_SELECT_ZONE__('Rameswaram', 9.2811, 79.3151));
+    await expect(page.getByTestId('query-input')).toHaveValue('Rameswaram');
+    await expect(page.getByTestId('lat-input')).toHaveValue('9.2811');
+    await expect(page.getByTestId('lon-input')).toHaveValue('79.3151');
   });
 });

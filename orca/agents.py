@@ -27,14 +27,20 @@ WIND_RISK_SCALE_KMH = 40.0  # risk_level reaches 1.0 at/above this sustained win
 WAVE_HARD_DENY_M = 2.5
 
 # --- geofence_agent ---
-# Hardcoded restricted marine zone for the demo (a designated protected
-# area — not a legally-verified maritime boundary). Deliberately clear of
-# ZONES A-D in data/fetch.py so it doesn't interfere with the main flow.
+# A real protected area: Krusadai Island (9.20N, 79.17E), part of the
+# Gulf of Mannar Marine National Park, India's first marine biosphere
+# reserve. This is a small box around the island's own published
+# coordinate, not the park's full ~160km official boundary (that exact
+# shape isn't publicly downloadable without a WDPA account -- see
+# SCRATCH.md) -- an approximation of one real, specific, verifiable
+# restricted feature, not an invented one. It sits ~7km from Mandapam and
+# ~15km from Rameswaram in data/fetch.py's ZONES -- close enough to be a
+# real nearby hazard for those queries, not overlapping either point.
 PROHIBITED_ZONE = [
-    (11.90, 80.60),
-    (11.90, 80.80),
-    (12.10, 80.80),
-    (12.10, 80.60),
+    (9.175, 79.145),
+    (9.175, 79.195),
+    (9.225, 79.195),
+    (9.225, 79.145),
 ]
 
 

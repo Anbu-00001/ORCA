@@ -11,14 +11,14 @@ from orca.mcp_server import ask_marine_advisory, get_evidence, mcp
 
 
 def test_ask_marine_advisory_returns_contract_shaped_dict():
-    result = ask_marine_advisory("Zone A", 10.76, 79.84)
+    result = ask_marine_advisory("Nagapattinam", 10.76, 79.84)
     for key in ("id", "action", "reason", "recommendation", "chosen_zone", "overridden", "evidence", "offline_mode"):
         assert key in result
     assert result["action"] in {"GO", "DO NOT GO", "SAFER ALTERNATIVE"}
 
 
 def test_get_evidence_resolves_a_real_id_from_ask():
-    rec = ask_marine_advisory("Zone A", 10.76, 79.84)
+    rec = ask_marine_advisory("Nagapattinam", 10.76, 79.84)
     obs_id = rec["evidence"][0]["id"]
     result = get_evidence(obs_id)
     assert "error" not in result
@@ -42,7 +42,7 @@ def test_call_tool_end_to_end_through_the_real_mcp_protocol_layer():
     import json
 
     result = asyncio.run(
-        mcp.call_tool("ask_marine_advisory", {"query": "Zone A", "lat": 10.76, "lon": 79.84})
+        mcp.call_tool("ask_marine_advisory", {"query": "Nagapattinam", "lat": 10.76, "lon": 79.84})
     )
     assert isinstance(result, list) and len(result) > 0
     payload = json.loads(result[0].text)

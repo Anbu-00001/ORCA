@@ -24,8 +24,13 @@ from orca.planner import (
 from orca.schema import MarineObservation
 from data.fetch import ZONES
 
-ZONE_A = ZONES[0]  # {"name": "Zone A", "lat": 10.76, "lon": 79.84}
-ZONE_B = ZONES[1]  # {"name": "Zone B", "lat": 10.85, "lon": 79.95}
+# Real zones, picked (not indexed positionally) so the query text below
+# ("fishing in Nagapattinam") unambiguously name-matches the one this
+# test rigs observations for. Nagapattinam and Karaikal are real,
+# geographically adjacent Tamil Nadu fishing harbours (data/fetch.py) --
+# a genuine "is there a clean zone nearby" pair, not an arbitrary one.
+ZONE_A = next(z for z in ZONES if z["name"] == "Nagapattinam")
+ZONE_B = next(z for z in ZONES if z["name"] == "Karaikal")
 
 
 def _obs(variable, value, unit, zone, source="Open-Meteo Marine"):
@@ -93,18 +98,18 @@ def test_observations_for_zone_filters_by_coordinates():
 
 
 def test_resolve_zone_from_query_matches_named_zone():
-    zone = resolve_zone_from_query("Should I go fishing in Zone A from Nagapattinam?", lat=10.76, lon=79.84)
-    assert zone["name"] == "Zone A"
+    zone = resolve_zone_from_query("Should I go fishing near Nagapattinam?", lat=10.76, lon=79.84)
+    assert zone["name"] == "Nagapattinam"
 
 
 def test_resolve_zone_from_query_matches_case_insensitively():
-    zone = resolve_zone_from_query("what about zone b today", lat=10.76, lon=79.84)
-    assert zone["name"] == "Zone B"
+    zone = resolve_zone_from_query("what about karaikal today", lat=10.76, lon=79.84)
+    assert zone["name"] == "Karaikal"
 
 
 def test_resolve_zone_from_query_falls_back_to_nearest_zone():
     zone = resolve_zone_from_query("Is it safe to go out today?", lat=ZONE_B["lat"], lon=ZONE_B["lon"])
-    assert zone["name"] == "Zone B"
+    assert zone["name"] == "Karaikal"
 
 
 # ---------------------------------------------------------------------------
@@ -126,19 +131,19 @@ def test_run_agents_returns_five_findings_with_expected_names():
 
 def test_build_recommendation_clean_go():
     obs = _clean_go_observations(ZONE_A)
-    rec = build_recommendation("Should I go fishing in Zone A?", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    rec = build_recommendation("Should I go fishing near Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
     assert rec.action == "GO"
-    assert rec.chosen_zone["name"] == "Zone A"
+    assert rec.chosen_zone["name"] == "Nagapattinam"
     assert rec.overridden == []
 
 
 def test_build_recommendation_hard_deny_falls_back_to_safer_zone():
-    """The money shot from §8.4: Zone A denied on waves, Zone B is clean."""
+    """The money shot from §8.4: Nagapattinam denied on waves, Karaikal is clean."""
     obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
-    rec = build_recommendation("Should I go fishing in Zone A from Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    rec = build_recommendation("Should I go fishing near Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
 
     assert rec.action == "SAFER ALTERNATIVE"
-    assert rec.chosen_zone["name"] == "Zone B"
+    assert rec.chosen_zone["name"] == "Karaikal"
     assert len(rec.overridden) >= 1
     assert any("ocean_state" in f.agent_name for f in rec.overridden)
     assert "3.1" in rec.reason
@@ -146,7 +151,7 @@ def test_build_recommendation_hard_deny_falls_back_to_safer_zone():
 
 def test_build_recommendation_no_clean_alternative_stays_do_not_go():
     obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _dangerous_observations(ZONE_B, wave_height=2.8)
-    rec = build_recommendation("Should I go fishing in Zone A?", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    rec = build_recommendation("Should I go fishing near Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
     assert rec.action == "DO NOT GO"
     assert rec.chosen_zone is None
 
@@ -156,30 +161,30 @@ def test_build_recommendation_flip_wave_height_changes_decision_end_to_end():
     not just policy.resolve() in isolation.
     """
     dangerous_obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
-    dangerous_rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=dangerous_obs)
+    dangerous_rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=dangerous_obs)
     assert dangerous_rec.action == "SAFER ALTERNATIVE"
-    assert dangerous_rec.chosen_zone["name"] == "Zone B"
+    assert dangerous_rec.chosen_zone["name"] == "Karaikal"
 
     safe_obs = _clean_go_observations(ZONE_A)  # wave_height_m = 1.4, well under 2.5
-    safe_rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=safe_obs)
+    safe_rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=safe_obs)
     assert safe_rec.action == "GO"
-    assert safe_rec.chosen_zone["name"] == "Zone A"
+    assert safe_rec.chosen_zone["name"] == "Nagapattinam"
 
 
 def test_recommendation_evidence_includes_the_hazard_that_caused_the_override():
     obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
     wave_values = [o.value for o in rec.evidence if o.variable == "wave_height_m" and o.lat == ZONE_A["lat"]]
     assert 3.1 in wave_values
 
 
 def test_recommendation_id_has_rec_prefix():
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
     assert rec.id.startswith("rec_")
 
 
 def test_recommendation_to_dict_matches_api_contract_shape():
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
     d = rec.to_dict()
     for key in ("id", "action", "reason", "recommendation", "chosen_zone", "overridden", "evidence", "offline_mode"):
         assert key in d
@@ -191,7 +196,7 @@ def test_recommendation_to_dict_matches_api_contract_shape():
 
 def test_build_recommendation_raises_on_zero_observations_everywhere():
     with pytest.raises(ValueError):
-        build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=[])
+        build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=[])
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +209,7 @@ def test_build_recommendation_raises_on_zero_observations_everywhere():
 # ---------------------------------------------------------------------------
 
 def test_recommendation_agent_findings_covers_all_five_agents():
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
     names = {f.agent_name for f in rec.agent_findings}
     assert names == {
         "eo_satellite_agent", "ocean_state_agent", "weather_agent",
@@ -216,8 +221,8 @@ def test_recommendation_agent_findings_are_the_primary_zones_findings():
     """agent_findings must reflect the queried (primary) zone, not whichever
     zone ends up chosen after a SAFER ALTERNATIVE swap."""
     obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
-    assert rec.chosen_zone["name"] == "Zone B"  # swapped
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    assert rec.chosen_zone["name"] == "Karaikal"  # swapped
 
     hazard = next(f for f in rec.agent_findings if f.agent_name == "hazard_agent")
     assert hazard.hard_deny is True
@@ -225,7 +230,7 @@ def test_recommendation_agent_findings_are_the_primary_zones_findings():
 
 
 def test_recommendation_to_dict_agent_findings_shape():
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
     d = rec.to_dict()
     assert "agent_findings" in d
     assert len(d["agent_findings"]) == 5
@@ -241,7 +246,7 @@ def test_recommendation_to_dict_agent_findings_shape():
 
 def test_recommendation_zone_summaries_covers_every_zone():
     obs = _clean_go_observations(ZONE_A) + _clean_go_observations(ZONE_B)
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
     names = {s["name"] for s in rec.zone_summaries}
     assert names == {z["name"] for z in ZONES}
     for s in rec.zone_summaries:
@@ -250,25 +255,25 @@ def test_recommendation_zone_summaries_covers_every_zone():
 
 
 def test_recommendation_zone_summaries_risk_level_reflects_worst_agent():
-    """Zone A has a hard-denying wave reading (3.1m > 2.5m limit) --
+    """Nagapattinam has a hard-denying wave reading (3.1m > 2.5m limit) --
     hazard_agent's risk_level for that is min(3.1/2.5, 1.0) == 1.0, and
-    that's the worst (max) of Zone A's five agents, so the summary must
-    surface it, not silently pick a calmer agent's number.
+    that's the worst (max) of Nagapattinam's five agents, so the summary
+    must surface it, not silently pick a calmer agent's number.
     """
     obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
-    zone_a_summary = next(s for s in rec.zone_summaries if s["name"] == "Zone A")
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    zone_a_summary = next(s for s in rec.zone_summaries if s["name"] == "Nagapattinam")
     assert zone_a_summary["risk_level"] == pytest.approx(1.0)
     assert zone_a_summary["hard_deny"] is True
     assert zone_a_summary["action"] == "DO NOT GO"
 
-    zone_b_summary = next(s for s in rec.zone_summaries if s["name"] == "Zone B")
+    zone_b_summary = next(s for s in rec.zone_summaries if s["name"] == "Karaikal")
     assert zone_b_summary["hard_deny"] is False
     assert zone_b_summary["action"] == "GO"
 
 
 def test_recommendation_zone_summaries_in_to_dict():
-    rec = build_recommendation("Zone A", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
     d = rec.to_dict()
     assert "zone_summaries" in d
     assert len(d["zone_summaries"]) == len(ZONES)

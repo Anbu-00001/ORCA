@@ -42,7 +42,7 @@ def test_hard_deny_wins_even_when_opportunity_present():
     """Rule 1 must short-circuit before rule 2 is even considered."""
     findings = [
         _finding(agent_name="ocean_state_agent", suggests_go=True, risk_level=0.1,
-                 hard_deny=False, reason="Zone A strong aggregation"),
+                 hard_deny=False, reason="strong aggregation"),
         _finding(agent_name="hazard_agent", suggests_go=False, risk_level=1.0,
                  hard_deny=True, reason="Wave height 3.1m exceeds 2.5m limit"),
     ]
@@ -73,7 +73,7 @@ def test_hard_deny_chosen_is_none():
 def test_opportunity_and_elevated_risk_returns_safer_alternative():
     findings = [
         _finding(agent_name="ocean_state_agent", suggests_go=True, risk_level=0.2,
-                 hard_deny=False, reason="Zone A strong aggregation, conf 0.86"),
+                 hard_deny=False, reason="strong aggregation, conf 0.86"),
         _finding(agent_name="hazard_agent", suggests_go=False, risk_level=0.71,
                  hard_deny=False, reason="Elevated wave height, conf 0.71"),
     ]
@@ -158,7 +158,7 @@ def test_flipping_wave_height_below_hard_deny_flips_the_decision():
     danger = _finding(agent_name="hazard_agent", suggests_go=False, risk_level=1.0,
                        hard_deny=True, reason="Wave height 3.1m exceeds 2.5m limit")
     opportunity = _finding(agent_name="ocean_state_agent", suggests_go=True, risk_level=0.1,
-                            reason="Zone A strong aggregation")
+                            reason="strong aggregation")
     assert resolve([opportunity, danger]).action == "DO NOT GO"
 
     safe = _finding(agent_name="hazard_agent", suggests_go=False, risk_level=0.1,
