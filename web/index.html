@@ -225,6 +225,23 @@
   #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
   #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
   #answer-placeholder { color: var(--muted); font-style: italic; }
+  /* Shown only when the backend actually used orca/agentic.py this
+     request (GROQ_API_KEY set + a live call succeeded) -- honest, not
+     decorative: with the key unset or the call unreachable this stays
+     hidden and the plain deterministic phrasing is exactly what's shown,
+     with nothing implying otherwise. */
+  #agentic-badge {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    margin-left: 0.5rem;
+  }
+  #agentic-badge.hidden { display: none; }
 
   #override-banner {
     border: 1px solid var(--amber-border);
@@ -399,7 +416,7 @@
 
   <aside>
     <div id="answer-card" data-testid="answer-card">
-      <div id="answer-action" data-testid="answer-action"></div>
+      <div id="answer-action" data-testid="answer-action"></div><span id="agentic-badge" class="hidden" data-testid="agentic-badge">AI-enhanced</span>
       <p id="answer-text" data-testid="answer-text"><span id="answer-placeholder">Ask a question below to get a recommendation.</span></p>
     </div>
 
@@ -474,6 +491,7 @@
   const offlineBadge = document.getElementById("offline-badge");
   const answerAction = document.getElementById("answer-action");
   const answerText = document.getElementById("answer-text");
+  const agenticBadge = document.getElementById("agentic-badge");
   const overrideBanner = document.getElementById("override-banner");
   const evidenceList = document.getElementById("evidence-list");
   const queryInput = document.getElementById("query-input");
@@ -616,6 +634,11 @@
     answerAction.textContent = data.action;
     answerAction.className = actionClass(data.action);
     answerText.textContent = data.recommendation;
+    // lang drives the [lang="ta"] font/line-height rule (see <style>) --
+    // real, backend-detected language of the composed answer, not a
+    // guess made in the browser.
+    answerText.setAttribute("lang", data.detected_language === "ta" ? "ta" : "en");
+    agenticBadge.classList.toggle("hidden", !data.agentic_used);
 
     if (data.overridden && data.overridden.length > 0) {
       overrideBanner.classList.remove("hidden");

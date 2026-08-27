@@ -20,7 +20,17 @@ Demoed live on 28th. Reliability beats features. Boring beats clever.
 7. Prefer boring, readable code. No factories, no plugin registries,
    no premature abstraction.
 8. The demo must run with NO network access. Everything reads from
-   data/cache/. Any network call outside data/fetch.py is a bug.
+   data/cache/. Any network call outside data/fetch.py or orca/agentic.py
+   is a bug.
+   **Exception, by explicit sign-off (2026-08-27):** orca/agentic.py may
+   call the Groq API to power the chatbot's agentic layer (zone
+   resolution + phrasing only — it never imports orca/policy.py and
+   never decides action/risk/hard_deny). It is strictly additive: with
+   GROQ_API_KEY unset, or on any failure (timeout, network error, bad
+   response), /ask must reproduce today's fully-offline, deterministic
+   output byte-for-byte — see orca/agentic.py's module docstring and
+   answer_question()'s fallback chain. If this guarantee ever breaks,
+   that's the bug rule 8 means, not the existence of the key check.
 
 ## Stack
 Python 3.11, FastAPI, plain HTML + MapLibre from CDN.

@@ -1,16 +1,16 @@
 # Graph Report - ORCA  (2026-08-27)
 
 ## Corpus Check
-- 52 files · ~110,445 words
+- 54 files · ~116,248 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 477 nodes · 941 edges · 50 communities (19 shown, 31 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 41 edges (avg confidence: 0.77)
+- 530 nodes · 1068 edges · 50 communities (19 shown, 31 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 49 edges (avg confidence: 0.76)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `886b41d8`
+- Built from commit: `7efdb2e0`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -61,30 +61,30 @@
 - ORCA — tech stack
 - conventions.md
 - task_completion.md
-- web/index.html
+- test_agentic.py
 
 ## God Nodes (most connected - your core abstractions)
-1. `MarineObservation` - 49 edges
-2. `build_recommendation()` - 29 edges
+1. `MarineObservation` - 52 edges
+2. `build_recommendation()` - 32 edges
 3. `_obs()` - 26 edges
 4. `resolve()` - 20 edges
-5. `Repository Structure` - 18 edges
-6. `geofence_agent()` - 16 edges
-7. `Finding` - 16 edges
-8. `_clean_go_observations()` - 16 edges
-9. `_finding()` - 16 edges
-10. `OpenMeteoMarineFetcher` - 15 edges
+5. `_clean_go_observations()` - 19 edges
+6. `Repository Structure` - 18 edges
+7. `answer_question()` - 17 edges
+8. `geofence_agent()` - 16 edges
+9. `Finding` - 16 edges
+10. `_finding()` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `ORCA Marine Advisory Dashboard Screenshot` --conceptually_related_to--> `MarineObservation`  [AMBIGUOUS]
   docs/screenshots/orca_live_demo.png → orca/schema.py
 - `OpenMeteoMarineFetcher` --uses--> `MarineObservation`  [INFERRED]
   data/fetch.py → orca/schema.py
+- `OpenMeteoForecastFetcher` --uses--> `MarineObservation`  [INFERRED]
+  data/fetch.py → orca/schema.py
 - `ERDDAPChlorophyllFetcher` --uses--> `MarineObservation`  [INFERRED]
   data/fetch.py → orca/schema.py
 - `ERDDAPBathymetryFetcher` --uses--> `MarineObservation`  [INFERRED]
-  data/fetch.py → orca/schema.py
-- `MarineRegionsIMBLFetcher` --uses--> `MarineObservation`  [INFERRED]
   data/fetch.py → orca/schema.py
 
 ## Import Cycles
@@ -99,19 +99,19 @@
 
 ### Community 0 - "test_fetch.py"
 Cohesion: 0.05
-Nodes (61): _box_around(), ERDDAPBathymetryFetcher, ERDDAPChlorophyllFetcher, fetch_all(), main(), MarineRegionsIMBLFetcher, OpenMeteoMarineFetcher, Path (+53 more)
+Nodes (62): _box_around(), ERDDAPBathymetryFetcher, ERDDAPChlorophyllFetcher, fetch_all(), main(), MarineRegionsIMBLFetcher, OpenMeteoForecastFetcher, OpenMeteoMarineFetcher (+54 more)
 
 ### Community 1 - "planner.py"
-Cohesion: 0.07
-Nodes (52): BaseModel, Freeze schema.py and policy.py Rule, ORCA Tech Stack, demo/scenarios.json, Backup the Deck, Test on the Actual Presentation Laptop, 5-Minute Demo Script (S9), Final Checklist T-2 (S15) (+44 more)
+Cohesion: 0.06
+Nodes (67): GET /health Endpoint, POST /ask Endpoint, BaseModel, Freeze schema.py and policy.py Rule, ORCA Tech Stack, demo/scenarios.json, Backup the Deck, Record Real Tamil Audio Sample (+59 more)
 
 ### Community 2 - "test_agents.py"
 Cohesion: 0.09
 Nodes (47): eo_satellite_agent(), _find(), geofence_agent(), hazard_agent(), _load_imbl_segments(), ocean_state_agent(), _point_in_polygon(), Lazy module-level cache of the real IMBL geometry, read once. Falls back to an… (+39 more)
 
 ### Community 3 - "test_planner.py"
-Cohesion: 0.11
-Nodes (38): build_recommendation(), _collect_evidence(), observation_id(), observations_for_zone(), Recommendation, resolve_zone_from_query(), run_agents(), _clean_go_observations() (+30 more)
+Cohesion: 0.10
+Nodes (45): build_recommendation(), observations_for_zone(), The zero-risk, zero-network first-pass zone match: does a known zone's name…, resolve_zone_from_query(), run_agents(), _zone_by_substring(), Wave-Height Flip End-to-End Verification, _clean_go_observations() (+37 more)
 
 ### Community 4 - "test_policy.py"
 Cohesion: 0.16
@@ -130,8 +130,8 @@ Cohesion: 0.11
 Nodes (21): Rehearsal Task, Sleep Task, Venue Logistics, DGLL NAVTEX, Fisher Friend (FFMA), GEMINI / DAT-SG, Hour-by-Hour Schedule (S10), INCOIS SAMUDRA (+13 more)
 
 ### Community 8 - "MarineObservation"
-Cohesion: 0.16
-Nodes (19): OpenMeteoForecastFetcher, Wind speed/gusts and precipitation, per point, near-term forecast., datetime, ORCA Marine Advisory Dashboard Screenshot, MarineObservation, pytest==9.1.1, test_forecast_fetcher_parses_real_fixture_into_observations(), _base_kwargs() (+11 more)
+Cohesion: 0.20
+Nodes (15): ORCA Marine Advisory Dashboard Screenshot, MarineObservation, pytest==9.1.1, _base_kwargs(), parametrize, Tests for orca/schema.py — written before the implementation. MarineObservation…, test_confidence_boundary_values_are_allowed(), test_confidence_out_of_range_raises() (+7 more)
 
 ### Community 9 - "three-viz.js"
 Cohesion: 0.09
@@ -157,9 +157,9 @@ Nodes (5): Add/update threshold, Discovery Model, Maintenance Actions, Memory Ma
 Cohesion: 0.40
 Nodes (4): Invariants, More, ORCA — core, Source map
 
-### Community 49 - "web/index.html"
-Cohesion: 0.20
-Nodes (12): GET /health Endpoint, POST /ask Endpoint, Record Real Tamil Audio Sample, Frontend + Tamil Decision (S8.5), Role: Operator 3 — Frontend, Prompt 4 — Frontend, refreshHealth(), renderEvidence() (+4 more)
+### Community 49 - "test_agentic.py"
+Cohesion: 0.09
+Nodes (41): agentic, Exception, AgenticUnavailable, answer_question(), compose_grounded_answer(), extract_query_intent(), is_configured(), _post() (+33 more)
 
 ## Ambiguous Edges - Review These
 - `MarineObservation` → `ORCA Marine Advisory Dashboard Screenshot`  [AMBIGUOUS]
@@ -175,15 +175,15 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **What is the exact relationship between `MarineObservation` and `ORCA Marine Advisory Dashboard Screenshot`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **Why does `MarineObservation` connect `MarineObservation` to `test_fetch.py`, `planner.py`, `test_agents.py`, `test_planner.py`, `test_policy.py`?**
-  _High betweenness centrality (0.124) - this node is a cross-community bridge._
+- **Why does `MarineObservation` connect `MarineObservation` to `test_fetch.py`, `planner.py`, `test_agents.py`, `test_planner.py`, `test_policy.py`, `test_agentic.py`?**
+  _High betweenness centrality (0.141) - this node is a cross-community bridge._
 - **Why does `Prior Art & Comparative Alignment Table` connect `Prior Art Table (S12)` to `test_fetch.py`?**
-  _High betweenness centrality (0.062) - this node is a cross-community bridge._
-- **Why does `build_recommendation()` connect `test_planner.py` to `MarineObservation`, `planner.py`, `test_policy.py`, `test_mcp_server.py`?**
-  _High betweenness centrality (0.041) - this node is a cross-community bridge._
-- **Are the 8 inferred relationships involving `MarineObservation` (e.g. with `ERDDAPBathymetryFetcher` and `ERDDAPChlorophyllFetcher`) actually correct?**
-  _`MarineObservation` has 8 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 6 inferred relationships involving `datetime` (e.g. with `_obs()` and `test_erddap_fetcher_selects_the_most_recent_valid_day_not_the_newest_day()`) actually correct?**
-  _`datetime` has 6 INFERRED edges - model-reasoned connections that need verification._
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
+- **Why does `build_recommendation()` connect `test_planner.py` to `planner.py`, `test_policy.py`, `test_mcp_server.py`, `MarineObservation`, `test_agentic.py`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+- **Are the 9 inferred relationships involving `MarineObservation` (e.g. with `ERDDAPBathymetryFetcher` and `ERDDAPChlorophyllFetcher`) actually correct?**
+  _`MarineObservation` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 7 inferred relationships involving `datetime` (e.g. with `_obs()` and `_obs()`) actually correct?**
+  _`datetime` has 7 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `{ test, expect }`, `{ test, expect }`, `name` to the rest of the system?**
   _67 weakly-connected nodes found - possible documentation gaps or missing edges._

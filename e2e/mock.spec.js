@@ -16,6 +16,19 @@ test.describe('frontend in mock mode', () => {
     await expect(page.getByTestId('answer-text')).toContainText('Karaikal');
   });
 
+  // orca/agentic.py's chatbot layer: mock_response.json carries
+  // agentic_used/detected_language exactly as the real /ask response
+  // would when GROQ_API_KEY is set and the call succeeds. The badge is
+  // honest, not decorative -- see web/index.html's #agentic-badge CSS
+  // comment -- rendered directly from mock_response.json on load, same
+  // as the answer card itself (mock mode renders once on init(), before
+  // any submit -- see that function).
+  test('agentic badge reflects agentic_used and answer-text carries the detected language', async ({ page }) => {
+    await expect(page.getByTestId('agentic-badge')).not.toHaveClass(/hidden/);
+    await expect(page.getByTestId('agentic-badge')).toHaveText('AI-enhanced');
+    await expect(page.getByTestId('answer-text')).toHaveAttribute('lang', 'en');
+  });
+
   test('Douglas ruler renders the real wave-height evidence with the correct band', async ({ page }) => {
     // mock_response.json's wave_height_m is 3.1 -- above the 2.5m hard-deny
     // line, so this must land in Douglas band 5 (Rough, per WMO's 2.50-4.00m)

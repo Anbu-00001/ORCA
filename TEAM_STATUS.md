@@ -1,7 +1,7 @@
 # ORCA — Team Status
 
 **For:** other ICARUS teammates and their agents/assistants working on this repo.
-**Last updated:** 2026-08-27, real IMBL geofence + Douglas sea scale + three-palette design system.
+**Last updated:** 2026-08-27, agentic chatbot layer (orca/agentic.py, Groq).
 **Read this before touching the repo.** It tells you what's real, what's
 verified, what's still a manual/human job, and where not to step.
 
@@ -25,9 +25,15 @@ style — see "Real zones" below. `geofence_agent` now also checks real
 distance to the actual India-Sri Lanka maritime boundary (IMBL), and the
 UI ships a real WMO Douglas sea scale ruler plus a three-palette
 (Day/Dusk/Night) design system inspired by IHO S-52 chart convention —
-see "IMBL geofence + design system" below. Backend suite is **124 pytest
-tests, all green** (excluding `orca/mcp_server.py`, still broken — see
-below, unchanged); e2e is **22 Playwright tests, all green**.
+see "IMBL geofence + design system" below. The chatbot's query box is no
+longer substring-matching theater: `orca/agentic.py` adds a real,
+fail-closed agentic layer (Groq, free tier) that resolves free-text
+queries onto real zones and phrases answers in the query's own language
+(including real Tamil) — see "Agentic chatbot layer" below. Backend suite
+is **148 pytest tests, all green** (excluding `orca/mcp_server.py`, still
+broken — see below, unchanged; +1 more, `test_answer_question_live_end_to_end`,
+when `GROQ_API_KEY` is set); e2e is **24 Playwright tests, all green**
+(+1 more live test when the webServer is started with a real key).
 
 Two teammate-sourced research documents (`ORCA_AUTHENTICITY_UPGRADE.md`-
 style data/feature plan, and a design-system spec) proposed a large body
@@ -402,6 +408,83 @@ real, valuable, unstarted work.
 
 ---
 
+## Agentic chatbot layer (orca/agentic.py)
+
+Direct feedback: the chatbot was "MOCK BASED ON THE LOCATION WE TOUCH" —
+`resolve_zone_from_query()` was pure substring matching on the 10 zone
+names, and clicking a map marker just wrote the zone's own name into the
+query box, so of course it "worked." See SCRATCH.md's "chatbot layer
+research" entry (2026-08-27) for the research this was built from —
+Anthropic's own "Building effective agents" guidance, and current
+safety-critical-agent literature converging on the same shape.
+
+**What it is:** a fixed-code-path *workflow* (not an open-ended
+autonomous agent — deliberately, per the research above and this
+project's "boring beats clever" rule), calling the Groq API
+(`openai/gpt-oss-20b` for zone extraction, `openai/gpt-oss-120b` for
+composition — both strict-JSON-schema-capable, verified against Groq's
+docs before use). Three things it can never do, by construction, not
+convention:
+- It never imports `orca/policy.py` (CLAUDE.md rule 4) — it only ever
+  sees an already-decided `Recommendation`.
+- It can only pick a zone from the real, fixed `ZONES` enum — never an
+  invented place (`extract_query_intent`'s strict schema, plus a
+  server-side re-check in case strict mode itself ever fails).
+- It can only cite `evidence[].id`s that are actually in the real
+  evidence list — any id the model names that isn't real is silently
+  dropped (citation hallucination is a documented failure mode even
+  under schema constraints; see the arxiv citation in SCRATCH.md).
+
+**Zero-risk-first design:** a cheap, deterministic substring match
+against the real zone list always runs first and always wins when it
+finds something — the LLM is only consulted for what substring matching
+genuinely cannot do (a landmark description, a query not in English).
+
+**Fails closed, always:** `GROQ_API_KEY` unset, or any failure at any
+stage (timeout, network error, malformed response) → `/ask` reproduces
+today's fully offline, deterministic output byte-for-byte. This is now
+CLAUDE.md rule 8's documented exception (see that file) — `orca/agentic.py`
+is the second and only other file allowed to touch the network, and the
+guarantee above is what makes that safe. Proven, not just claimed: every
+failure mode (unconfigured, `ConnectionError`, `Timeout`, malformed JSON,
+non-200 status, a hallucinated zone name, a hallucinated citation) has
+its own test in `tests/test_agentic.py`.
+
+**Verified live**, not just mocked — real Groq calls, real answers:
+- English, zone named exactly: substring match resolves it, zero LLM
+  calls for zone resolution, composed phrasing: *"Yes, you can head out
+  to Kanyakumari; the wave height is 1.4 m, which is fine for fishing."*
+- English, **no zone name anywhere in the query** ("the southernmost tip
+  of India") — plain substring matching could never resolve this; the
+  LLM correctly identified Kanyakumari, constrained to the real zone
+  list. Covered by a live Playwright test
+  (`e2e/live.spec.js`, skips itself without a real key).
+- **Real Tamil query** (`நாகப்பட்டினத்தில் இருந்து மீன்பிடிக்க போகலாமா?`),
+  wave height rigged above the 2.5 m hard-deny line: language correctly
+  detected as `ta`, decision correctly DO NOT GO, and the composed Tamil
+  answer states the exact real numbers (3.1 m / 2.5 m), not a
+  paraphrase — grounding held under a full script switch, not just
+  English rephrasing.
+
+**Security note, fixed during this build:** a Groq key was briefly
+pasted as a comment into `web/three-viz.js` (frontend JS — served to the
+browser as-is, no build step, fully visible via view-source). Removed
+before it was ever committed (`git log` confirms); moved to a git-ignored
+`.env` (see `.env.example`), which only the backend process reads via
+`os.environ`. A key must never live in `web/*.js`.
+
+**New response fields** (additive — see `API_CONTRACT.md`):
+`agentic_used`, `detected_language`, `cited_evidence_ids`. Frontend shows
+a small "AI-enhanced" badge (`#agentic-badge`) only when `agentic_used`
+is genuinely true, and sets `answer-text`'s `lang` attribute from the
+real detected language (reuses the existing `[lang="ta"]` Tamil font
+rule, not a separate style).
+
+**Setup (optional):** `cp .env.example .env`, fill in a free key from
+console.groq.com/keys, `source .env`. See README's "2b" step.
+
+---
+
 ## What's proposed but not built (two teammate research docs)
 
 Two large research documents were dropped into this session: a
@@ -410,15 +493,15 @@ genuinely good — real endpoints, real domain research, not filler — and
 both propose far more than one pass can build. What's real above is the
 tractable slice; everything below is a prioritized backlog, not started:
 
-- **LLM/agentic planning layer** ("LLM proposes, policy disposes" —
-  a planner agent with tool-calling, an evidence-whitelist-constrained
-  explanation agent). Architecturally sound and compatible with
-  CLAUDE.md rule 4 (policy.py stays LLM-free either way), but it's a new
-  paid dependency and the first thing that would put a live network call
-  in `orca/api.py`'s request path — **get explicit sign-off before
-  building this**, don't just start.
+- ~~LLM/agentic planning layer~~ — **built**, see "Agentic chatbot layer"
+  above. What's still open from the original idea: this only covers
+  zone resolution + phrasing (query → decision), not a multi-step
+  *planning* agent proposing routes/timing for the policy engine to
+  check — that's a materially bigger scope and still unbuilt.
 - Multi-turn conversation / session memory, language auto-detection
-  beyond the single Tamil sample phrase.
+  beyond the single Tamil sample phrase and `orca/agentic.py`'s
+  per-query `detected_language` (which doesn't persist across turns —
+  there are no turns yet).
 - Vessel-class-dependent hazard thresholds (the design doc calls the
   current single global `WAVE_HARD_DENY_M` "a correctness bug, not a
   feature request" — a fair point, real future work, not attempted here).
@@ -541,3 +624,7 @@ plus the mutation check described in `tests/test_policy.py`'s docstrings.
 Full history: `git log --oneline`. Every commit here is small and was
 green before the next one started — if something breaks, `git bisect` or
 just read the commit messages, they say what was verified and how.
+
+
+
+

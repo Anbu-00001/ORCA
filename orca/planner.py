@@ -75,13 +75,24 @@ def observations_for_zone(
     ]
 
 
-def resolve_zone_from_query(query: str, lat: float, lon: float, zones: list[dict] | None = None) -> dict:
-    zones = zones or ZONES
+def _zone_by_substring(query: str, zones: list[dict]) -> dict | None:
+    """The zero-risk, zero-network first-pass zone match: does a known
+    zone's name literally appear in the query? Extracted out of
+    resolve_zone_from_query() so orca/agentic.py can run this exact check
+    itself before ever considering an LLM guess -- a deterministic hit
+    here always wins (see that module's answer_question())."""
     query_lower = query.lower()
     for zone in zones:
         if zone["name"].lower() in query_lower:
             return zone
-    return min(zones, key=lambda z: (z["lat"] - lat) ** 2 + (z["lon"] - lon) ** 2)
+    return None
+
+
+def resolve_zone_from_query(query: str, lat: float, lon: float, zones: list[dict] | None = None) -> dict:
+    zones = zones or ZONES
+    return _zone_by_substring(query, zones) or min(
+        zones, key=lambda z: (z["lat"] - lat) ** 2 + (z["lon"] - lon) ** 2
+    )
 
 
 def run_agents(observations: list[MarineObservation]) -> list[Finding]:
@@ -128,6 +139,12 @@ class Recommendation:
     # here is fabricated for the sake of a nicer chart (CLAUDE.md rule 1).
     agent_findings: list[Finding] = field(default_factory=list)  # primary zone's 5 raw agent findings
     zone_summaries: list[dict] = field(default_factory=list)  # one entry per evaluated zone
+    # orca/agentic.py's fields, additive same as above. Defaults reproduce
+    # today's plain build_recommendation() output exactly -- a caller that
+    # never touches orca.agentic sees no difference at all.
+    agentic_used: bool = False
+    detected_language: str = "en"
+    cited_evidence_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -151,6 +168,9 @@ class Recommendation:
                 for f in self.agent_findings
             ],
             "zone_summaries": self.zone_summaries,
+            "agentic_used": self.agentic_used,
+            "detected_language": self.detected_language,
+            "cited_evidence_ids": self.cited_evidence_ids,
         }
 
 
@@ -161,13 +181,18 @@ def build_recommendation(
     observations: list[MarineObservation] | None = None,
     offline_mode: bool = False,
     zones: list[dict] | None = None,
+    resolved_zone: dict | None = None,
 ) -> Recommendation:
     zones = zones or ZONES
     observations = observations if observations is not None else load_cached_observations()
     if not observations:
         raise ValueError("No observations available to build a recommendation from")
 
-    primary_zone = resolve_zone_from_query(query, lat, lon, zones)
+    # resolved_zone lets orca/agentic.py hand in a zone it already picked
+    # (via substring match or an LLM-constrained-to-real-zones guess)
+    # instead of recomputing it here -- default None reproduces the plain
+    # resolve_zone_from_query() behaviour exactly.
+    primary_zone = resolved_zone or resolve_zone_from_query(query, lat, lon, zones)
     ordered_zones = [primary_zone] + [z for z in zones if z["name"] != primary_zone["name"]]
 
     zone_results: dict[str, tuple[dict, Decision, list[Finding]]] = {}

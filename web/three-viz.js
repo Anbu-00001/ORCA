@@ -13,6 +13,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 // Reuses the app's existing palette (see index.html's :root custom
 // properties) so the 3D views read as part of the same product, not a
 // bolted-on demo.
+
 const COLOR_LOW = new THREE.Color(0x0f6e5c); // --accent
 const COLOR_MID = new THREE.Color(0xc98a12); // --amber-border
 const COLOR_HIGH = new THREE.Color(0xa4321d); // --danger

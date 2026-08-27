@@ -69,7 +69,10 @@ Submit a user query (e.g. location, target area, intent) and receive a determini
       "risk_level": 1.0,
       "hard_deny": true
     }
-  ]
+  ],
+  "agentic_used": false,
+  "detected_language": "en",
+  "cited_evidence_ids": []
 }
 ```
 `chosen_zone`, the entries of `zone_summaries`, and the map markers all
@@ -84,6 +87,29 @@ the 3D evidence-reasoning graph. `zone_summaries` is one entry per
 evaluated zone with a worst-agent `risk_level` and `hard_deny` -- added
 for the geospatial risk-terrain view. Both surface computation
 `build_recommendation()` already did internally; neither is fabricated.
+
+`agentic_used`, `detected_language`, and `cited_evidence_ids` are also
+additive, from `orca/agentic.py` (the chatbot's agentic layer -- see that
+file's module docstring for the full design). With `GROQ_API_KEY` unset,
+or on any failure of the optional Groq call, these are always `false` /
+`"en"` / `[]` and every other field is byte-for-byte what plain
+`build_recommendation()` always produced -- this is CLAUDE.md rule 8's
+guarantee, not just a default. When configured and reachable:
+- `agentic_used` is `true` if the LLM contributed to zone resolution
+  and/or answer phrasing this request.
+- `detected_language` is the query's detected language (`"ta"` for
+  Tamil, `"en"` for English, `"other"` otherwise) -- `recommendation` is
+  phrased in it.
+- `cited_evidence_ids` are the real `evidence[].id`s the composed
+  `recommendation` text actually drew on, server-validated against the
+  real evidence list (any id the model named that isn't real is dropped,
+  never shown as if it were).
+- A cheap, zero-risk substring match against the real zone list always
+  wins over an LLM guess when it finds one; the LLM is only consulted
+  (to map free text like "the harbour jetty" or "the southernmost tip of
+  India" onto a real zone) when that substring match finds nothing, and
+  even then it can only ever pick a zone that's genuinely in
+  `data/fetch.py`'s `ZONES` -- never an invented place.
 
 ---
 

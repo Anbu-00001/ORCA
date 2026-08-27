@@ -6,3 +6,11 @@ node_modules/
 playwright-report/
 test-results/
 *.log
+
+# Secrets -- GROQ_API_KEY / etc. Never commit these; orca/agentic.py reads
+# them from the environment only, and only from the backend process (a
+# key must never be reachable from web/*.js -- that's shipped to the
+# browser as-is, no build step, no bundler, fully visible via view-source).
+.env
+.env.*
+!.env.example

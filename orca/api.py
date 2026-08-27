@@ -2,9 +2,12 @@
 
 Matches API_CONTRACT.md. Every number in every response traces to a
 MarineObservation id via /evidence/{id} (CLAUDE.md rule 3). This module
-reads only from data/cache/ through orca.planner — it makes no network
-calls itself (CLAUDE.md rule 8; data/fetch.py is the only file allowed
-to touch the network).
+itself makes no network calls (CLAUDE.md rule 8). /ask delegates to
+orca.agentic.answer_question(), which always runs the same
+build_recommendation() this file used to call directly, and only ever
+*adds* an optional, fail-closed network call on top of it (GROQ_API_KEY
+unset -> identical to the old direct call, byte-for-byte). See
+orca/agentic.py's module docstring for the rule 8 exception this is.
 
 Does not modify orca/schema.py or orca/policy.py.
 """
@@ -19,7 +22,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from orca.planner import build_recommendation, load_cached_observations, observation_id
+from orca.agentic import answer_question
+from orca.planner import load_cached_observations, observation_id
 
 app = FastAPI(title="ORCA", description="Marine advisory reasoning layer")
 
@@ -61,7 +65,7 @@ def ask(request: AskRequest) -> dict:
     observations = load_cached_observations()
     offline = _is_reachable()
     try:
-        recommendation = build_recommendation(
+        recommendation = answer_question(
             request.query, request.lat, request.lon, observations=observations, offline_mode=offline
         )
     except ValueError as exc:

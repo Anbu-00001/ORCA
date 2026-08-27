@@ -2,7 +2,7 @@
   "id": "rec_123456",
   "action": "SAFER ALTERNATIVE",
   "reason": "Opportunity overridden by hazard: significant wave height 3.1 m at Nagapattinam exceeds safety threshold (2.5 m).",
-  "recommendation": "Do not go to Nagapattinam. Go to Karaikal — lower expected catch, wave height 1.4 m.",
+  "recommendation": "Skip Nagapattinam today — waves are running 3.1 m, above the safe limit. Karaikal is calm (1.4 m), go there instead.",
   "chosen_zone": {
     "name": "Karaikal",
     "lat": 10.9327,
@@ -118,5 +118,8 @@
     { "name": "Thoothukudi", "lat": 8.4730, "lon": 78.1215, "action": "GO", "risk_level": 0.17, "hard_deny": false },
     { "name": "Kanyakumari", "lat": 8.0883, "lon": 77.5385, "action": "GO", "risk_level": 0.28, "hard_deny": false },
     { "name": "Colachel", "lat": 8.1786, "lon": 77.2561, "action": "GO", "risk_level": 0.2, "hard_deny": false }
-  ]
+  ],
+  "agentic_used": true,
+  "detected_language": "en",
+  "cited_evidence_ids": ["obs_wave_01", "obs_sst_01"]
 }

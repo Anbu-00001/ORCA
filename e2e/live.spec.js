@@ -50,6 +50,27 @@ test.describe('frontend against the real live API', () => {
     await expect(detail).toContainText(/open-meteo|erddap|coastwatch/i);
   });
 
+  // orca/agentic.py's chatbot layer, through the real HTTP + browser path
+  // (not just calling the Python function directly, as tests/test_agentic.py
+  // does) -- proves the wiring in orca/api.py's /ask handler, not just the
+  // module in isolation. Skips itself (this test only, not the rest of the
+  // suite) if the webServer wasn't started with a real key, same shape as
+  // the pytest "agentic" marker.
+  test('a free-text query with no zone name literally in it resolves via the real agentic layer', async ({ page }) => {
+    test.skip(!process.env.GROQ_API_KEY, 'requires the webServer to be started with a real GROQ_API_KEY');
+    await page.getByTestId('query-input').fill('Is it safe to fish near the southernmost tip of India today?');
+    await page.getByTestId('lat-input').fill('8.0883');
+    await page.getByTestId('lon-input').fill('77.5385');
+    await page.getByTestId('ask-button').click();
+
+    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 15000 });
+    await expect(page.getByTestId('agentic-badge')).not.toHaveClass(/hidden/);
+    // Real backend, real Groq call: proves the LLM actually resolved
+    // "southernmost tip of India" to the real Kanyakumari zone, something
+    // plain substring matching (the pre-existing behaviour) could never do.
+    await expect(page.getByTestId('answer-text')).toContainText(/Kanyakumari/i);
+  });
+
   test('a zone with a real live conflict shows the amber override banner', async ({ page }) => {
     // As of the last demo/scenarios.json capture, Karaikal has a genuine
     // wind-risk-vs-opportunity conflict live. If sea state has changed by

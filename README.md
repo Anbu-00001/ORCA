@@ -30,6 +30,7 @@ India's marine monitoring ecosystem (ISRO, INCOIS, DGLL, NOAA) generates rich sa
 | **Data Traceability** | Aggregated values / opaque predictions | **100% Provenance**: Source, timestamp, confidence, & dataset ID per number |
 | **Offline Resilience** | Fails or shows empty screen offshore | **Offline-First Cache & Degraded Confidence Engine** |
 | **Synthetic Fallbacks** | Silent mock fallback when API fails | **Strict Prohibition**: Raises errors on failure; zero fabricated data |
+| **Conversational Query** | Structured push (SMS/IVRS) or a search box matched to exact zone names | **Agentic chatbot layer** (`orca/agentic.py`): free-text, real-language queries resolved onto real zones, phrased in the query's own language — deterministic policy untouched, network calls fail closed to the same offline behavior above |
 
 ---
 
@@ -231,6 +232,21 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 2b. Chatbot agentic layer (Optional - ORCA runs fully offline without it)
+`/ask` works exactly as always with no setup. To also enable LLM-assisted
+zone resolution (free text like "the harbour jetty at Rameswaram" or "the
+southernmost tip of India" → the real zone, not just an exact name match)
+and localized, natural-language phrasing (including real Tamil, not just
+canned templates) — see `orca/agentic.py`:
+
+```bash
+cp .env.example .env      # then fill in a free key from console.groq.com/keys
+source .env
+```
+With `GROQ_API_KEY` unset, or if Groq is unreachable, every response is
+byte-for-byte what it always was (CLAUDE.md rule 8) — this is additive,
+never a dependency for the demo to run.
+
 ### 3. Ingest Real Marine Data (Optional - Offline Cache Included)
 To refresh the real cached marine data for the Tamil Nadu coast (Nagapattinam / Chennai):
 
@@ -239,7 +255,8 @@ python data/fetch.py
 ```
 
 ### 4. Run Test Suite
-Verify that all 103 unit and integration tests pass:
+Verify that the unit and integration tests pass (148, plus 1 more if
+`GROQ_API_KEY` is set — see 2b above):
 
 ```bash
 pytest -v

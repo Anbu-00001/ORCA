@@ -20,6 +20,7 @@ from orca.planner import (
     observations_for_zone,
     resolve_zone_from_query,
     run_agents,
+    _zone_by_substring,
 )
 from orca.schema import MarineObservation
 from data.fetch import ZONES
@@ -277,3 +278,61 @@ def test_recommendation_zone_summaries_in_to_dict():
     d = rec.to_dict()
     assert "zone_summaries" in d
     assert len(d["zone_summaries"]) == len(ZONES)
+
+
+# ---------------------------------------------------------------------------
+# _zone_by_substring / resolved_zone — the seam orca/agentic.py hooks into.
+# resolve_zone_from_query()'s own behaviour must not change at all (these
+# mirror the existing tests above it); _zone_by_substring is the new,
+# directly-testable piece, and resolved_zone is the override orca/agentic.py
+# uses to hand in an already-picked zone without recomputing it.
+# ---------------------------------------------------------------------------
+
+def test_zone_by_substring_matches_named_zone():
+    zone = _zone_by_substring("Should I go fishing near Nagapattinam?", ZONES)
+    assert zone["name"] == "Nagapattinam"
+
+
+def test_zone_by_substring_returns_none_when_nothing_matches():
+    assert _zone_by_substring("Is it safe to go out today?", ZONES) is None
+
+
+def test_resolve_zone_from_query_unchanged_when_no_match_still_falls_back_to_nearest():
+    # Regression guard for the _zone_by_substring extraction: behaviour of
+    # the public function must be identical to before the refactor.
+    zone = resolve_zone_from_query("Is it safe to go out today?", lat=ZONE_B["lat"], lon=ZONE_B["lon"])
+    assert zone["name"] == ZONE_B["name"]
+
+
+def test_build_recommendation_resolved_zone_overrides_query_matching():
+    # A query that would substring-match Nagapattinam, but resolved_zone
+    # says Karaikal -- resolved_zone must win, proving orca/agentic.py can
+    # actually steer zone selection.
+    rec = build_recommendation(
+        "Should I go fishing near Nagapattinam?",
+        ZONE_A["lat"], ZONE_A["lon"],
+        observations=_clean_go_observations(ZONE_B),
+        resolved_zone=ZONE_B,
+    )
+    assert rec.recommendation.startswith(f"Go to {ZONE_B['name']}")
+
+
+def test_build_recommendation_resolved_zone_none_matches_old_behaviour():
+    rec = build_recommendation(
+        "Should I go fishing near Nagapattinam?",
+        ZONE_A["lat"], ZONE_A["lon"],
+        observations=_clean_go_observations(ZONE_A),
+        resolved_zone=None,
+    )
+    assert rec.recommendation.startswith(f"Go to {ZONE_A['name']}")
+
+
+def test_recommendation_agentic_fields_default_to_plain_behaviour():
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=_clean_go_observations(ZONE_A))
+    assert rec.agentic_used is False
+    assert rec.detected_language == "en"
+    assert rec.cited_evidence_ids == []
+    d = rec.to_dict()
+    assert d["agentic_used"] is False
+    assert d["detected_language"] == "en"
+    assert d["cited_evidence_ids"] == []
