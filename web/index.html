@@ -242,6 +242,19 @@
     margin-left: 0.5rem;
   }
   #agentic-badge.hidden { display: none; }
+  /* Honest caveat strip: shown only when ORCA is answering about a zone
+     the user did not actually name, or from data that isn't for the day
+     they asked about. Muted rather than alarming -- it's a clarification,
+     not a hazard warning (those are the amber/red bands above). */
+  #coverage-note {
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--muted);
+    border-left: 3px solid var(--line);
+    padding: 0.4rem 0 0.4rem 0.6rem;
+    margin-top: 0.6rem;
+  }
+  #coverage-note.hidden { display: none; }
 
   #override-banner {
     border: 1px solid var(--amber-border);
@@ -418,6 +431,7 @@
     <div id="answer-card" data-testid="answer-card">
       <div id="answer-action" data-testid="answer-action"></div><span id="agentic-badge" class="hidden" data-testid="agentic-badge">AI-enhanced</span>
       <p id="answer-text" data-testid="answer-text"><span id="answer-placeholder">Ask a question below to get a recommendation.</span></p>
+      <div id="coverage-note" class="hidden" data-testid="coverage-note"></div>
     </div>
 
     <div id="override-banner" class="hidden" data-testid="override-banner"></div>
@@ -492,6 +506,7 @@
   const answerAction = document.getElementById("answer-action");
   const answerText = document.getElementById("answer-text");
   const agenticBadge = document.getElementById("agentic-badge");
+  const coverageNote = document.getElementById("coverage-note");
   const overrideBanner = document.getElementById("override-banner");
   const evidenceList = document.getElementById("evidence-list");
   const queryInput = document.getElementById("query-input");
@@ -640,6 +655,27 @@
     answerText.setAttribute("lang", data.detected_language === "ta" ? "ta" : "en");
     agenticBadge.classList.toggle("hidden", !data.agentic_used);
 
+    // Honest caveat, straight from the backend -- never composed here.
+    if (data.coverage_note) {
+      coverageNote.textContent = data.coverage_note;
+      coverageNote.classList.remove("hidden");
+    } else {
+      coverageNote.textContent = "";
+      coverageNote.classList.add("hidden");
+    }
+
+    // An off-topic reply is not a safety verdict, so it must not be
+    // dressed as one -- the GO/DO NOT GO badge, the override banner and
+    // the Douglas ruler all describe conditions nobody asked about.
+    if (data.answer_kind === "off_topic") {
+      answerAction.textContent = "";
+      answerAction.className = "hidden";
+      overrideBanner.classList.add("hidden");
+      renderEvidence([]);
+      renderDouglasRuler([]);
+      return;
+    }
+
     if (data.overridden && data.overridden.length > 0) {
       overrideBanner.classList.remove("hidden");
       const lines = data.overridden.map((o) => o.agent + ": " + o.reason).join("<br/>");
@@ -673,6 +709,35 @@
   }
   wirePaletteSwitch();
 
+  // Conversation memory, client side. Deliberately stores ONLY the three
+  // structured facts orca/memory.py will accept -- never the question
+  // text and never a previous answer. That is what lets a follow-up like
+  // "what about tomorrow?" find its subject without giving a model any
+  // earlier prose to drift from or contradict. The server re-validates
+  // all of it regardless (orca/memory.py's sanitize()); this side is a
+  // convenience, not a trust boundary.
+  const HISTORY_MAX = 3;
+  let conversationHistory = [];
+
+  function rememberTurn(data) {
+    // primary_zone, not chosen_zone: what the conversation is ABOUT is the
+    // place the user asked about, not the safer alternative ORCA may have
+    // redirected them to. Caught live -- asking about Rameswaram, getting
+    // a SAFER ALTERNATIVE of Chennai, then asking "what's the wave height
+    // there?" answered about Chennai. chosen_zone is also null on a
+    // DO NOT GO, which would drop the subject entirely.
+    const subject = data.primary_zone || data.chosen_zone;
+    const zoneName = subject ? subject.name : null;
+    const variable = data.lookup ? data.lookup.variable : null;
+    if (!zoneName && !variable) return;
+    conversationHistory.push({
+      zone_name: zoneName,
+      variable: variable,
+      time_frame: data.time_frame || "now",
+    });
+    conversationHistory = conversationHistory.slice(-HISTORY_MAX);
+  }
+
   async function submitQuery() {
     const query = queryInput.value.trim();
     const lat = parseFloat(latInput.value);
@@ -684,10 +749,11 @@
       const resp = await fetch(API_BASE + "/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, lat, lon }),
+        body: JSON.stringify({ query, lat, lon, history: conversationHistory }),
       });
       if (!resp.ok) throw new Error("ORCA API error " + resp.status);
       const data = await resp.json();
+      rememberTurn(data);
       renderRecommendation(data);
     } catch (err) {
       answerAction.textContent = "ERROR";

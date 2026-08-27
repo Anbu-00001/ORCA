@@ -255,7 +255,7 @@ python data/fetch.py
 ```
 
 ### 4. Run Test Suite
-Verify that the unit and integration tests pass (148, plus 1 more if
+Verify that the unit and integration tests pass (207, plus 1 more if
 `GROQ_API_KEY` is set — see 2b above):
 
 ```bash

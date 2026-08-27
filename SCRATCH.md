@@ -284,3 +284,138 @@ design and what was verified live. Notes that didn't fit there:
   ...") instead of speaking like a person -- fixed by explicitly telling
   the model not to narrate the JSON's structure. Caught by reading a real
   response, not by guessing what "natural" would mean.
+
+## 2026-08-27 — the four question types + memory layer: what was risky
+
+Built gaps 1-4 from the "how to answer more indirect questions" analysis
+(bare-number lookups, multi-turn memory, out-of-coverage honesty,
+off-topic refusal). Notes on the parts that were genuinely risky, and the
+bugs found by actually running it rather than by reading the code:
+
+- **The "tomorrow" data was already being fetched and thrown away.**
+  `data/fetch.py` has always asked Open-Meteo for `forecast_days=2` (~48
+  hourly points per variable per zone) and `_parse_point()` has always
+  kept `idx = 0` and discarded the other 47. So "what about tomorrow"
+  needed no new data source at all -- just a second, separate read of a
+  response we were already paying for. Added `fetch_tomorrow()` /
+  `_parse_point_at_offset()` as a SEPARATE path rather than widening
+  `fetch()`, deliberately: the "now" pipeline feeds the live safety
+  policy and every agent, and this feature isn't on that request path.
+  It writes to `data/cache/forecast/` -- its own subdirectory, the same
+  isolation pattern bathymetry and IMBL already use, so
+  `load_cached_observations()` (non-recursive glob) cannot sweep it into
+  the safety-critical observation set.
+- **Confidence had to drop for a day-ahead reading, and the first fix
+  only landed on half of it.** Copying `NEAR_TERM_CONFIDENCE = 0.9` onto
+  a 24h forecast would have quietly overstated exactly what CLAUDE.md
+  rule 3 makes every number carry honestly, so `NEXT_DAY_CONFIDENCE =
+  0.75`. The bug: the edit matched only `OpenMeteoMarineFetcher` (the two
+  fetchers' code differed by one trailing comment), so the wind fetcher
+  kept writing 0.9 for tomorrow -- and the marine-only test passed.
+  Caught by reading the actual regenerated cache, not by the suite. The
+  test is now parametrized across BOTH fetchers.
+- **Composition was ~3,200 tokens per request and rate-limited the demo
+  after two questions.** The composer was handed the entire
+  `Recommendation.to_dict()` -- all 10 `zone_summaries`, all 5
+  `agent_findings`, every evidence item's full provenance URL and
+  coordinates. Groq's free tier allows 8,000 TPM on
+  `openai/gpt-oss-120b`, so the third question in a minute got a real
+  429 and silently fell back to template text (observed live; the
+  fallback worked exactly as designed, which is why it looked like
+  "composition randomly not applying" rather than an error).
+  `_composition_context()` now sends only action/reason/chosen_zone and
+  each evidence item's id/variable/value/unit: **~470 tokens, an 85%
+  cut**. None of the dropped bulk was reachable in the output anyway, and
+  less irrelevant material is a grounding win too, not just a cost one.
+- **The model copied the JSON into the answer verbatim.** First version
+  of the data_lookup prompt said "stated EXACTLY as given here (same
+  number, same unit): {json.dumps(lookup)}" -- and the live answer began
+  `{"variable": "wave_height_m", "value": 0.84, ...}`. Fixed by spelling
+  the value out in the prompt as a sentence and explicitly forbidding
+  JSON/braces/field names in the reply. Caught by reading real output.
+- **A `data_lookup` that is also a DO NOT GO with no named zone dropped
+  the number entirely.** `chosen_zone` is None on a DO NOT GO (there is
+  nowhere to send them) and `resolved_zone` is None when they named no
+  place -- "what's the wave height?" in dangerous conditions hits both at
+  once, and `_resolve_lookup()` returned None. Now falls back to
+  `zone_summaries[0]`, which planner.py builds primary-zone-first, so the
+  reading always has a real home. This is the mirror image of the
+  hard-deny rule below: one guards against burying the safety fact, this
+  one against dropping the question that was actually asked.
+- **`history: list | None` on the Pydantic model contradicted its own
+  docstring.** `orca/memory.py` promises a malformed or hostile history
+  degrades to "no memory", never a rejected request -- but Pydantic
+  rejected a non-list with 422 *before* `sanitize()` ever ran. Caught by
+  an e2e test, not by the Python-level tests (which call
+  `answer_question()` directly and so bypass the HTTP boundary
+  entirely). Field is now typed `Any`, with `sanitize()` as the single
+  validation gate, and both a parametrized pytest and an e2e case pin it.
+- **Memory design, the part that was explicitly required not to
+  hallucinate.** Research (summarized with sources in the entry above) is
+  consistent on two points: concatenating raw transcripts is what makes
+  models drift and reinforce their own earlier mistakes, and prompt
+  injection through history is architectural -- delimiters and role
+  markers demonstrably do not hold. So `orca/memory.py` stores no user
+  text at all: a turn is reduced on ingest to `{zone_name, variable,
+  time_frame}`, each re-validated against the real closed sets, capped at
+  3, frozen once built. A bad turn can leave behind only a zone that
+  really exists and a variable that really exists, so there is no wrong
+  *text* to carry forward. The other half of the guarantee is in
+  `orca/agentic.py`: history reaches ONLY extraction, never composition
+  -- so the composer literally cannot repeat or compound an earlier
+  answer, because it has never seen one. Both halves are asserted against
+  the real outbound payloads in tests, not just documented.
+- **Enum literals were written twice** (`("en","ta","other")`,
+  `("verdict","data_lookup")`) -- once in the JSON schema sent to the
+  model, once in the re-validation of its reply. Adding a language would
+  have let the model return it and then had re-validation silently
+  normalize it away. Hoisted to `LANGUAGES`/`INTENTS` constants, matching
+  what `orca/memory.py` already does for `TIME_FRAMES`/`LOOKUP_VARIABLES`.
+- **Three frontend/backend constants necessarily exist twice** (ZONES,
+  `WAVE_HARD_DENY_M`, the history cap) because `web/` has no build step
+  and cannot import Python. Rather than add a runtime `/zones` dependency
+  the offline demo would have to survive, `tests/test_frontend_constants.py`
+  parses the real values out of `web/index.html` and asserts they match
+  the Python ones. Drift now fails at CI time instead of misleading
+  someone on stage.
+
+## 2026-08-27 — chatbot e2e re-test: two bugs only a real conversation exposed
+
+Re-ran the chatbot layer end to end (full Playwright suite + a scripted
+4-turn conversation driven through a real browser against the real
+backend and the real Groq API). Every automated test was already green;
+the conversation transcript exposed two bugs none of them could have
+caught, because both are about *what the answer means across turns*
+rather than whether a field is populated:
+
+- **Memory recorded the wrong conversational subject.** Turn 1 asked
+  about **Rameswaram**, got a SAFER ALTERNATIVE pointing at Chennai, and
+  `web/index.html`'s `rememberTurn()` stored `chosen_zone` -- Chennai. So
+  turn 2, "What's the wave height *there*?", silently answered about
+  Chennai. `chosen_zone` is the *answer* ("where we're sending you"); the
+  *subject* is the place they asked about, and on a DO NOT GO
+  `chosen_zone` is `None` entirely, which would drop the thread
+  altogether. Added an explicit `primary_zone` to `Recommendation` (the
+  zone `build_recommendation()` actually resolved) and pointed
+  `rememberTurn()` at it. Both cases now have tests -- SAFER ALTERNATIVE
+  and DO NOT GO.
+- **The composer hallucinated a claim about ORCA's own capabilities.**
+  Turn 3, "And what about tomorrow?", produced: *"...we don't have
+  tomorrow's readings yet"* -- while stating correct forecast figures in
+  the same sentence, from a forecast cache that was fully populated. Not
+  a number hallucination (every figure was right) but a false statement
+  that would make a fisherman distrust a working feature. Root cause:
+  `_composition_context()` stripped `time_frame`, so the model received
+  unlabelled readings, was asked about tomorrow, and hedged. Fixed by
+  including `readings_are_for` in the context plus an explicit
+  instruction never to claim missing data for that day. Verified after
+  the fix: the same turn now reports 28.2 km/h wind, which is genuinely
+  tomorrow's Rameswaram forecast (today's is 25.9), carrying the honest
+  0.75 next-day confidence.
+
+Worth recording as a method note: both bugs were invisible to the test
+suite because every assertion passed -- the fields were present, the
+types were right, the numbers traced to real observations. What was wrong
+was the *meaning* of an answer given what had been asked two turns
+earlier. Scripting a real conversation and reading the transcript found
+in one run what field-level assertions could not.

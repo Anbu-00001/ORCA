@@ -72,7 +72,10 @@
       "risk_level": 0.0,
       "hard_deny": false,
       "reason": "Elevated chlorophyll (2.30 mg/m³) and warm SST (28.4°C) suggest fish aggregation",
-      "observation_ids": ["obs_chl_01", "obs_sst_01"]
+      "observation_ids": [
+        "obs_chl_01",
+        "obs_sst_01"
+      ]
     },
     {
       "agent": "ocean_state_agent",
@@ -80,7 +83,9 @@
       "risk_level": 0.0,
       "hard_deny": false,
       "reason": "SST 28.4°C within productive range",
-      "observation_ids": ["obs_sst_01"]
+      "observation_ids": [
+        "obs_sst_01"
+      ]
     },
     {
       "agent": "weather_agent",
@@ -88,7 +93,9 @@
       "risk_level": 0.3,
       "hard_deny": false,
       "reason": "Wind 12.0 km/h",
-      "observation_ids": ["obs_wind_01"]
+      "observation_ids": [
+        "obs_wind_01"
+      ]
     },
     {
       "agent": "hazard_agent",
@@ -96,7 +103,9 @@
       "risk_level": 1.0,
       "hard_deny": true,
       "reason": "Significant wave height 3.1 m exceeds 2.5 m safety limit",
-      "observation_ids": ["obs_wave_01"]
+      "observation_ids": [
+        "obs_wave_01"
+      ]
     },
     {
       "agent": "geofence_agent",
@@ -104,22 +113,107 @@
       "risk_level": 0.0,
       "hard_deny": false,
       "reason": "Outside restricted zones",
-      "observation_ids": ["obs_wave_01"]
+      "observation_ids": [
+        "obs_wave_01"
+      ]
     }
   ],
   "zone_summaries": [
-    { "name": "Chennai", "lat": 13.1251, "lon": 80.2955, "action": "GO", "risk_level": 0.18, "hard_deny": false },
-    { "name": "Cuddalore", "lat": 11.75, "lon": 79.75, "action": "GO", "risk_level": 0.22, "hard_deny": false },
-    { "name": "Karaikal", "lat": 10.9327, "lon": 79.8319, "action": "GO", "risk_level": 0.3, "hard_deny": false },
-    { "name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449, "action": "DO NOT GO", "risk_level": 1.0, "hard_deny": true },
-    { "name": "Point Calimere", "lat": 10.2845, "lon": 79.8241, "action": "GO", "risk_level": 0.15, "hard_deny": false },
-    { "name": "Mandapam", "lat": 9.28, "lon": 79.12, "action": "GO", "risk_level": 0.25, "hard_deny": false },
-    { "name": "Rameswaram", "lat": 9.2811, "lon": 79.3151, "action": "GO", "risk_level": 0.2, "hard_deny": false },
-    { "name": "Thoothukudi", "lat": 8.4730, "lon": 78.1215, "action": "GO", "risk_level": 0.17, "hard_deny": false },
-    { "name": "Kanyakumari", "lat": 8.0883, "lon": 77.5385, "action": "GO", "risk_level": 0.28, "hard_deny": false },
-    { "name": "Colachel", "lat": 8.1786, "lon": 77.2561, "action": "GO", "risk_level": 0.2, "hard_deny": false }
+    {
+      "name": "Chennai",
+      "lat": 13.1251,
+      "lon": 80.2955,
+      "action": "GO",
+      "risk_level": 0.18,
+      "hard_deny": false
+    },
+    {
+      "name": "Cuddalore",
+      "lat": 11.75,
+      "lon": 79.75,
+      "action": "GO",
+      "risk_level": 0.22,
+      "hard_deny": false
+    },
+    {
+      "name": "Karaikal",
+      "lat": 10.9327,
+      "lon": 79.8319,
+      "action": "GO",
+      "risk_level": 0.3,
+      "hard_deny": false
+    },
+    {
+      "name": "Nagapattinam",
+      "lat": 10.7672,
+      "lon": 79.8449,
+      "action": "DO NOT GO",
+      "risk_level": 1.0,
+      "hard_deny": true
+    },
+    {
+      "name": "Point Calimere",
+      "lat": 10.2845,
+      "lon": 79.8241,
+      "action": "GO",
+      "risk_level": 0.15,
+      "hard_deny": false
+    },
+    {
+      "name": "Mandapam",
+      "lat": 9.28,
+      "lon": 79.12,
+      "action": "GO",
+      "risk_level": 0.25,
+      "hard_deny": false
+    },
+    {
+      "name": "Rameswaram",
+      "lat": 9.2811,
+      "lon": 79.3151,
+      "action": "GO",
+      "risk_level": 0.2,
+      "hard_deny": false
+    },
+    {
+      "name": "Thoothukudi",
+      "lat": 8.473,
+      "lon": 78.1215,
+      "action": "GO",
+      "risk_level": 0.17,
+      "hard_deny": false
+    },
+    {
+      "name": "Kanyakumari",
+      "lat": 8.0883,
+      "lon": 77.5385,
+      "action": "GO",
+      "risk_level": 0.28,
+      "hard_deny": false
+    },
+    {
+      "name": "Colachel",
+      "lat": 8.1786,
+      "lon": 77.2561,
+      "action": "GO",
+      "risk_level": 0.2,
+      "hard_deny": false
+    }
   ],
   "agentic_used": true,
   "detected_language": "en",
-  "cited_evidence_ids": ["obs_wave_01", "obs_sst_01"]
+  "cited_evidence_ids": [
+    "obs_wave_01",
+    "obs_sst_01"
+  ],
+  "zone_match": "exact",
+  "answer_kind": "verdict",
+  "time_frame": "now",
+  "coverage_note": null,
+  "lookup": null,
+  "primary_zone": {
+    "name": "Nagapattinam",
+    "lat": 10.7672,
+    "lon": 79.8449
+  }
 }

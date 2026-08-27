@@ -72,9 +72,40 @@ Submit a user query (e.g. location, target area, intent) and receive a determini
   ],
   "agentic_used": false,
   "detected_language": "en",
-  "cited_evidence_ids": []
+  "cited_evidence_ids": [],
+  "zone_match": "exact",
+  "answer_kind": "verdict",
+  "time_frame": "now",
+  "coverage_note": null,
+  "lookup": null,
+  "primary_zone": { "name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449 }
 }
 ```
+
+#### Optional request field: `history`
+`POST /ask` also accepts an optional `history` array for multi-turn
+follow-ups ("what about tomorrow?"). Each entry carries **only** three
+validated values -- never question text, never a previous answer:
+
+```json
+"history": [
+  { "zone_name": "Karaikal", "variable": "wave_height_m", "time_frame": "now" }
+]
+```
+
+`zone_name` must be one of the real `ZONES`, `variable` one of the real
+observation variables, `time_frame` `"now"` or `"tomorrow"`; at most 3
+entries are kept. Anything else -- a wrong type, an invented place, an
+injected instruction, a non-list -- is reduced to nothing by
+`orca/memory.py`'s `sanitize()` and the request still answers normally
+(**never** a 4xx). That module's docstring explains why the field is
+structured facts rather than a transcript: it makes hallucination
+compounding and prompt injection through history structurally
+impossible, not merely unlikely. History reaches only the extraction
+step, never answer composition.
+
+---
+
 `chosen_zone`, the entries of `zone_summaries`, and the map markers all
 come from `data/fetch.py`'s `ZONES` — 10 real, named Tamil Nadu coastal
 fishing harbours/towns (Chennai down to Colachel), not `Zone A`/`Zone
@@ -105,11 +136,47 @@ guarantee, not just a default. When configured and reachable:
   real evidence list (any id the model named that isn't real is dropped,
   never shown as if it were).
 - A cheap, zero-risk substring match against the real zone list always
-  wins over an LLM guess when it finds one; the LLM is only consulted
-  (to map free text like "the harbour jetty" or "the southernmost tip of
-  India" onto a real zone) when that substring match finds nothing, and
-  even then it can only ever pick a zone that's genuinely in
-  `data/fetch.py`'s `ZONES` -- never an invented place.
+  wins over an LLM guess when it finds one; the LLM's `zone_name` is only
+  consulted (to map free text like "the harbour jetty" or "the
+  southernmost tip of India" onto a real zone) when that substring match
+  finds nothing, and even then it can only ever pick a zone that's
+  genuinely in `data/fetch.py`'s `ZONES` -- never an invented place.
+- `zone_match` says how the answered zone was arrived at, so a guess is
+  never presented as a certainty: `"exact"` (the query named it),
+  `"inferred"` (an LLM mapped a landmark onto it), `"remembered"`
+  (carried from the prior turn), `"fallback"` (nothing matched -- nearest
+  by coordinates). `"fallback"` is the only one that sets
+  `coverage_note`.
+- `coverage_note` is an honest caveat string (or `null`) stating that
+  ORCA is answering about a place the user didn't name, and/or that no
+  forecast was cached so the answer reflects current conditions rather
+  than tomorrow's. The UI renders it verbatim; it is never composed in
+  the browser.
+- `answer_kind` is `"verdict"` (the default), `"data_lookup"` (they asked
+  for one specific measurement), or `"off_topic"` (nothing to do with the
+  sea -- the UI suppresses the GO/DO NOT GO badge, evidence and Douglas
+  ruler in that case, since none of it was asked about).
+- `time_frame` is `"now"` or `"tomorrow"`. A `"tomorrow"` question is
+  answered from the separately-cached forecast observations, run through
+  the **identical** deterministic policy -- a forecast verdict is a real
+  verdict, not a weaker one. Those observations carry an honestly lower
+  `confidence` (0.75 vs 0.9) because a day-ahead forecast genuinely is
+  less certain.
+- `lookup` is the single real observation a `data_lookup` asked for --
+  `{variable, value, unit, valid_time, source, confidence, id}`, whose
+  `id` resolves through `/evidence/{id}` like any other number -- or
+  `{variable, time_frame, missing: true}` when ORCA has no such reading
+  (e.g. chlorophyll for tomorrow: it is a satellite observation, not a
+  forecast). A missing reading is never substituted or estimated.
+- A narrow `data_lookup` **never** suppresses a `DO NOT GO`: the composer
+  is explicitly instructed to state the danger regardless of how narrow
+  the question was.
+- `primary_zone` is the zone the **question was about**, which is not the
+  same as `chosen_zone` (where ORCA is sending them). They differ on a
+  `SAFER ALTERNATIVE`, and `chosen_zone` is `null` entirely on a
+  `DO NOT GO`. Anything resolving a follow-up pronoun ("what's the wave
+  height *there*?") should use `primary_zone` — using `chosen_zone` made
+  a Rameswaram question silently become a Chennai one.
 
 ---
 

@@ -16,7 +16,7 @@ real whenever a connection exists.
 """
 import json
 import socket
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -34,7 +34,7 @@ from data.fetch import (
     write_cache,
     write_imbl_cache,
 )
-from orca.planner import load_cached_observations
+from orca.planner import load_cached_observations, load_forecast_observations
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ZONE_A = {"name": "Nagapattinam", "lat": 10.7672, "lon": 79.8449}
@@ -118,6 +118,117 @@ def test_forecast_fetcher_parses_real_fixture_into_observations():
     assert "wind_speed_kmh" in variables
     assert all(o.source == "Open-Meteo Forecast" for o in obs)
     assert all("api.open-meteo.com" in o.provenance for o in obs)
+
+
+# ---------------------------------------------------------------------------
+# fetch_tomorrow() / _parse_point_at_offset() — the same real fixtures
+# already used above (48 real hourly points, confirmed by hand: idx 24 is
+# safely in range, and is a genuinely different calendar day from idx 0 --
+# see SCRATCH.md), read one day ahead instead of "now". Never touches
+# fetch()/_parse_point() -- see fetch_tomorrow()'s docstring for why.
+# ---------------------------------------------------------------------------
+
+def test_marine_fetcher_tomorrow_offset_is_a_real_different_day_than_now():
+    raw = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
+    fetcher = OpenMeteoMarineFetcher()
+    fetched_at = datetime(2026, 8, 26, 5, 0, tzinfo=timezone.utc)
+
+    now_obs = fetcher._parse_point(raw, ZONE_A, fetched_at)
+    tomorrow_obs = fetcher._parse_point_at_offset(raw, ZONE_A, fetched_at, hours_ahead=24)
+
+    assert len(tomorrow_obs) > 0
+    now_wave = next(o for o in now_obs if o.variable == "wave_height_m")
+    tomorrow_wave = next(o for o in tomorrow_obs if o.variable == "wave_height_m")
+    assert tomorrow_wave.valid_time.date() > now_wave.valid_time.date()
+    assert tomorrow_wave.valid_time - now_wave.valid_time == timedelta(hours=24)
+    assert tomorrow_wave.source == "Open-Meteo Marine"  # honest about which real source this still is
+
+
+@pytest.mark.parametrize(
+    "fetcher_cls,fixture_name",
+    [
+        (OpenMeteoMarineFetcher, "real_openmeteo_marine_response.json"),
+        (OpenMeteoForecastFetcher, "real_openmeteo_forecast_response.json"),
+    ],
+)
+def test_tomorrow_observations_carry_lower_confidence_than_now(fetcher_cls, fixture_name):
+    """A day-ahead forecast really is less certain than the current hour.
+    Copying NEAR_TERM_CONFIDENCE onto it would quietly overstate exactly
+    what CLAUDE.md rule 3 makes every number carry honestly.
+
+    Parametrized across BOTH fetchers deliberately: the first version of
+    this fix landed on the marine fetcher only, and a marine-only test
+    passed while the wind fetcher silently kept writing 0.9 for tomorrow
+    (caught by reading the real cache, not by the suite -- see SCRATCH.md).
+    """
+    raw = json.loads((FIXTURES / fixture_name).read_text())
+    fetcher = fetcher_cls()
+    fetched_at = datetime(2026, 8, 26, 5, 0, tzinfo=timezone.utc)
+
+    now_obs = fetcher._parse_point(raw, ZONE_A, fetched_at)
+    tomorrow_obs = fetcher._parse_point_at_offset(raw, ZONE_A, fetched_at, hours_ahead=24)
+
+    assert now_obs and tomorrow_obs
+    assert all(o.confidence == fetcher.NEAR_TERM_CONFIDENCE for o in now_obs)
+    assert all(o.confidence == fetcher.NEXT_DAY_CONFIDENCE for o in tomorrow_obs)
+    assert fetcher.NEXT_DAY_CONFIDENCE < fetcher.NEAR_TERM_CONFIDENCE
+
+
+def test_marine_fetcher_tomorrow_offset_out_of_range_returns_empty_not_fabricated():
+    raw = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
+    obs = OpenMeteoMarineFetcher()._parse_point_at_offset(
+        raw, ZONE_A, datetime.now(timezone.utc), hours_ahead=9999
+    )
+    assert obs == []
+
+
+def test_forecast_fetcher_tomorrow_offset_is_a_real_different_day_than_now():
+    raw = json.loads((FIXTURES / "real_openmeteo_forecast_response.json").read_text())
+    fetcher = OpenMeteoForecastFetcher()
+    fetched_at = datetime(2026, 8, 26, 5, 0, tzinfo=timezone.utc)
+
+    now_obs = fetcher._parse_point(raw, ZONE_A, fetched_at)
+    tomorrow_obs = fetcher._parse_point_at_offset(raw, ZONE_A, fetched_at, hours_ahead=24)
+
+    now_wind = next(o for o in now_obs if o.variable == "wind_speed_kmh")
+    tomorrow_wind = next(o for o in tomorrow_obs if o.variable == "wind_speed_kmh")
+    assert tomorrow_wind.valid_time.date() > now_wind.valid_time.date()
+    assert tomorrow_wind.source == "Open-Meteo Forecast"
+
+
+def test_forecast_cache_directory_is_invisible_to_load_cached_observations(tmp_path):
+    """The regression this guards: forecast/*.json must never be counted
+    as part of the live, safety-critical observation set (Path.glob is
+    non-recursive, but this proves it, not just asserts it by reading the
+    stdlib docs)."""
+    raw = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
+    tomorrow_obs = OpenMeteoMarineFetcher()._parse_point_at_offset(
+        raw, ZONE_A, datetime.now(timezone.utc), hours_ahead=24
+    )
+    write_cache("Open-Meteo Marine", tomorrow_obs, cache_dir=tmp_path / "forecast")
+
+    now_obs = OpenMeteoMarineFetcher()._parse_point(raw, ZONE_A, datetime.now(timezone.utc))
+    write_cache("Open-Meteo Marine", now_obs, cache_dir=tmp_path)
+
+    loaded = load_cached_observations(cache_dir=tmp_path)
+    assert len(loaded) == len(now_obs)  # tomorrow's must not have been swept in
+
+
+def test_load_forecast_observations_reads_back_what_was_written(tmp_path):
+    raw = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
+    tomorrow_obs = OpenMeteoMarineFetcher()._parse_point_at_offset(
+        raw, ZONE_A, datetime.now(timezone.utc), hours_ahead=24
+    )
+    write_cache("Open-Meteo Marine", tomorrow_obs, cache_dir=tmp_path / "forecast")
+
+    loaded = load_forecast_observations(cache_dir=tmp_path / "forecast")
+    assert len(loaded) == len(tomorrow_obs)
+    assert {o.variable for o in loaded} == {o.variable for o in tomorrow_obs}
+
+
+def test_load_forecast_observations_returns_empty_list_when_uncached(tmp_path):
+    # Absent is correct, not an error -- CLAUDE.md rule 1's spirit.
+    assert load_forecast_observations(cache_dir=tmp_path / "does_not_exist") == []
 
 
 # ---------------------------------------------------------------------------

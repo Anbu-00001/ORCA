@@ -32,13 +32,21 @@ from orca.policy import Decision, Finding, resolve
 from orca.schema import MarineObservation
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
+# Tomorrow's forecast, for orca/agentic.py's data_lookup answers only --
+# see data/fetch.py's fetch_tomorrow() docstring for why this is a wholly
+# separate subdirectory, never mixed into CACHE_DIR: the live GO/DO NOT
+# GO path (this file's build_recommendation(), every agent) must keep
+# reading exactly what it always has. Path.glob("*.json") on CACHE_DIR is
+# non-recursive, so files in here are already invisible to
+# load_cached_observations() without any extra guard -- this constant
+# just names the directory both sides agree on.
+FORECAST_CACHE_DIR = CACHE_DIR / "forecast"
 ZONE_MATCH_TOLERANCE_DEG = 0.05
 
 AGENTS = [eo_satellite_agent, ocean_state_agent, weather_agent, hazard_agent, geofence_agent]
 
 
-def load_cached_observations(cache_dir: Path | None = None) -> list[MarineObservation]:
-    cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR
+def _load_observations_from(cache_dir: Path) -> list[MarineObservation]:
     observations: list[MarineObservation] = []
     for path in sorted(cache_dir.glob("*.json")):
         raw = json.loads(path.read_text())
@@ -59,6 +67,22 @@ def load_cached_observations(cache_dir: Path | None = None) -> list[MarineObserv
                 )
             )
     return observations
+
+
+def load_cached_observations(cache_dir: Path | None = None) -> list[MarineObservation]:
+    return _load_observations_from(Path(cache_dir) if cache_dir else CACHE_DIR)
+
+
+def load_forecast_observations(cache_dir: Path | None = None) -> list[MarineObservation]:
+    """Tomorrow's forecast only -- orca/agentic.py's data_lookup path is
+    the only caller. Returns [] if the forecast cache hasn't been
+    populated yet (e.g. an older data/fetch.py run, or this run's
+    tomorrow-fetch failed) -- absent, not fabricated, per CLAUDE.md rule 1.
+    """
+    cache_dir = Path(cache_dir) if cache_dir else FORECAST_CACHE_DIR
+    if not cache_dir.exists():
+        return []
+    return _load_observations_from(cache_dir)
 
 
 def observation_id(obs: MarineObservation) -> str:
@@ -145,6 +169,24 @@ class Recommendation:
     agentic_used: bool = False
     detected_language: str = "en"
     cited_evidence_ids: list[str] = field(default_factory=list)
+    # How the answered zone was arrived at, so the UI (and the composed
+    # wording) can be honest about it rather than presenting a
+    # nearest-by-distance guess as if it were what was asked:
+    #   "exact"      -- the query literally named this zone
+    #   "inferred"   -- an LLM mapped a landmark/description onto it
+    #   "remembered" -- carried over from the conversation's prior turn
+    #   "fallback"   -- nothing matched; nearest zone by coordinates
+    zone_match: str = "exact"
+    answer_kind: str = "verdict"  # "verdict" | "data_lookup" | "off_topic"
+    time_frame: str = "now"  # "now" | "tomorrow"
+    coverage_note: str | None = None  # honest caveat when zone_match == "fallback"
+    lookup: dict | None = None  # the one real observation a data_lookup asked for
+    # The zone the QUESTION was about, which is not the same thing as
+    # chosen_zone (where we're sending them). On a SAFER ALTERNATIVE they
+    # differ, and on a DO NOT GO chosen_zone is None entirely. Anything
+    # resolving a follow-up pronoun ("what's the wave height *there*?")
+    # wants this one -- see web/index.html's rememberTurn().
+    primary_zone: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -171,6 +213,12 @@ class Recommendation:
             "agentic_used": self.agentic_used,
             "detected_language": self.detected_language,
             "cited_evidence_ids": self.cited_evidence_ids,
+            "zone_match": self.zone_match,
+            "answer_kind": self.answer_kind,
+            "time_frame": self.time_frame,
+            "coverage_note": self.coverage_note,
+            "lookup": self.lookup,
+            "primary_zone": self.primary_zone,
         }
 
 
@@ -264,4 +312,5 @@ def build_recommendation(
         offline_mode=offline_mode,
         agent_findings=p_findings,
         zone_summaries=zone_summaries,
+        primary_zone={"name": p_zone["name"], "lat": p_zone["lat"], "lon": p_zone["lon"]},
     )

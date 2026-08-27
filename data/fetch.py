@@ -98,8 +98,10 @@ class OpenMeteoMarineFetcher:
         "ocean_current_direction": "ocean_current_direction_deg",
     }
     # Open-Meteo does not publish per-point uncertainty. We use a fixed,
-    # documented heuristic: high confidence for the nearest forecast hour.
+    # documented heuristic: high confidence for the nearest forecast hour,
+    # lower for a day ahead (see _parse_point_at_offset).
     NEAR_TERM_CONFIDENCE = 0.9
+    NEXT_DAY_CONFIDENCE = 0.75
 
     def fetch(self, points: list[dict]) -> list[MarineObservation]:
         fetched_at = datetime.now(timezone.utc)
@@ -150,6 +152,77 @@ class OpenMeteoMarineFetcher:
             )
         return observations
 
+    def fetch_tomorrow(self, points: list[dict]) -> list[MarineObservation]:
+        """Same live forecast fetch() already makes (forecast_days=2 asks
+        for ~48 hourly points; fetch()/_parse_point() have only ever kept
+        idx 0), read one day ahead instead. A SEPARATE request on
+        purpose, not a second return channel out of fetch() -- sharing
+        that path risked the already-tested 'now' pipeline every agent
+        and the live safety policy depend on, for a feature that isn't on
+        that request path at all (this only ever populates
+        data/cache/forecast/, which orca/planner.py's
+        load_cached_observations() never reads -- see write_cache()'s
+        cache_dir param and that loader's docstring). See SCRATCH.md for
+        the full reasoning.
+        """
+        fetched_at = datetime.now(timezone.utc)
+        observations: list[MarineObservation] = []
+        for point in points:
+            params = {
+                "latitude": point["lat"],
+                "longitude": point["lon"],
+                "hourly": self.HOURLY_VARS,
+                "timezone": "UTC",
+                "forecast_days": 2,
+            }
+            resp = requests.get(self.BASE_URL, params=params, timeout=15)
+            resp.raise_for_status()
+            observations.extend(self._parse_point_at_offset(resp.json(), point, fetched_at, hours_ahead=24))
+        return observations
+
+    def _parse_point_at_offset(
+        self, raw: dict, point: dict, fetched_at: datetime, hours_ahead: int
+    ) -> list[MarineObservation]:
+        hourly = raw["hourly"]
+        units = raw.get("hourly_units", {})
+        idx = hours_ahead
+        if idx >= len(hourly.get("time", [])):
+            return []  # forecast_days didn't cover this far -- no fabricated fallback
+        valid_time = datetime.fromisoformat(hourly["time"][idx]).replace(tzinfo=timezone.utc)
+
+        request_url = (
+            f"{self.BASE_URL}?latitude={point['lat']}&longitude={point['lon']}"
+            f"&hourly={self.HOURLY_VARS}&timezone=UTC&forecast_days=2"
+        )
+
+        observations = []
+        for raw_var, schema_var in self._VAR_MAP.items():
+            series = hourly.get(raw_var)
+            if series is None or idx >= len(series) or series[idx] is None:
+                continue  # absent reading is honest; do not fabricate a value
+            observations.append(
+                MarineObservation(
+                    variable=schema_var,
+                    value=float(series[idx]),
+                    unit=units.get(raw_var, ""),
+                    lat=point["lat"],
+                    lon=point["lon"],
+                    valid_time=valid_time,
+                    fetched_at=fetched_at,
+                    source=self.SOURCE_NAME,
+                    # A day-ahead forecast is genuinely less certain than
+                    # the current hour. Claiming NEAR_TERM_CONFIDENCE for
+                    # it would be a quiet overstatement of exactly the
+                    # kind CLAUDE.md rule 3 exists to prevent -- the
+                    # number reaching the user must carry honest
+                    # confidence, not a copied-over one.
+                    confidence=self.NEXT_DAY_CONFIDENCE if hours_ahead >= 24 else self.NEAR_TERM_CONFIDENCE,
+                    freshness_min=max(0, int((fetched_at - valid_time).total_seconds() // 60)),
+                    provenance=request_url,
+                )
+            )
+        return observations
+
 
 class OpenMeteoForecastFetcher:
     """Wind speed/gusts and precipitation, per point, near-term forecast."""
@@ -164,6 +237,7 @@ class OpenMeteoForecastFetcher:
         "rain": "rain_mm",
     }
     NEAR_TERM_CONFIDENCE = 0.9
+    NEXT_DAY_CONFIDENCE = 0.75
 
     def fetch(self, points: list[dict]) -> list[MarineObservation]:
         fetched_at = datetime.now(timezone.utc)
@@ -208,6 +282,63 @@ class OpenMeteoForecastFetcher:
                     fetched_at=fetched_at,
                     source=self.SOURCE_NAME,
                     confidence=self.NEAR_TERM_CONFIDENCE,
+                    freshness_min=max(0, int((fetched_at - valid_time).total_seconds() // 60)),
+                    provenance=request_url,
+                )
+            )
+        return observations
+
+    def fetch_tomorrow(self, points: list[dict]) -> list[MarineObservation]:
+        """Wind's equivalent of OpenMeteoMarineFetcher.fetch_tomorrow() --
+        same reasoning, see that method's docstring."""
+        fetched_at = datetime.now(timezone.utc)
+        observations: list[MarineObservation] = []
+        for point in points:
+            params = {
+                "latitude": point["lat"],
+                "longitude": point["lon"],
+                "hourly": self.HOURLY_VARS,
+                "timezone": "UTC",
+                "forecast_days": 2,
+            }
+            resp = requests.get(self.BASE_URL, params=params, timeout=15)
+            resp.raise_for_status()
+            observations.extend(self._parse_point_at_offset(resp.json(), point, fetched_at, hours_ahead=24))
+        return observations
+
+    def _parse_point_at_offset(
+        self, raw: dict, point: dict, fetched_at: datetime, hours_ahead: int
+    ) -> list[MarineObservation]:
+        hourly = raw["hourly"]
+        units = raw.get("hourly_units", {})
+        idx = hours_ahead
+        if idx >= len(hourly.get("time", [])):
+            return []
+        valid_time = datetime.fromisoformat(hourly["time"][idx]).replace(tzinfo=timezone.utc)
+
+        request_url = (
+            f"{self.BASE_URL}?latitude={point['lat']}&longitude={point['lon']}"
+            f"&hourly={self.HOURLY_VARS}&timezone=UTC&forecast_days=2"
+        )
+
+        observations = []
+        for raw_var, schema_var in self._VAR_MAP.items():
+            series = hourly.get(raw_var)
+            if series is None or idx >= len(series) or series[idx] is None:
+                continue  # absent reading is honest; do not fabricate a value
+            observations.append(
+                MarineObservation(
+                    variable=schema_var,
+                    value=float(series[idx]),
+                    unit=units.get(raw_var, ""),
+                    lat=point["lat"],
+                    lon=point["lon"],
+                    valid_time=valid_time,
+                    fetched_at=fetched_at,
+                    source=self.SOURCE_NAME,
+                    # See OpenMeteoMarineFetcher._parse_point_at_offset --
+                    # a day-ahead forecast carries honest, lower confidence.
+                    confidence=self.NEXT_DAY_CONFIDENCE if hours_ahead >= 24 else self.NEAR_TERM_CONFIDENCE,
                     freshness_min=max(0, int((fetched_at - valid_time).total_seconds() // 60)),
                     provenance=request_url,
                 )
@@ -571,6 +702,21 @@ def main() -> int:
         print(f"PASS  {MarineRegionsIMBLFetcher.SOURCE_NAME}: {n_points} boundary points -> {path}")
     except Exception as exc:  # noqa: BLE001 — logged loudly, never swallowed
         print(f"FAIL  {MarineRegionsIMBLFetcher.SOURCE_NAME}: {exc}", file=sys.stderr)
+
+    # Tomorrow's forecast, for orca/agentic.py's "what about tomorrow"
+    # data_lookup answers only -- never read by load_cached_observations()
+    # (own subdirectory, same isolation pattern as bathymetry/imbl above),
+    # so its failure can't affect the live GO/DO NOT GO path either.
+    for fetcher in (OpenMeteoMarineFetcher(), OpenMeteoForecastFetcher()):
+        try:
+            obs = fetcher.fetch_tomorrow(ZONES)
+            if obs:
+                path = write_cache(fetcher.SOURCE_NAME, obs, cache_dir=CACHE_DIR / "forecast")
+                print(f"PASS  {fetcher.SOURCE_NAME} (tomorrow): {len(obs)} observations -> {path}")
+            else:
+                print(f"WARN  {fetcher.SOURCE_NAME} (tomorrow): 0 observations (nothing to cache)")
+        except Exception as exc:  # noqa: BLE001 — logged loudly, never swallowed
+            print(f"FAIL  {fetcher.SOURCE_NAME} (tomorrow): {exc}", file=sys.stderr)
 
     return 1 if errors and not results else 0
 

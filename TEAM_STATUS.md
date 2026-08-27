@@ -1,7 +1,7 @@
 # ORCA — Team Status
 
 **For:** other ICARUS teammates and their agents/assistants working on this repo.
-**Last updated:** 2026-08-27, agentic chatbot layer (orca/agentic.py, Groq).
+**Last updated:** 2026-08-27, chatbot question types + conversation memory (orca/memory.py).
 **Read this before touching the repo.** It tells you what's real, what's
 verified, what's still a manual/human job, and where not to step.
 
@@ -30,14 +30,17 @@ longer substring-matching theater: `orca/agentic.py` adds a real,
 fail-closed agentic layer (Groq, free tier) that resolves free-text
 queries onto real zones and phrases answers in the query's own language
 (including real Tamil) — see "Agentic chatbot layer" below. Backend suite
-is **148 pytest tests, all green** (excluding `orca/mcp_server.py`, still
+is **207 pytest tests, all green** (excluding `orca/mcp_server.py`, still
 broken — see below, unchanged; +1 more, `test_answer_question_live_end_to_end`,
-when `GROQ_API_KEY` is set); e2e is **33 Playwright tests, all green**,
+when `GROQ_API_KEY` is set); e2e is **39 Playwright tests, all green**,
 including a dedicated exceptional-cases sweep (`e2e/live.spec.js`'s
 "exceptional / error paths" block + `e2e/agentic-exceptions.spec.js`) —
 404/422 on the real endpoints, a real dead-port backend, a real 503, an
 empty-query no-op, and a *real* invalid Groq key hit live against a
 disposable second backend instance, not mocked.
+
+The chatbot now answers four question *kinds*, not just one — see
+"Chatbot question types + memory" below.
 
 Two teammate-sourced research documents (`ORCA_AUTHENTICITY_UPGRADE.md`-
 style data/feature plan, and a design-system spec) proposed a large body
@@ -521,6 +524,103 @@ not worth the risk for coverage that already exists at the right layer.
 
 ---
 
+## Chatbot question types + memory (orca/memory.py)
+
+The agentic layer above answered exactly one intent, however phrased:
+"is it safe at X". Four honest limits were identified and closed:
+
+**1. Bare-number questions.** `answer_kind: "data_lookup"` — "what's the
+wave height at Chennai?" now leads with the real reading (value, unit,
+and an `id` that resolves through `/evidence/{id}` like every other
+number) instead of only a verdict. **The safety floor:** a narrow
+question can never bury a `DO NOT GO` — the composer is explicitly
+instructed to state the danger regardless. The mirror-image bug is also
+covered: a `data_lookup` that is *also* a DO NOT GO with no named zone
+used to drop the number entirely (both `chosen_zone` and `resolved_zone`
+are None there); it now falls back to `zone_summaries[0]`, the primary
+zone actually evaluated.
+
+**2. "What about tomorrow?"** Turned out to need no new data source at
+all — `data/fetch.py` was already requesting `forecast_days=2` and
+discarding 47 of 48 hourly points. `fetch_tomorrow()` reads one day ahead
+into `data/cache/forecast/` (own subdirectory, so
+`load_cached_observations()` cannot sweep it into the safety-critical
+set). A "tomorrow" verdict runs the **identical** deterministic policy on
+those observations — a forecast verdict is a real verdict — and they
+carry an honestly lower `confidence` (0.75 vs 0.9), because a day-ahead
+forecast genuinely is less certain. If the forecast cache is empty, the
+answer says so rather than passing today's conditions off as tomorrow's.
+
+**3. Out-of-coverage places.** `zone_match` now records how the answered
+zone was reached — `exact` / `inferred` / `remembered` / `fallback`. On
+`fallback` (nothing matched; nearest-by-coordinates) the response carries
+a `coverage_note` and the UI renders it: *"You didn't name a place ORCA
+covers, so this is for Nagapattinam, the nearest…"* — instead of silently
+answering about somewhere else, which was the actual dishonesty.
+
+**4. Off-topic questions.** `answer_kind: "off_topic"` declines politely
+and the UI suppresses the GO/DO NOT GO badge, evidence panel and Douglas
+ruler — none of which were asked about. Defaults to *on*-topic when the
+signal is malformed: wrongly refusing a real fisherman's real question is
+the worse failure (the abstention literature's over-abstention problem).
+
+### The memory layer — and why it cannot hallucinate mid-conversation
+
+`orca/memory.py` exists as its own module because of one rule:
+**nothing the user typed is ever stored or replayed.** A turn is reduced
+on ingest to `{zone_name, variable, time_frame}`, each re-validated
+against the real closed sets (`ZONES`, the real observation variables,
+`now`/`tomorrow`), capped at 3, and frozen. That makes the two documented
+failure modes of multi-turn chat structurally impossible rather than
+merely unlikely:
+
+- **Hallucination compounding.** The naive pattern — concatenate the raw
+  transcript into every later prompt — is what makes models drift,
+  contradict themselves and reinforce their own earlier mistakes. Here a
+  bad turn can leave behind only a zone that really exists and a variable
+  that really exists, so there is no wrong *text* to carry forward, and
+  every answer is re-derived from live cached observations.
+- **Prompt injection through history.** An injected instruction would
+  have to survive being reduced to an enum value, and fails validation
+  instead. This is architectural prevention — the literature is clear
+  that delimiters and role markers do not hold.
+
+The other half of the guarantee is in `orca/agentic.py`: **history reaches
+only the extraction step, never composition.** The composer sees one
+thing — the decision just computed from real cached data — so it cannot
+repeat or compound an earlier answer, because it has never seen one. Both
+halves are asserted against the real outbound payloads in tests, not just
+documented. The browser mirrors the same shape (`web/index.html`'s
+`rememberTurn()`), and the server re-validates regardless: the client is
+a convenience, not a trust boundary.
+
+**Malformed history never fails a request.** `AskRequest.history` is typed
+`Any`, not `list | None`, deliberately — a narrower annotation had
+Pydantic reject a non-list with 422 *before* `sanitize()` ran, which
+contradicted the documented guarantee. Caught by an e2e test (the
+Python-level tests call `answer_question()` directly and bypass the HTTP
+boundary entirely). A fisherman's safety answer must not be lost to a
+malformed optional field.
+
+### Hardcode audit (done alongside)
+
+- Composition was sending the **entire** recommendation dict to the model
+  — ~3,200 tokens — which exhausted Groq's free 8,000 TPM budget after
+  about two questions and made composition silently fall back to template
+  text. `_composition_context()` sends only what can actually appear in
+  an answer: **~470 tokens, an 85% cut.** Also a grounding win.
+- `("en","ta","other")` and `("verdict","data_lookup")` were each written
+  twice (JSON schema + re-validation) — hoisted to `LANGUAGES`/`INTENTS`,
+  matching what `memory.py` already did for its own enums.
+- Three constants necessarily exist in both Python and JS (ZONES,
+  `WAVE_HARD_DENY_M`, the history cap) because `web/` has no build step.
+  `tests/test_frontend_constants.py` parses the real values out of
+  `web/index.html` and asserts they match — drift fails at CI time
+  instead of misleading someone on stage. Chosen over a `/zones` endpoint
+  because the page must keep rendering with the API down.
+
+---
+
 ## What's proposed but not built (two teammate research docs)
 
 Two large research documents were dropped into this session: a
@@ -534,10 +634,10 @@ tractable slice; everything below is a prioritized backlog, not started:
   zone resolution + phrasing (query → decision), not a multi-step
   *planning* agent proposing routes/timing for the policy engine to
   check — that's a materially bigger scope and still unbuilt.
-- Multi-turn conversation / session memory, language auto-detection
-  beyond the single Tamil sample phrase and `orca/agentic.py`'s
-  per-query `detected_language` (which doesn't persist across turns —
-  there are no turns yet).
+- ~~Multi-turn conversation / session memory~~ — **built**, see "Chatbot
+  question types + memory" above. Still open from the original idea:
+  memory is a 3-turn structured cap with no persistence across page
+  reloads, and there is no notion of a named user or a saved session.
 - Vessel-class-dependent hazard thresholds (the design doc calls the
   current single global `WAVE_HARD_DENY_M` "a correctness bug, not a
   feature request" — a fair point, real future work, not attempted here).

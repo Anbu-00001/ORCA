@@ -18,12 +18,14 @@ import socket
 from datetime import datetime, timezone
 from pathlib import Path
 
+from typing import Any
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from orca.agentic import answer_question
-from orca.planner import load_cached_observations, observation_id
+from orca.planner import load_cached_observations, load_forecast_observations, observation_id
 
 app = FastAPI(title="ORCA", description="Marine advisory reasoning layer")
 
@@ -46,6 +48,19 @@ class AskRequest(BaseModel):
     query: str
     lat: float
     lon: float
+    # Optional conversation memory, sent by the client. Typed as Any, not
+    # `list | None`, on purpose: orca/memory.sanitize() is the SINGLE
+    # validation gate for this field (it reduces whatever arrives to
+    # validated enum facts and drops everything else), and any annotation
+    # narrower than Any hands part of that job to Pydantic -- which
+    # rejects with a 422 instead of degrading to "no memory".
+    #
+    # That difference is not cosmetic and was caught by a real e2e test:
+    # with `list | None`, sending a string here failed the whole request,
+    # contradicting the guarantee stated in orca/memory.py's docstring.
+    # A fisherman's safety answer must not be lost because a client sent
+    # a malformed optional field. See orca/memory.py.
+    history: Any = None
 
 
 def _is_reachable(host: str = "marine-api.open-meteo.com", port: int = 443, timeout: float = 0.75) -> bool:
@@ -66,7 +81,16 @@ def ask(request: AskRequest) -> dict:
     offline = _is_reachable()
     try:
         recommendation = answer_question(
-            request.query, request.lat, request.lon, observations=observations, offline_mode=offline
+            request.query,
+            request.lat,
+            request.lon,
+            observations=observations,
+            offline_mode=offline,
+            history=request.history,
+            # Tomorrow's cached forecast, for "what about tomorrow"
+            # data_lookup answers only. Empty if data/fetch.py hasn't
+            # populated it -- absent, never fabricated.
+            forecast_observations=load_forecast_observations(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

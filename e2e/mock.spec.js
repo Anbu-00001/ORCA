@@ -67,6 +67,14 @@ test.describe('frontend in mock mode', () => {
     await expect(page.getByTestId('map')).toBeAttached();
   });
 
+  // The honesty strip: rendered straight from the backend's coverage_note,
+  // never composed in the browser. mock_response.json has none (it's an
+  // exact zone match), so it must stay hidden here -- the live suite
+  // covers the case where one is present.
+  test('coverage note stays hidden when the zone was an exact match', async ({ page }) => {
+    await expect(page.getByTestId('coverage-note')).toHaveClass(/hidden/);
+  });
+
   test('palette switch changes data-palette and persists across reload', async ({ page }) => {
     await expect(page.locator('html')).toHaveAttribute('data-palette', 'day');
     await expect(page.getByTestId('palette-day')).toHaveClass(/active/);

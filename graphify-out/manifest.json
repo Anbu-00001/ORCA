@@ -20,8 +20,8 @@
     "semantic_hash": "fd222d94a72f2d796464fab88bc7421f"
   },
   "data/fetch.py": {
-    "mtime": 1787810377.2143853,
-    "ast_hash": "20eaac832107fd362aa792b3de5a933f",
+    "mtime": 1787820063.2461293,
+    "ast_hash": "eb75ebdeafb8744dad027e25193b7070",
     "semantic_hash": ""
   },
   "demo/scenarios.json": {
@@ -30,13 +30,13 @@
     "semantic_hash": ""
   },
   "e2e/live.spec.js": {
-    "mtime": 1787817169.6372168,
-    "ast_hash": "eefd922042d942fed6456e38e6cbcaad",
+    "mtime": 1787820184.6343007,
+    "ast_hash": "8db88c1487ffd8e450f274964cedf766",
     "semantic_hash": ""
   },
   "e2e/mock.spec.js": {
-    "mtime": 1787816251.7043536,
-    "ast_hash": "8f06de4092092c8066cf13b3111b2b1a",
+    "mtime": 1787820193.455028,
+    "ast_hash": "08de66a64a50bb4560a75961d278a178",
     "semantic_hash": ""
   },
   "orca/__init__.py": {
@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "orca/api.py": {
-    "mtime": 1787815736.8942125,
-    "ast_hash": "7b10a717063bf106c36253bb78f9214b",
+    "mtime": 1787820362.322339,
+    "ast_hash": "1716212bb663584bff14aa9732f40db9",
     "semantic_hash": ""
   },
   "orca/mcp_server.py": {
@@ -60,8 +60,8 @@
     "semantic_hash": "db159af6d93399127244cd18da2fab8f"
   },
   "orca/planner.py": {
-    "mtime": 1787815717.5588217,
-    "ast_hash": "b5823ce3046d09d6cf7091beb36071e3",
+    "mtime": 1787819306.8600442,
+    "ast_hash": "cd1f7a26d2e3efa598b03b4dc56d4603",
     "semantic_hash": ""
   },
   "orca/policy.py": {
@@ -115,13 +115,13 @@
     "semantic_hash": ""
   },
   "tests/test_api.py": {
-    "mtime": 1787808175.578252,
-    "ast_hash": "aaf6ce62fd2f4089cabbd319afef7f59",
+    "mtime": 1787820386.0934596,
+    "ast_hash": "48b6fa609792fe226dd06c26d04cb981",
     "semantic_hash": ""
   },
   "tests/test_fetch.py": {
-    "mtime": 1787810303.2274501,
-    "ast_hash": "39597f30ff3f31a25175661b7542404c",
+    "mtime": 1787820080.0291417,
+    "ast_hash": "3baf87645963cc71d8f4724ef71d868d",
     "semantic_hash": ""
   },
   "tests/test_mcp_server.py": {
@@ -145,13 +145,13 @@
     "semantic_hash": "725cd3dc40f334fb6a80e3ba6ac12932"
   },
   "web/mock_response.json": {
-    "mtime": 1787816214.7814214,
-    "ast_hash": "316d065d18d298cf9110673cd53f5fac",
+    "mtime": 1787820161.3211586,
+    "ast_hash": "fad39998b091418ffacbf7830afa09e2",
     "semantic_hash": ""
   },
   "API_CONTRACT.md": {
-    "mtime": 1787816537.0141299,
-    "ast_hash": "bd3af817240f9d6cb00019545a70d66b",
+    "mtime": 1787830731.6438074,
+    "ast_hash": "afb0b356709a8bf45bce2637f869a9a3",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
@@ -170,18 +170,18 @@
     "semantic_hash": "f575820d408edc8a0c5dab2b151fd3c0"
   },
   "README.md": {
-    "mtime": 1787816742.3625221,
-    "ast_hash": "0f7f19a98faa73b85b150d5c5e54cd57",
+    "mtime": 1787830817.0782454,
+    "ast_hash": "311977dd6df06e033c3173b8f7c58cbf",
     "semantic_hash": ""
   },
   "SCRATCH.md": {
-    "mtime": 1787816832.6174822,
-    "ast_hash": "1dfac5ca5a01596631ce6237a437047c",
+    "mtime": 1787830767.1646292,
+    "ast_hash": "bf3a341564402fa23c88efa9afc8aaa6",
     "semantic_hash": ""
   },
   "TEAM_STATUS.md": {
-    "mtime": 1787816807.0288122,
-    "ast_hash": "762a85e93e17bce2347cc8a3ad7e3af5",
+    "mtime": 1787830830.5191426,
+    "ast_hash": "3d1076ca3bb551b2506383f660a6a649",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -190,8 +190,8 @@
     "semantic_hash": "ce7c3b009b67ff1849eb7d880e8e813a"
   },
   "web/index.html": {
-    "mtime": 1787816166.7803342,
-    "ast_hash": "3076190740c15e068072648ed95a5d7d",
+    "mtime": 1787819895.8141942,
+    "ast_hash": "04ec93189f7dc9f59aaa4ba7987cca22",
     "semantic_hash": ""
   },
   "docs/screenshots/orca_live_demo.png": {
@@ -200,18 +200,18 @@
     "semantic_hash": ""
   },
   "data/cache/bathymetry/bathymetry_grid.json": {
-    "mtime": 1787810458.8396802,
-    "ast_hash": "91c1e57d25a4a5b34f57832d5891c5e4",
+    "mtime": 1787819980.8774087,
+    "ast_hash": "7322df79f9ccddf39a8bdc2ea8c9c848",
     "semantic_hash": ""
   },
   "data/cache/open-meteo-forecast_2026-08-27.json": {
-    "mtime": 1787810455.2388175,
-    "ast_hash": "bacd7ae7999dfcba18319590a84153dc",
+    "mtime": 1787819977.8017683,
+    "ast_hash": "7e87aec06bf324ee3f64bdce3dbe3066",
     "semantic_hash": ""
   },
   "data/cache/open-meteo-marine_2026-08-27.json": {
-    "mtime": 1787810455.23773,
-    "ast_hash": "124c79af90e93083dc12bcff82441177",
+    "mtime": 1787819977.8000119,
+    "ast_hash": "25870b09c45f3f11f1233095842cd378",
     "semantic_hash": ""
   },
   "web/mock_bathymetry.json": {
@@ -265,13 +265,13 @@
     "semantic_hash": ""
   },
   "data/cache/noaa-coastwatch-erddap-viirs-chlorophyll-a_2026-08-27.json": {
-    "mtime": 1787810455.2391539,
-    "ast_hash": "5f6bf2c3dab446d422c454f3a245198f",
+    "mtime": 1787818283.3782957,
+    "ast_hash": "de5958dd1bd6b3a9e49c8f27b264a07b",
     "semantic_hash": ""
   },
   "data/cache/imbl/imbl_boundary.json": {
-    "mtime": 1787810459.6252153,
-    "ast_hash": "4dbfefa1ea99eb276ffb3f5c26bc4198",
+    "mtime": 1787819981.5958648,
+    "ast_hash": "e6256b3a72a349418a6a5b8e096ee87d",
     "semantic_hash": ""
   },
   "tests/fixtures/real_marineregions_imbl_response.json": {
@@ -280,18 +280,48 @@
     "semantic_hash": ""
   },
   "orca/agentic.py": {
-    "mtime": 1787816012.647652,
-    "ast_hash": "59eb702d11d3c0ea609ac7842f6c90fb",
+    "mtime": 1787830672.338694,
+    "ast_hash": "d4ee3ee17e43a8d7d187a4efde3b5ec1",
     "semantic_hash": ""
   },
   "tests/test_agentic.py": {
-    "mtime": 1787815930.7269738,
-    "ast_hash": "115163d474a665722a96c1bf5d0f81ca",
+    "mtime": 1787830682.2972195,
+    "ast_hash": "b81191771111fb53b3381c43a6f9a0d6",
     "semantic_hash": ""
   },
   "e2e/agentic-exceptions.spec.js": {
     "mtime": 1787817191.0878983,
     "ast_hash": "64d0c0b40ac4a3a15819b41a42a06d8c",
+    "semantic_hash": ""
+  },
+  "data/cache/forecast/open-meteo-forecast_2026-08-27.json": {
+    "mtime": 1787820124.234297,
+    "ast_hash": "89f7837974626eaae833530c16a9d775",
+    "semantic_hash": ""
+  },
+  "data/cache/forecast/open-meteo-marine_2026-08-27.json": {
+    "mtime": 1787819998.8841414,
+    "ast_hash": "3b16193d2974ea9dad27e4c21f48e083",
+    "semantic_hash": ""
+  },
+  "orca/memory.py": {
+    "mtime": 1787819053.862275,
+    "ast_hash": "82b3ab7a33d54d75fa4532d3eb860f3b",
+    "semantic_hash": ""
+  },
+  "scripts/build_docx.py": {
+    "mtime": 1787820373.8482852,
+    "ast_hash": "db1be050fed011e4e469914a14e85f1f",
+    "semantic_hash": ""
+  },
+  "tests/test_frontend_constants.py": {
+    "mtime": 1787820287.5654101,
+    "ast_hash": "6fa5066398b04cd135dc76b1a81fe4c1",
+    "semantic_hash": ""
+  },
+  "tests/test_memory.py": {
+    "mtime": 1787819088.5155237,
+    "ast_hash": "6d22a2ef5f04d1b489e8ab1e582d5402",
     "semantic_hash": ""
   }
 }
