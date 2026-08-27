@@ -1,0 +1,28 @@
+[
+  {
+    "variable": "chlorophyll_mg_m3",
+    "value": 1.75225,
+    "unit": "mg m^-3",
+    "lat": 10.76,
+    "lon": 79.84,
+    "valid_time": "2026-07-28T12:00:00+00:00",
+    "fetched_at": "2026-08-26T14:39:06.172368+00:00",
+    "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+    "confidence": 0.3,
+    "freshness_min": 41760,
+    "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.61):(10.91)][(79.69):(79.99000000000001)]"
+  },
+  {
+    "variable": "chlorophyll_mg_m3",
+    "value": 1.7777863285714286,
+    "unit": "mg m^-3",
+    "lat": 10.85,
+    "lon": 79.95,
+    "valid_time": "2026-07-28T12:00:00+00:00",
+    "fetched_at": "2026-08-26T14:39:06.172368+00:00",
+    "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+    "confidence": 0.3,
+    "freshness_min": 41760,
+    "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.7):(11.0)][(79.8):(80.10000000000001)]"
+  }
+]

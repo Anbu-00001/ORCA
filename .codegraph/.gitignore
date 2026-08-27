@@ -1,0 +1,8 @@
+# CodeGraph runtime files — machine-specific, not for committing.
+# The database is rebuilt locally by each developer's codegraph daemon.
+codegraph.db
+codegraph.db-shm
+codegraph.db-wal
+daemon.log
+daemon.pid
+daemon.sock

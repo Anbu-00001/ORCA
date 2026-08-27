@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ORCA — Marine Advisory</title>
+<script>
+  // Set the palette attribute before first paint (not after the stylesheet
+  // loads) so there's no flash of the wrong palette on reload. IHO S-52
+  // requires certified chart displays to carry three calibrated colour
+  // tables -- Day, Dusk, Night -- because a bridge at night is destroyed
+  // by bright light; ORCA ships the same three for the same reason, not
+  // as a "dark mode" toggle. See the :root / [data-palette] blocks below.
+  try {
+    var saved = localStorage.getItem("orca-palette");
+    document.documentElement.setAttribute("data-palette", saved || "day");
+  } catch (e) {
+    document.documentElement.setAttribute("data-palette", "day");
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Archivo (condensed width axis): instrument/signage labelling, not an
+     editorial display face -- used for the verdict and section heads.
+     Public Sans: US federal government interface face, plain and civic --
+     body text. IBM Plex Mono: ORCA's rule is that monospace means "this
+     is a transmissible safety message" (coordinates, evidence values,
+     the NavIC-style ticket) and nothing else uses it. Hind Madurai /
+     Noto Sans Tamil UI: Tamil UI text, both verified real Google Fonts
+     families (not assumed -- see SCRATCH.md). -->
+<link
+  href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,75,400;0,75,600;0,75,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Hind+Madurai:wght@400;500;600&family=Noto+Sans+Tamil+UI:wght@400;500&display=swap"
+  rel="stylesheet"
+/>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<!-- three.js: pinned version (not "latest"), same convention as maplibre-gl
+     above. Only build/build/three.module.js is published from r150+, so
+     this has to be an import map + module scripts, not a plain global. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  /* Colour tokens borrowed from nautical chart convention (IHO S-52 /
+     Admiralty chart), not an invented palette -- see SCRATCH.md for the
+     reasoning. --accent/--danger/--amber-* are the original token names
+     (kept so the many rules below didn't need a risky mass rename);
+     their *values* now carry chart meaning: --accent = starboard green
+     (GO), --danger = port red (DO NOT GO), --amber-border = chart
+     magenta (the Admiralty convention for cautions/restricted features,
+     used here for SAFER ALTERNATIVE and geofence warnings).
+     --unknown is deliberately its own token: a missing observation is
+     never shown as a guessed colour. */
+  :root, :root[data-palette="day"] {
+    --ink: #101418;
+    --paper: #fbfcfb;      /* chart white -- deep water */
+    --panel: #ffffff;
+    --card-bg: #f7f9f8;
+    --line: #c7d2d6;
+    --muted: #4a555c;
+    --accent: #007f3f;     /* starboard */
+    --accent-bg: #e1f3e8;
+    --danger: #c4161c;     /* port */
+    --danger-bg: #fbe2e1;
+    --amber-border: #c6006e; /* chart magenta */
+    --amber-bg: #f9dcec;
+    --map-placeholder: #c9e4ec; /* shoal blue */
+    --unknown: #6b7a82;
+  }
+  :root[data-palette="dusk"] {
+    --ink: #c6d2d8;
+    --paper: #1b2429;
+    --panel: #222e35;
+    --card-bg: #24313a;
+    --line: #3c4a52;
+    --muted: #8c9ba3;
+    --accent: #2e9460;
+    --accent-bg: #23372c;
+    --danger: #d8433f;
+    --danger-bg: #3a2422;
+    --amber-border: #c4479a;
+    --amber-bg: #362533;
+    --map-placeholder: #263a42;
+    --unknown: #5c6a72;
+  }
+  :root[data-palette="night"] {
+    /* S-52 logic: low-saturation red on black, so the eye keeps its dark
+       adaptation -- not a generic "dark mode" inversion. */
+    --ink: #a8534b;
+    --paper: #000000;
+    --panel: #120a0a;
+    --card-bg: #170d0d;
+    --line: #2a1614;
+    --muted: #6e3833;
+    --accent: #2c6e48;
+    --accent-bg: #10231a;
+    --danger: #e0564a;
+    --danger-bg: #2a1210;
+    --amber-border: #96395f;
+    --amber-bg: #200d18;
+    --map-placeholder: #150a0a;
+    --unknown: #4a3330;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  [lang="ta"] { font-family: "Hind Madurai", "Noto Sans Tamil UI", "Public Sans", sans-serif; line-height: 1.8; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  header h1 {
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
+    font-size: 1.3rem; margin: 0; letter-spacing: 0.02em; text-transform: uppercase;
+  }
+  header h1 span { color: var(--accent); text-transform: none; font-weight: 500; }
+  .palette-switch { display: flex; gap: 0.25rem; margin-left: 1rem; }
+  .palette-btn {
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 600;
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 0.3rem 0.55rem; border-radius: 5px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--muted); cursor: pointer;
+  }
+  .palette-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  #offline-badge {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--card-bg);
+    color: var(--muted);
+  }
+  #offline-badge.online { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+  #offline-badge.offline { background: var(--amber-bg); color: var(--amber-border); border-color: var(--amber-border); }
+
+  main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  #map-wrap { flex: 0 0 60%; position: relative; background: var(--map-placeholder); min-width: 0; }
+  #map-2d-layer { position: absolute; inset: 0; }
+  #map-2d-layer.hidden-view { display: none; }
+  #map { position: absolute; inset: 0; }
+  #map-fallback {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #bcd9ea 0%, #9fc9dd 45%, #2f6b53 46%, #1c4d3a 100%);
+  }
+  #map-fallback.visible { display: flex; }
+  #map-fallback svg { width: 90%; height: 90%; }
+  .zone-dot { fill: #ffffff; stroke: var(--ink); stroke-width: 1.5; }
+  .zone-label { font-size: 9px; fill: var(--ink); font-weight: 600; }
+
+  .view-toggle-bar { position: absolute; top: 10px; left: 10px; z-index: 10; display: flex; gap: 0.4rem; }
+  .view-toggle-btn {
+    padding: 0.35rem 0.7rem; border-radius: 7px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.92); color: var(--ink); font-size: 0.78rem;
+    font-weight: 600; cursor: pointer;
+  }
+  .view-toggle-btn.active { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+  #ocean3d-container { position: absolute; inset: 0; display: none; background: #0d2233; }
+  #ocean3d-container.visible { display: block; }
+  #ocean3d-container.awaiting::after {
+    content: "Loading seafloor relief…"; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #cfe3ee; font-size: 0.85rem; pointer-events: none;
+  }
+
+  aside {
+    flex: 0 0 40%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    overflow-y: auto;
+    padding: 1rem 1.1rem;
+    gap: 0.85rem;
+  }
+
+  #answer-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem;
+    background: var(--card-bg);
+  }
+  /* The verdict badge -- Archivo condensed, the same face used for the
+     Douglas ruler's band labels, since both are "instrument readout"
+     text, not prose. */
+  #answer-action {
+    display: inline-block;
+    font-family: "Archivo", sans-serif; font-stretch: condensed;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.7rem;
+    border-radius: 6px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  #answer-action.action-do-not-go { background: var(--danger-bg); color: var(--danger); }
+  #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
+  #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
+  #answer-placeholder { color: var(--muted); font-style: italic; }
+  /* Shown only when the backend actually used orca/agentic.py this
+     request (GROQ_API_KEY set + a live call succeeded) -- honest, not
+     decorative: with the key unset or the call unreachable this stays
+     hidden and the plain deterministic phrasing is exactly what's shown,
+     with nothing implying otherwise. */
+  #agentic-badge {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    margin-left: 0.5rem;
+  }
+  #agentic-badge.hidden { display: none; }
+  /* Honest caveat strip: shown only when ORCA is answering about a zone
+     the user did not actually name, or from data that isn't for the day
+     they asked about. Muted rather than alarming -- it's a clarification,
+     not a hazard warning (those are the amber/red bands above). */
+  #coverage-note {
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--muted);
+    border-left: 3px solid var(--line);
+    padding: 0.4rem 0 0.4rem 0.6rem;
+    margin-top: 0.6rem;
+  }
+  #coverage-note.hidden { display: none; }
+
+  #override-banner {
+    border: 1px solid var(--amber-border);
+    background: var(--amber-bg);
+    color: var(--amber-border);
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+  #override-banner.hidden { display: none; }
+  #override-banner strong { display: block; margin-bottom: 0.25rem; }
+
+  #reasoning3d-toggle {
+    width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--accent); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+  }
+  #reasoning3d-container {
+    position: relative; height: 280px; margin-top: 0.6rem;
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card-bg);
+  }
+  #reasoning3d-container.collapsed { display: none; }
+
+  #evidence-panel h3 {
+    margin: 0 0 0.4rem 0; font-size: 0.85rem;
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .evidence-item {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+    cursor: pointer;
+    background: var(--panel);
+  }
+  /* Values and provenance are transmissible-safety-message data, per the
+     mono-means-data rule -- same face as the Douglas ruler and any
+     coordinate pair in the app. */
+  .evidence-summary { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.92rem; }
+  .evidence-summary .var-name { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85em; }
+  .evidence-summary .var-value { font-weight: 700; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .evidence-detail { display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); font-size: 0.82rem; color: var(--muted); line-height: 1.6; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .evidence-detail.expanded { display: block; }
+  .evidence-detail dt { font-weight: 600; color: var(--ink); display: inline; }
+  .evidence-detail dd { display: inline; margin: 0 0.8rem 0 0.3rem; }
+  .evidence-detail a { color: var(--accent); word-break: break-all; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  footer input[type="text"] { flex: 1 1 260px; padding: 0.55rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; font-size: 0.95rem; background: var(--panel); color: var(--ink); }
+  footer input.coord {
+    flex: 0 0 90px; padding: 0.55rem 0.5rem; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 0.85rem; background: var(--panel); color: var(--ink);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; /* a coordinate pair is data, not prose */
+  }
+  footer button {
+    padding: 0.55rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--paper);
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  footer button.secondary { background: var(--panel); color: var(--accent); }
+  footer label { font-size: 0.72rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.15rem; }
+
+  /* Douglas sea scale ruler -- see orca/agents.py's WAVE_HARD_DENY_M
+     comment. Real WMO/Douglas band boundaries, not invented; the marker
+     sits on the latest real wave_height_m evidence and the double bar at
+     2.5 m is ORCA's actual hard-deny threshold, so "change the wave
+     height, watch the marker cross the bar" needs no narration. */
+  #douglas-ruler {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 0.8rem 0.5rem;
+    background: var(--card-bg);
+  }
+  #douglas-ruler h3 {
+    margin: 0 0 0.5rem 0; font-size: 0.85rem;
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  #douglas-ruler .no-data { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+  .ruler-track { position: relative; height: 22px; display: flex; border-radius: 4px; overflow: visible; }
+  .ruler-band { height: 100%; position: relative; }
+  .ruler-band:first-child { border-radius: 4px 0 0 4px; }
+  .ruler-band:last-child { border-radius: 0 4px 4px 0; }
+  .ruler-deny-line {
+    position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--danger);
+  }
+  .ruler-marker {
+    position: absolute; top: -14px; width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-top: 8px solid var(--ink); transform: translateX(-6px);
+  }
+  .ruler-scale { display: flex; justify-content: space-between; margin-top: 0.3rem; font-size: 0.65rem; color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .ruler-reading {
+    margin-top: 0.6rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.95rem; color: var(--ink);
+  }
+  .ruler-reading .band-name { font-weight: 700; text-transform: uppercase; }
+  .ruler-reading .stop-note { color: var(--danger); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex; align-items:center;">
+    <h1>ORCA <span>— marine advisory</span></h1>
+    <!-- Visible, not hidden in a settings menu -- the palette switch is
+         part of the pitch: certified marine chart displays are required
+         (IHO S-52) to carry Day/Dusk/Night tables, and ORCA does too. -->
+    <div class="palette-switch" data-testid="palette-switch">
+      <button class="palette-btn" data-palette-choice="day" data-testid="palette-day">Day</button>
+      <button class="palette-btn" data-palette-choice="dusk" data-testid="palette-dusk">Dusk</button>
+      <button class="palette-btn" data-palette-choice="night" data-testid="palette-night">Night</button>
+    </div>
+  </div>
+  <div id="offline-badge" data-testid="offline-badge">…</div>
+</header>
+
+<main>
+  <div id="map-wrap">
+    <div class="view-toggle-bar">
+      <button id="view-toggle-2d" class="view-toggle-btn active" data-testid="view-toggle-2d">2D Map</button>
+      <button id="view-toggle-3d" class="view-toggle-btn" data-testid="view-toggle-3d">3D Ocean</button>
+    </div>
+    <div id="map-2d-layer">
+      <div id="map" data-testid="map"></div>
+      <div id="map-fallback">
+        <!-- Positions are a straight-line projection of each real zone's
+             actual lat/lon (data/fetch.py ZONES) onto this viewBox, north
+             at top -- an approximate sketch of the real Tamil Nadu coast
+             shape, not an arbitrary scatter. See #map-fallback's script
+             hookup below for the live marker equivalent. -->
+        <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+          <circle class="zone-dot" data-zone="Chennai" cx="240" cy="20" r="5"></circle>
+          <text class="zone-label" x="248" y="24">Chennai</text>
+          <circle class="zone-dot" data-zone="Cuddalore" cx="208" cy="91" r="5"></circle>
+          <text class="zone-label" x="216" y="95">Cuddalore</text>
+          <circle class="zone-dot" data-zone="Karaikal" cx="213" cy="133" r="5"></circle>
+          <text class="zone-label" x="221" y="130">Karaikal</text>
+          <circle class="zone-dot" data-zone="Nagapattinam" cx="213" cy="142" r="5"></circle>
+          <text class="zone-label" x="221" y="150">Nagapattinam</text>
+          <circle class="zone-dot" data-zone="Point Calimere" cx="212" cy="167" r="5"></circle>
+          <text class="zone-label" x="220" y="171">Pt. Calimere</text>
+          <circle class="zone-dot" data-zone="Mandapam" cx="170" cy="219" r="5"></circle>
+          <text class="zone-label" x="178" y="215">Mandapam</text>
+          <circle class="zone-dot" data-zone="Rameswaram" cx="182" cy="218" r="5"></circle>
+          <text class="zone-label" x="190" y="230">Rameswaram</text>
+          <circle class="zone-dot" data-zone="Thoothukudi" cx="111" cy="260" r="5"></circle>
+          <text class="zone-label" x="119" y="256">Thoothukudi</text>
+          <circle class="zone-dot" data-zone="Kanyakumari" cx="77" cy="280" r="5"></circle>
+          <text class="zone-label" x="30" y="272">Kanyakumari</text>
+          <circle class="zone-dot" data-zone="Colachel" cx="60" cy="275" r="5"></circle>
+          <text class="zone-label" x="18" y="290">Colachel</text>
+        </svg>
+      </div>
+    </div>
+    <!-- Real seafloor relief (GET /bathymetry) + per-zone risk columns,
+         rendered by web/three-viz.js. Populated lazily on first "3D Ocean"
+         click -- see web/three-viz-app.js. -->
+    <div id="ocean3d-container" class="awaiting" data-testid="ocean3d-container"></div>
+  </div>
+
+  <aside>
+    <div id="answer-card" data-testid="answer-card">
+      <div id="answer-action" data-testid="answer-action"></div><span id="agentic-badge" class="hidden" data-testid="agentic-badge">AI-enhanced</span>
+      <p id="answer-text" data-testid="answer-text"><span id="answer-placeholder">Ask a question below to get a recommendation.</span></p>
+      <div id="coverage-note" class="hidden" data-testid="coverage-note"></div>
+    </div>
+
+    <div id="override-banner" class="hidden" data-testid="override-banner"></div>
+
+    <!-- Douglas sea scale ruler: real WMO band boundaries (0-9, Calm to
+         Phenomenal), the real 2.5m hard-deny line, and a marker on the
+         latest wave_height_m evidence. Populated by renderDouglasRuler()
+         below -- see orca/agents.py's WAVE_HARD_DENY_M comment for why
+         2.5m is the real Douglas 4/5 boundary, not an arbitrary number. -->
+    <div id="douglas-ruler" data-testid="douglas-ruler">
+      <h3>Douglas sea scale</h3>
+      <div id="douglas-ruler-body"><span class="no-data">No wave height in this answer's evidence yet.</span></div>
+    </div>
+
+    <div id="evidence-panel" data-testid="evidence-panel">
+      <h3>Evidence</h3>
+      <ul id="evidence-list"></ul>
+    </div>
+
+    <div id="reasoning3d-panel">
+      <button id="reasoning3d-toggle" data-testid="reasoning3d-toggle">View reasoning in 3D ▾</button>
+      <!-- The 5 agents + their evidence + the final decision, as a 3D
+           graph -- a picture of the last /ask response's agent_findings,
+           not a separate computation. See web/three-viz.js ReasoningGraph. -->
+      <div id="reasoning3d-container" class="collapsed" data-testid="reasoning3d-container"></div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <input type="text" id="query-input" data-testid="query-input" placeholder="Should I go fishing near Nagapattinam?" />
+  <label>lat <input type="text" class="coord" id="lat-input" data-testid="lat-input" value="10.7672" /></label>
+  <label>lon <input type="text" class="coord" id="lon-input" data-testid="lon-input" value="79.8449" /></label>
+  <button id="ask-button" data-testid="ask-button">Ask</button>
+  <button id="tamil-sample-button" class="secondary" data-testid="tamil-sample-button">🔊 Play sample Tamil query</button>
+  <audio id="tamil-audio" data-testid="tamil-audio" src="assets/tamil_sample.mp3" preload="none"></audio>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  const params = new URLSearchParams(window.location.search);
+  const MOCK_MODE = params.get("mock") === "1";
+  const API_BASE = params.get("api") || "http://localhost:8000";
+
+  // Mirrors data/fetch.py's ZONES -- real Tamil Nadu coastal fishing
+  // harbours/towns, north to south, each sourced from that place's
+  // Wikipedia article (see the comment there for details). Display-only
+  // coordinates for the map, not a marine observation, so duplicating
+  // them here doesn't touch orca/schema.py's traceability rule.
+  const ZONES = [
+    { name: "Chennai", lat: 13.1251, lon: 80.2955 },
+    { name: "Cuddalore", lat: 11.75, lon: 79.75 },
+    { name: "Karaikal", lat: 10.9327, lon: 79.8319 },
+    { name: "Nagapattinam", lat: 10.7672, lon: 79.8449 },
+    { name: "Point Calimere", lat: 10.2845, lon: 79.8241 },
+    { name: "Mandapam", lat: 9.28, lon: 79.12 },
+    { name: "Rameswaram", lat: 9.2811, lon: 79.3151 },
+    { name: "Thoothukudi", lat: 8.4730, lon: 78.1215 },
+    { name: "Kanyakumari", lat: 8.0883, lon: 77.5385 },
+    { name: "Colachel", lat: 8.1786, lon: 77.2561 },
+  ];
+
+  // A real, simple Tamil query and its transcription, used only for the
+  // "play sample query" demo button -- not marine data, just UI copy.
+  // (Team: please have a native speaker confirm the phrasing and record a
+  // real audio file at web/assets/tamil_sample.mp3 -- see MANUAL_TASKS.md.)
+  const TAMIL_SAMPLE_TEXT = "நாகப்பட்டினத்தில் இருந்து மீன்பிடிக்க போகலாமா?";
+
+  const offlineBadge = document.getElementById("offline-badge");
+  const answerAction = document.getElementById("answer-action");
+  const answerText = document.getElementById("answer-text");
+  const agenticBadge = document.getElementById("agentic-badge");
+  const coverageNote = document.getElementById("coverage-note");
+  const overrideBanner = document.getElementById("override-banner");
+  const evidenceList = document.getElementById("evidence-list");
+  const queryInput = document.getElementById("query-input");
+  const latInput = document.getElementById("lat-input");
+  const lonInput = document.getElementById("lon-input");
+  const askButton = document.getElementById("ask-button");
+  const tamilButton = document.getElementById("tamil-sample-button");
+  const tamilAudio = document.getElementById("tamil-audio");
+  const douglasRulerBody = document.getElementById("douglas-ruler-body");
+
+  // Real WMO Douglas sea scale (H.P. Douglas, c.1917-1920) -- degree,
+  // name, band start/end in metres. Not ORCA's own scheme; see
+  // orca/agents.py's WAVE_HARD_DENY_M comment. WAVE_HARD_DENY_M below
+  // mirrors that real backend constant for display -- same pattern as
+  // the ZONES mirror above.
+  const WAVE_HARD_DENY_M = 2.5;
+  const DOUGLAS_SCALE = [
+    { degree: 0, name: "Calm (glassy)", min: 0, max: 0 },
+    { degree: 1, name: "Calm (rippled)", min: 0, max: 0.10 },
+    { degree: 2, name: "Smooth", min: 0.10, max: 0.50 },
+    { degree: 3, name: "Slight", min: 0.50, max: 1.25 },
+    { degree: 4, name: "Moderate", min: 1.25, max: 2.50 },
+    { degree: 5, name: "Rough", min: 2.50, max: 4.00 },
+    { degree: 6, name: "Very rough", min: 4.00, max: 6.00 },
+  ];
+  const RULER_MAX_M = 6.0;
+
+  function douglasBandFor(waveM) {
+    if (waveM === 0) return DOUGLAS_SCALE[0]; // degree 0 is exactly 0m, degenerate
+    for (const band of DOUGLAS_SCALE.slice(1)) {
+      if (waveM >= band.min && waveM < band.max) return band;
+    }
+    return waveM < 0 ? DOUGLAS_SCALE[1] : DOUGLAS_SCALE[DOUGLAS_SCALE.length - 1];
+  }
+
+  function renderDouglasRuler(evidence) {
+    const wave = (evidence || []).find((o) => o.variable === "wave_height_m");
+    if (!wave) {
+      douglasRulerBody.innerHTML = '<span class="no-data">No wave height in this answer\'s evidence yet.</span>';
+      return;
+    }
+    const waveM = wave.value;
+    const pct = (v) => Math.min(v, RULER_MAX_M) / RULER_MAX_M * 100;
+    const denyPct = pct(WAVE_HARD_DENY_M);
+    const markerPct = pct(waveM);
+
+    const bands = DOUGLAS_SCALE.map((b) => {
+      const widthPct = (Math.min(b.max, RULER_MAX_M) - b.min) / RULER_MAX_M * 100;
+      // Below the 2.5m line: safe green-ish; at/above: danger red-ish --
+      // reuses the same GO/DO-NOT-GO chart colours as the rest of the app.
+      const color = b.min >= WAVE_HARD_DENY_M ? "var(--danger-bg)" : "var(--accent-bg)";
+      return `<div class="ruler-band" style="width:${widthPct}%;background:${color};" title="Douglas ${b.degree}: ${b.name} (${b.min}-${b.max === Infinity ? "+" : b.max}m)"></div>`;
+    }).join("");
+
+    const band = douglasBandFor(waveM);
+    const stopNote = waveM > WAVE_HARD_DENY_M
+      ? '<span class="stop-note">— ORCA stops here (exceeds ' + WAVE_HARD_DENY_M + 'm)</span>'
+      : "";
+
+    douglasRulerBody.innerHTML =
+      '<div class="ruler-track">' + bands +
+      '<div class="ruler-deny-line" style="left:' + denyPct + '%;" title="ORCA hard-deny line: ' + WAVE_HARD_DENY_M + 'm"></div>' +
+      '<div class="ruler-marker" style="left:' + markerPct + '%;"></div>' +
+      '</div>' +
+      '<div class="ruler-scale"><span>0</span><span>' + WAVE_HARD_DENY_M + 'm deny line</span><span>' + RULER_MAX_M + 'm+</span></div>' +
+      '<div class="ruler-reading">' + formatNumber(waveM) + ' m — <span class="band-name">Douglas ' + band.degree + ' ' + band.name + '</span> ' + stopNote + '</div>';
+  }
+
+  function setOfflineBadge(offline) {
+    offlineBadge.textContent = offline ? "OFFLINE" : "ONLINE";
+    offlineBadge.classList.toggle("offline", !!offline);
+    offlineBadge.classList.toggle("online", !offline);
+    offlineBadge.title = offline
+      ? "Offline — cached evidence, confidence adjusted"
+      : "Live connectivity available";
+  }
+
+  function actionClass(action) {
+    if (action === "DO NOT GO") return "action-do-not-go";
+    if (action === "SAFER ALTERNATIVE") return "action-safer-alternative";
+    return "action-go";
+  }
+
+  function formatNumber(value) {
+    if (typeof value !== "number") return value;
+    // Round for display only -- the real value is still what's sent to
+    // /evidence/{id} and used in calculations; this never touches data.
+    const rounded = Math.round(value * 100) / 100;
+    return String(rounded);
+  }
+
+  function renderEvidence(evidence) {
+    evidenceList.innerHTML = "";
+    (evidence || []).forEach((obs) => {
+      const li = document.createElement("li");
+      li.className = "evidence-item";
+      li.setAttribute("data-testid", "evidence-item");
+
+      const summary = document.createElement("div");
+      summary.className = "evidence-summary";
+      summary.innerHTML =
+        '<span class="var-name">' + obs.variable + '</span>' +
+        '<span class="var-value">' + formatNumber(obs.value) + " " + (obs.unit || "") + "</span>";
+
+      const detail = document.createElement("dl");
+      detail.className = "evidence-detail";
+      detail.setAttribute("data-testid", "evidence-detail");
+      detail.innerHTML =
+        "<dt>source</dt><dd>" + obs.source + "</dd>" +
+        "<dt>valid_time</dt><dd>" + obs.valid_time + "</dd>" +
+        "<dt>confidence</dt><dd>" + obs.confidence + "</dd>" +
+        "<dt>provenance</dt><dd><a href=\"" + obs.provenance + "\" target=\"_blank\" rel=\"noopener\">" + obs.provenance + "</a></dd>";
+
+      li.appendChild(summary);
+      li.appendChild(detail);
+      li.addEventListener("click", () => {
+        detail.classList.toggle("expanded");
+      });
+      evidenceList.appendChild(li);
+    });
+  }
+
+  // Bridge into web/three-viz-app.js (a separate <script type="module">,
+  // loaded after this one): buffered as a plain property (not just an
+  // event) so a 3D view constructed after this render still picks up the
+  // latest data instead of racing the event -- see that file's
+  // "check-then-subscribe" comment.
+  function selectZone(name, lat, lon) {
+    queryInput.value = name;
+    latInput.value = lat;
+    lonInput.value = lon;
+    submitQuery();
+  }
+  window.__ORCA_SELECT_ZONE__ = selectZone;
+
+  function renderRecommendation(data) {
+    window.__ORCA_LAST_RECOMMENDATION__ = data;
+    window.dispatchEvent(new CustomEvent("orca:recommendation", { detail: data }));
+
+    answerAction.textContent = data.action;
+    answerAction.className = actionClass(data.action);
+    answerText.textContent = data.recommendation;
+    // lang drives the [lang="ta"] font/line-height rule (see <style>) --
+    // real, backend-detected language of the composed answer, not a
+    // guess made in the browser.
+    answerText.setAttribute("lang", data.detected_language === "ta" ? "ta" : "en");
+    agenticBadge.classList.toggle("hidden", !data.agentic_used);
+
+    // Honest caveat, straight from the backend -- never composed here.
+    if (data.coverage_note) {
+      coverageNote.textContent = data.coverage_note;
+      coverageNote.classList.remove("hidden");
+    } else {
+      coverageNote.textContent = "";
+      coverageNote.classList.add("hidden");
+    }
+
+    // An off-topic reply is not a safety verdict, so it must not be
+    // dressed as one -- the GO/DO NOT GO badge, the override banner and
+    // the Douglas ruler all describe conditions nobody asked about.
+    if (data.answer_kind === "off_topic") {
+      answerAction.textContent = "";
+      answerAction.className = "hidden";
+      overrideBanner.classList.add("hidden");
+      renderEvidence([]);
+      renderDouglasRuler([]);
+      return;
+    }
+
+    if (data.overridden && data.overridden.length > 0) {
+      overrideBanner.classList.remove("hidden");
+      const lines = data.overridden.map((o) => o.agent + ": " + o.reason).join("<br/>");
+      overrideBanner.innerHTML = "<strong>Overridden</strong>" + lines;
+    } else {
+      overrideBanner.classList.add("hidden");
+      overrideBanner.innerHTML = "";
+    }
+
+    renderEvidence(data.evidence);
+    renderDouglasRuler(data.evidence);
+  }
+
+  function wirePaletteSwitch() {
+    const buttons = document.querySelectorAll(".palette-btn");
+    function setActive(name) {
+      buttons.forEach((b) => b.classList.toggle("active", b.dataset.paletteChoice === name));
+    }
+    setActive(document.documentElement.getAttribute("data-palette") || "day");
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const name = btn.dataset.paletteChoice;
+        document.documentElement.setAttribute("data-palette", name);
+        setActive(name);
+        try { localStorage.setItem("orca-palette", name); } catch (e) {
+          // Private browsing / storage blocked -- the choice just won't
+          // persist across reloads, which is a harmless degradation.
+        }
+      });
+    });
+  }
+  wirePaletteSwitch();
+
+  // Conversation memory, client side. Deliberately stores ONLY the three
+  // structured facts orca/memory.py will accept -- never the question
+  // text and never a previous answer. That is what lets a follow-up like
+  // "what about tomorrow?" find its subject without giving a model any
+  // earlier prose to drift from or contradict. The server re-validates
+  // all of it regardless (orca/memory.py's sanitize()); this side is a
+  // convenience, not a trust boundary.
+  const HISTORY_MAX = 3;
+  let conversationHistory = [];
+
+  function rememberTurn(data) {
+    // primary_zone, not chosen_zone: what the conversation is ABOUT is the
+    // place the user asked about, not the safer alternative ORCA may have
+    // redirected them to. Caught live -- asking about Rameswaram, getting
+    // a SAFER ALTERNATIVE of Chennai, then asking "what's the wave height
+    // there?" answered about Chennai. chosen_zone is also null on a
+    // DO NOT GO, which would drop the subject entirely.
+    const subject = data.primary_zone || data.chosen_zone;
+    const zoneName = subject ? subject.name : null;
+    const variable = data.lookup ? data.lookup.variable : null;
+    if (!zoneName && !variable) return;
+    conversationHistory.push({
+      zone_name: zoneName,
+      variable: variable,
+      time_frame: data.time_frame || "now",
+    });
+    conversationHistory = conversationHistory.slice(-HISTORY_MAX);
+  }
+
+  async function submitQuery() {
+    const query = queryInput.value.trim();
+    const lat = parseFloat(latInput.value);
+    const lon = parseFloat(lonInput.value);
+    if (!query || Number.isNaN(lat) || Number.isNaN(lon)) return;
+
+    askButton.disabled = true;
+    try {
+      const resp = await fetch(API_BASE + "/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, lat, lon, history: conversationHistory }),
+      });
+      if (!resp.ok) throw new Error("ORCA API error " + resp.status);
+      const data = await resp.json();
+      rememberTurn(data);
+      renderRecommendation(data);
+    } catch (err) {
+      answerAction.textContent = "ERROR";
+      answerAction.className = "action-do-not-go";
+      answerText.textContent = "Could not reach ORCA: " + err.message;
+      console.error(err);
+    } finally {
+      askButton.disabled = false;
+    }
+  }
+
+  async function refreshHealth() {
+    if (MOCK_MODE) {
+      setOfflineBadge(false);
+      return;
+    }
+    try {
+      const resp = await fetch(API_BASE + "/health");
+      const data = await resp.json();
+      setOfflineBadge(!!data.offline_mode);
+    } catch (err) {
+      setOfflineBadge(true);
+    }
+  }
+
+  askButton.addEventListener("click", submitQuery);
+  queryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitQuery();
+  });
+  queryInput.addEventListener("input", () => queryInput.setAttribute("lang", "en"));
+
+  tamilButton.addEventListener("click", () => {
+    queryInput.value = TAMIL_SAMPLE_TEXT;
+    // Hind Madurai / larger line-height for Tamil script (see [lang="ta"]
+    // rule above) -- reverts to the page default once the user types
+    // over it, via the plain "input" listener below.
+    queryInput.setAttribute("lang", "ta");
+    tamilAudio.play().catch(() => {
+      // No audio file yet in this environment -- filling the transcription
+      // is still the documented, demo-safe behaviour (see MANUAL_TASKS.md).
+    });
+  });
+
+  function initMap() {
+    if (typeof maplibregl === "undefined") {
+      document.getElementById("map-fallback").classList.add("visible");
+      return;
+    }
+    try {
+      const map = new maplibregl.Map({
+        container: "map",
+        // OpenFreeMap: free, no API key, no request limits (openfreemap.org).
+        // "liberty" carries real place labels/coastline detail, unlike the
+        // generic demo tiles this used to point at -- worth it here since
+        // real coastal town names are the whole point of the map.
+        style: "https://tiles.openfreemap.org/styles/liberty",
+        center: [78.85, 10.6],
+        zoom: 6.3,
+      });
+      map.on("error", () => {
+        document.getElementById("map-fallback").classList.add("visible");
+      });
+      map.on("load", () => {
+        ZONES.forEach((zone) => {
+          const el = document.createElement("div");
+          el.style.width = "14px";
+          el.style.height = "14px";
+          el.style.borderRadius = "50%";
+          el.style.background = "#fff";
+          el.style.border = "2px solid #10241f";
+          el.title = zone.name;
+          el.addEventListener("click", () => selectZone(zone.name, zone.lat, zone.lon));
+          new maplibregl.Marker({ element: el }).setLngLat([zone.lon, zone.lat]).addTo(map);
+        });
+      });
+    } catch (err) {
+      document.getElementById("map-fallback").classList.add("visible");
+    }
+  }
+
+  async function init() {
+    initMap();
+    await refreshHealth();
+    if (MOCK_MODE) {
+      const resp = await fetch("mock_response.json");
+      const data = await resp.json();
+      renderRecommendation(data);
+    }
+  }
+
+  init();
+})();
+</script>
+
+<!-- Separate module script: three.js needs ES modules (see the import map
+     in <head>), which can't live inside the classic IIFE above. Talks to
+     it only through the small window.__ORCA_* bridge defined there. -->
+<script type="module" src="three-viz-app.js"></script>
+
+</body>
+</html>

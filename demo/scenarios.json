@@ -1,0 +1,2505 @@
+{
+  "captured_at": "2026-08-27T05:32:15.180630+00:00",
+  "note": "This file is a REAL, live-verified transcript of the actual system's output, captured by querying the running API (not hand-written). Conditions are dynamic: re-run scripts/generate_demo_scenarios.py before the real presentation to refresh these against current sea state. Never hardcode a response path in orca/api.py or orca/planner.py keyed off these query strings -- the API must always compute live from data/cache/, or this file becomes exactly the 'hardcoded string' failure the war plan warns about (S8.4).",
+  "health_at_capture": {
+    "status": "ok",
+    "offline_mode": false,
+    "cache_age_min": 3,
+    "cache_observation_count": 146
+  },
+  "scenarios": [
+    {
+      "query_zone": "Chennai",
+      "lat": 13.1251,
+      "lon": 80.2955,
+      "response": {
+        "id": "rec_2fd5f1b8",
+        "action": "GO",
+        "reason": "SST 30.1\u00b0C within productive range, current 0.4 km/h",
+        "recommendation": "Go to Chennai. SST 30.1\u00b0C within productive range, current 0.4 km/h.",
+        "chosen_zone": {
+          "name": "Chennai",
+          "lat": 13.1251,
+          "lon": 80.2955
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "sst_c",
+            "value": 30.1,
+            "unit": "\u00b0C",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_47d170c091"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.4,
+            "unit": "km/h",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7996b0b15e"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 9.7,
+            "unit": "km/h",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_24e851a372"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_77aaad6cf9"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.84,
+            "unit": "m",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_6392717e62"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "No satellite chlorophyll data for this zone (cloud cover or no recent pass)",
+            "observation_ids": [
+              "obs_47d170c091"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 30.1\u00b0C within productive range, current 0.4 km/h",
+            "observation_ids": [
+              "obs_47d170c091",
+              "obs_7996b0b15e"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.2425,
+            "hard_deny": false,
+            "reason": "Wind 9.7 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_24e851a372",
+              "obs_77aaad6cf9"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false,
+            "reason": "Significant wave height 0.8 m",
+            "observation_ids": [
+              "obs_6392717e62"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_24e851a372"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Cuddalore",
+      "lat": 11.75,
+      "lon": 79.75,
+      "response": {
+        "id": "rec_631bfc4f",
+        "action": "GO",
+        "reason": "SST 30.1\u00b0C within productive range, current 0.4 km/h",
+        "recommendation": "Go to Cuddalore. SST 30.1\u00b0C within productive range, current 0.4 km/h.",
+        "chosen_zone": {
+          "name": "Cuddalore",
+          "lat": 11.75,
+          "lon": 79.75
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "sst_c",
+            "value": 30.1,
+            "unit": "\u00b0C",
+            "lat": 11.75,
+            "lon": 79.75,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=11.75&longitude=79.75&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_fe8c3024a5"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.4,
+            "unit": "km/h",
+            "lat": 11.75,
+            "lon": 79.75,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=11.75&longitude=79.75&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_d6a694300e"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 12.4,
+            "unit": "km/h",
+            "lat": 11.75,
+            "lon": 79.75,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.75&longitude=79.75&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_36c31b9db3"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 11.75,
+            "lon": 79.75,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.75&longitude=79.75&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_1094873f87"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.32,
+            "unit": "m",
+            "lat": 11.75,
+            "lon": 79.75,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=11.75&longitude=79.75&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7ac49fde2d"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "No satellite chlorophyll data for this zone (cloud cover or no recent pass)",
+            "observation_ids": [
+              "obs_fe8c3024a5"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 30.1\u00b0C within productive range, current 0.4 km/h",
+            "observation_ids": [
+              "obs_fe8c3024a5",
+              "obs_d6a694300e"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.31,
+            "hard_deny": false,
+            "reason": "Wind 12.4 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_36c31b9db3",
+              "obs_1094873f87"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.128,
+            "hard_deny": false,
+            "reason": "Significant wave height 0.3 m",
+            "observation_ids": [
+              "obs_7ac49fde2d"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_36c31b9db3"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Karaikal",
+      "lat": 10.9327,
+      "lon": 79.8319,
+      "response": {
+        "id": "rec_bd0bf4c4",
+        "action": "GO",
+        "reason": "SST 29.7\u00b0C within productive range, current 0.2 km/h",
+        "recommendation": "Go to Karaikal. SST 29.7\u00b0C within productive range, current 0.2 km/h.",
+        "chosen_zone": {
+          "name": "Karaikal",
+          "lat": 10.9327,
+          "lon": 79.8319
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "sst_c",
+            "value": 29.7,
+            "unit": "\u00b0C",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.9327&longitude=79.8319&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_4cdc603ecb"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.2,
+            "unit": "km/h",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.9327&longitude=79.8319&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7cb7fa3ff1"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 13.3,
+            "unit": "km/h",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.9327&longitude=79.8319&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_002614fc4f"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.9327&longitude=79.8319&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_caab44d398"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.46,
+            "unit": "m",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.9327&longitude=79.8319&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_df38aa87fb"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "No satellite chlorophyll data for this zone (cloud cover or no recent pass)",
+            "observation_ids": [
+              "obs_4cdc603ecb"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 29.7\u00b0C within productive range, current 0.2 km/h",
+            "observation_ids": [
+              "obs_4cdc603ecb",
+              "obs_7cb7fa3ff1"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.3325,
+            "hard_deny": false,
+            "reason": "Wind 13.3 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_002614fc4f",
+              "obs_caab44d398"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.184,
+            "hard_deny": false,
+            "reason": "Significant wave height 0.5 m",
+            "observation_ids": [
+              "obs_df38aa87fb"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_002614fc4f"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Nagapattinam",
+      "lat": 10.7672,
+      "lon": 79.8449,
+      "response": {
+        "id": "rec_ab2be0e2",
+        "action": "GO",
+        "reason": "Elevated chlorophyll (1.75 mg/m\u00b3) and warm SST (30.3\u00b0C) suggest fish aggregation",
+        "recommendation": "Go to Nagapattinam. Elevated chlorophyll (1.75 mg/m\u00b3) and warm SST (30.3\u00b0C) suggest fish aggregation.",
+        "chosen_zone": {
+          "name": "Nagapattinam",
+          "lat": 10.7672,
+          "lon": 79.8449
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.75225,
+            "unit": "mg m^-3",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-07-28T12:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:06.172368+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 41760,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.61):(10.91)][(79.69):(79.99000000000001)]",
+            "id": "obs_69a21ec9c9"
+          },
+          {
+            "variable": "sst_c",
+            "value": 30.3,
+            "unit": "\u00b0C",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_c97a9cce53"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.0,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_ecf89379b1"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 18.5,
+            "unit": "km/h",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_54084a9d58"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:39:02.077331+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 879,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.76&longitude=79.84&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_1f13ffe28d"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.46,
+            "unit": "m",
+            "lat": 10.76,
+            "lon": 79.84,
+            "valid_time": "2026-08-26T00:00:00+00:00",
+            "fetched_at": "2026-08-26T14:38:58.599208+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 878,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.76&longitude=79.84&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7cdb151cbd"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Elevated chlorophyll (1.75 mg/m\u00b3) and warm SST (30.3\u00b0C) suggest fish aggregation",
+            "observation_ids": [
+              "obs_69a21ec9c9",
+              "obs_c97a9cce53"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 30.3\u00b0C within productive range, current 0.0 km/h",
+            "observation_ids": [
+              "obs_c97a9cce53",
+              "obs_ecf89379b1"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.4625,
+            "hard_deny": false,
+            "reason": "Wind 18.5 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_54084a9d58",
+              "obs_1f13ffe28d"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.184,
+            "hard_deny": false,
+            "reason": "Significant wave height 0.5 m",
+            "observation_ids": [
+              "obs_7cdb151cbd"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_69a21ec9c9"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Point Calimere",
+      "lat": 10.2845,
+      "lon": 79.8241,
+      "response": {
+        "id": "rec_77a41be7",
+        "action": "GO",
+        "reason": "Elevated chlorophyll (3.98 mg/m\u00b3) and warm SST (30.0\u00b0C) suggest fish aggregation",
+        "recommendation": "Go to Point Calimere. Elevated chlorophyll (3.98 mg/m\u00b3) and warm SST (30.0\u00b0C) suggest fish aggregation.",
+        "chosen_zone": {
+          "name": "Point Calimere",
+          "lat": 10.2845,
+          "lon": 79.8241
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 3.9784424210526317,
+            "unit": "mg m^-3",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "valid_time": "2026-07-31T12:00:00+00:00",
+            "fetched_at": "2026-08-27T05:29:08.486542+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 38880,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(10.1345):(10.4345)][(79.6741):(79.9741)]",
+            "id": "obs_e77f22aaba"
+          },
+          {
+            "variable": "sst_c",
+            "value": 30.0,
+            "unit": "\u00b0C",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.2845&longitude=79.8241&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_51b4a0764d"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.5,
+            "unit": "km/h",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.2845&longitude=79.8241&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_a48554f6e9"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 12.3,
+            "unit": "km/h",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.2845&longitude=79.8241&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_a102f243de"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.2845&longitude=79.8241&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_cc5bbb3947"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.62,
+            "unit": "m",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=10.2845&longitude=79.8241&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_c2d77e871b"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Elevated chlorophyll (3.98 mg/m\u00b3) and warm SST (30.0\u00b0C) suggest fish aggregation",
+            "observation_ids": [
+              "obs_e77f22aaba",
+              "obs_51b4a0764d"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 30.0\u00b0C within productive range, current 0.5 km/h",
+            "observation_ids": [
+              "obs_51b4a0764d",
+              "obs_a48554f6e9"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.3075,
+            "hard_deny": false,
+            "reason": "Wind 12.3 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_a102f243de",
+              "obs_cc5bbb3947"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.248,
+            "hard_deny": false,
+            "reason": "Significant wave height 0.6 m",
+            "observation_ids": [
+              "obs_c2d77e871b"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_e77f22aaba"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Mandapam",
+      "lat": 9.28,
+      "lon": 79.12,
+      "response": {
+        "id": "rec_095da457",
+        "action": "SAFER ALTERNATIVE",
+        "reason": "Wind 24.7 km/h, rain 0.0mm",
+        "recommendation": "Do not go to Mandapam \u2014 Wind 24.7 km/h, rain 0.0mm. Go to Chennai instead.",
+        "chosen_zone": {
+          "name": "Chennai",
+          "lat": 13.1251,
+          "lon": 80.2955
+        },
+        "overridden": [
+          {
+            "agent": "eo_satellite_agent",
+            "reason": "Elevated chlorophyll (1.69 mg/m\u00b3) and warm SST (29.4\u00b0C) suggest fish aggregation"
+          },
+          {
+            "agent": "ocean_state_agent",
+            "reason": "SST 29.4\u00b0C within productive range, current 0.6 km/h"
+          }
+        ],
+        "evidence": [
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.6929462788732395,
+            "unit": "mg m^-3",
+            "lat": 9.28,
+            "lon": 79.12,
+            "valid_time": "2026-07-31T12:00:00+00:00",
+            "fetched_at": "2026-08-27T05:29:08.486542+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 38880,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(9.129999999999999):(9.43)][(78.97):(79.27000000000001)]",
+            "id": "obs_4a6e7b5abb"
+          },
+          {
+            "variable": "sst_c",
+            "value": 29.4,
+            "unit": "\u00b0C",
+            "lat": 9.28,
+            "lon": 79.12,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=9.28&longitude=79.12&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_6544c42e55"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.6,
+            "unit": "km/h",
+            "lat": 9.28,
+            "lon": 79.12,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=9.28&longitude=79.12&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_316616bbd4"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 24.7,
+            "unit": "km/h",
+            "lat": 9.28,
+            "lon": 79.12,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.28&longitude=79.12&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_9dd068b2c5"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 9.28,
+            "lon": 79.12,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.28&longitude=79.12&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_0b06160133"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.98,
+            "unit": "m",
+            "lat": 9.28,
+            "lon": 79.12,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=9.28&longitude=79.12&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_3e516e1797"
+          },
+          {
+            "variable": "sst_c",
+            "value": 30.1,
+            "unit": "\u00b0C",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_47d170c091"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.4,
+            "unit": "km/h",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7996b0b15e"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 9.7,
+            "unit": "km/h",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_24e851a372"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_77aaad6cf9"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.84,
+            "unit": "m",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_6392717e62"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Elevated chlorophyll (1.69 mg/m\u00b3) and warm SST (29.4\u00b0C) suggest fish aggregation",
+            "observation_ids": [
+              "obs_4a6e7b5abb",
+              "obs_6544c42e55"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 29.4\u00b0C within productive range, current 0.6 km/h",
+            "observation_ids": [
+              "obs_6544c42e55",
+              "obs_316616bbd4"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false,
+            "reason": "Wind 24.7 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_9dd068b2c5",
+              "obs_0b06160133"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.392,
+            "hard_deny": false,
+            "reason": "Significant wave height 1.0 m",
+            "observation_ids": [
+              "obs_3e516e1797"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_4a6e7b5abb"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Rameswaram",
+      "lat": 9.2811,
+      "lon": 79.3151,
+      "response": {
+        "id": "rec_452f0f7e",
+        "action": "SAFER ALTERNATIVE",
+        "reason": "Wind 26.2 km/h, rain 0.0mm",
+        "recommendation": "Do not go to Rameswaram \u2014 Wind 26.2 km/h, rain 0.0mm. Go to Chennai instead.",
+        "chosen_zone": {
+          "name": "Chennai",
+          "lat": 13.1251,
+          "lon": 80.2955
+        },
+        "overridden": [
+          {
+            "agent": "eo_satellite_agent",
+            "reason": "Elevated chlorophyll (1.70 mg/m\u00b3) and warm SST (29.1\u00b0C) suggest fish aggregation"
+          },
+          {
+            "agent": "ocean_state_agent",
+            "reason": "SST 29.1\u00b0C within productive range, current 1.6 km/h"
+          }
+        ],
+        "evidence": [
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.7031872189873416,
+            "unit": "mg m^-3",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "valid_time": "2026-07-31T12:00:00+00:00",
+            "fetched_at": "2026-08-27T05:29:08.486542+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 38880,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(9.1311):(9.4311)][(79.1651):(79.4651)]",
+            "id": "obs_8a090e6016"
+          },
+          {
+            "variable": "sst_c",
+            "value": 29.1,
+            "unit": "\u00b0C",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=9.2811&longitude=79.3151&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_663495c2c2"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 1.6,
+            "unit": "km/h",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=9.2811&longitude=79.3151&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_d8dca579f3"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 26.2,
+            "unit": "km/h",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.2811&longitude=79.3151&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_2575bf982e"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.2811&longitude=79.3151&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_d21fb830e4"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.94,
+            "unit": "m",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=9.2811&longitude=79.3151&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_08d22d21ba"
+          },
+          {
+            "variable": "sst_c",
+            "value": 30.1,
+            "unit": "\u00b0C",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_47d170c091"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.4,
+            "unit": "km/h",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_7996b0b15e"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 9.7,
+            "unit": "km/h",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_24e851a372"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_77aaad6cf9"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 0.84,
+            "unit": "m",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=13.1251&longitude=80.2955&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_6392717e62"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Elevated chlorophyll (1.70 mg/m\u00b3) and warm SST (29.1\u00b0C) suggest fish aggregation",
+            "observation_ids": [
+              "obs_8a090e6016",
+              "obs_663495c2c2"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 29.1\u00b0C within productive range, current 1.6 km/h",
+            "observation_ids": [
+              "obs_663495c2c2",
+              "obs_d8dca579f3"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.655,
+            "hard_deny": false,
+            "reason": "Wind 26.2 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_2575bf982e",
+              "obs_d21fb830e4"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.376,
+            "hard_deny": false,
+            "reason": "Significant wave height 0.9 m",
+            "observation_ids": [
+              "obs_08d22d21ba"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_8a090e6016"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Thoothukudi",
+      "lat": 8.473,
+      "lon": 78.1215,
+      "response": {
+        "id": "rec_a3134b7d",
+        "action": "GO",
+        "reason": "Elevated chlorophyll (1.18 mg/m\u00b3) and warm SST (27.1\u00b0C) suggest fish aggregation",
+        "recommendation": "Go to Thoothukudi. Elevated chlorophyll (1.18 mg/m\u00b3) and warm SST (27.1\u00b0C) suggest fish aggregation.",
+        "chosen_zone": {
+          "name": "Thoothukudi",
+          "lat": 8.473,
+          "lon": 78.1215
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "chlorophyll_mg_m3",
+            "value": 1.181949975,
+            "unit": "mg m^-3",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "valid_time": "2026-07-31T12:00:00+00:00",
+            "fetched_at": "2026-08-27T05:29:08.486542+00:00",
+            "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
+            "confidence": 0.3,
+            "freshness_min": 38880,
+            "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv?chlor_a[(last-15):1:(last)][(0.0)][(8.323):(8.623000000000001)][(77.97149999999999):(78.2715)]",
+            "id": "obs_cc66730ecb"
+          },
+          {
+            "variable": "sst_c",
+            "value": 27.1,
+            "unit": "\u00b0C",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.473&longitude=78.1215&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_6f45ee51bf"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.2,
+            "unit": "km/h",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.473&longitude=78.1215&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_e542aac9d3"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 10.7,
+            "unit": "km/h",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.473&longitude=78.1215&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_3d14d8549e"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.473&longitude=78.1215&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_306d7a1a38"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 1.24,
+            "unit": "m",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.473&longitude=78.1215&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_c7baeeab83"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Elevated chlorophyll (1.18 mg/m\u00b3) and warm SST (27.1\u00b0C) suggest fish aggregation",
+            "observation_ids": [
+              "obs_cc66730ecb",
+              "obs_6f45ee51bf"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": true,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "SST 27.1\u00b0C within productive range, current 0.2 km/h",
+            "observation_ids": [
+              "obs_6f45ee51bf",
+              "obs_e542aac9d3"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.26749999999999996,
+            "hard_deny": false,
+            "reason": "Wind 10.7 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_3d14d8549e",
+              "obs_306d7a1a38"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.496,
+            "hard_deny": false,
+            "reason": "Significant wave height 1.2 m",
+            "observation_ids": [
+              "obs_c7baeeab83"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_cc66730ecb"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Kanyakumari",
+      "lat": 8.0883,
+      "lon": 77.5385,
+      "response": {
+        "id": "rec_47c7a292",
+        "action": "GO",
+        "reason": "No hazards found; conditions acceptable",
+        "recommendation": "Go to Kanyakumari. No hazards found; conditions acceptable.",
+        "chosen_zone": {
+          "name": "Kanyakumari",
+          "lat": 8.0883,
+          "lon": 77.5385
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "sst_c",
+            "value": 24.3,
+            "unit": "\u00b0C",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.0883&longitude=77.5385&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_5162974f66"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 0.7,
+            "unit": "km/h",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.0883&longitude=77.5385&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_433d90beba"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 21.2,
+            "unit": "km/h",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.0883&longitude=77.5385&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_99349e9918"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.0883&longitude=77.5385&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_4956cd41cd"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 1.42,
+            "unit": "m",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.0883&longitude=77.5385&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_4bede56053"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "No satellite chlorophyll data for this zone (cloud cover or no recent pass)",
+            "observation_ids": [
+              "obs_5162974f66"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": false,
+            "risk_level": 0.15,
+            "hard_deny": false,
+            "reason": "SST 24.3\u00b0C outside productive range, current 0.7 km/h",
+            "observation_ids": [
+              "obs_5162974f66",
+              "obs_433d90beba"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.53,
+            "hard_deny": false,
+            "reason": "Wind 21.2 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_99349e9918",
+              "obs_4956cd41cd"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.568,
+            "hard_deny": false,
+            "reason": "Significant wave height 1.4 m",
+            "observation_ids": [
+              "obs_4bede56053"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_99349e9918"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          }
+        ]
+      }
+    },
+    {
+      "query_zone": "Colachel",
+      "lat": 8.1786,
+      "lon": 77.2561,
+      "response": {
+        "id": "rec_6ce73540",
+        "action": "GO",
+        "reason": "No hazards found; conditions acceptable",
+        "recommendation": "Go to Colachel. No hazards found; conditions acceptable.",
+        "chosen_zone": {
+          "name": "Colachel",
+          "lat": 8.1786,
+          "lon": 77.2561
+        },
+        "overridden": [],
+        "evidence": [
+          {
+            "variable": "sst_c",
+            "value": 25.1,
+            "unit": "\u00b0C",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.1786&longitude=77.2561&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_50919f6175"
+          },
+          {
+            "variable": "ocean_current_velocity_kmh",
+            "value": 2.1,
+            "unit": "km/h",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.1786&longitude=77.2561&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_bad5e18594"
+          },
+          {
+            "variable": "wind_speed_kmh",
+            "value": 21.1,
+            "unit": "km/h",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.1786&longitude=77.2561&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_b010a95d1f"
+          },
+          {
+            "variable": "rain_mm",
+            "value": 0.0,
+            "unit": "mm",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+            "source": "Open-Meteo Forecast",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.1786&longitude=77.2561&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2",
+            "id": "obs_845992a4a0"
+          },
+          {
+            "variable": "wave_height_m",
+            "value": 1.4,
+            "unit": "m",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "valid_time": "2026-08-27T00:00:00+00:00",
+            "fetched_at": "2026-08-27T05:28:40.079672+00:00",
+            "source": "Open-Meteo Marine",
+            "confidence": 0.9,
+            "freshness_min": 328,
+            "provenance": "https://marine-api.open-meteo.com/v1/marine?latitude=8.1786&longitude=77.2561&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&timezone=UTC&forecast_days=2",
+            "id": "obs_34c77e1fa5"
+          }
+        ],
+        "offline_mode": false,
+        "agent_findings": [
+          {
+            "agent": "eo_satellite_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "No satellite chlorophyll data for this zone (cloud cover or no recent pass)",
+            "observation_ids": [
+              "obs_50919f6175"
+            ]
+          },
+          {
+            "agent": "ocean_state_agent",
+            "suggests_go": false,
+            "risk_level": 0.15,
+            "hard_deny": false,
+            "reason": "SST 25.1\u00b0C outside productive range, current 2.1 km/h",
+            "observation_ids": [
+              "obs_50919f6175",
+              "obs_bad5e18594"
+            ]
+          },
+          {
+            "agent": "weather_agent",
+            "suggests_go": false,
+            "risk_level": 0.5275000000000001,
+            "hard_deny": false,
+            "reason": "Wind 21.1 km/h, rain 0.0mm",
+            "observation_ids": [
+              "obs_b010a95d1f",
+              "obs_845992a4a0"
+            ]
+          },
+          {
+            "agent": "hazard_agent",
+            "suggests_go": false,
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false,
+            "reason": "Significant wave height 1.4 m",
+            "observation_ids": [
+              "obs_34c77e1fa5"
+            ]
+          },
+          {
+            "agent": "geofence_agent",
+            "suggests_go": false,
+            "risk_level": 0.0,
+            "hard_deny": false,
+            "reason": "Outside restricted zones",
+            "observation_ids": [
+              "obs_b010a95d1f"
+            ]
+          }
+        ],
+        "zone_summaries": [
+          {
+            "name": "Colachel",
+            "lat": 8.1786,
+            "lon": 77.2561,
+            "action": "GO",
+            "risk_level": 0.5599999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Chennai",
+            "lat": 13.1251,
+            "lon": 80.2955,
+            "action": "GO",
+            "risk_level": 0.33599999999999997,
+            "hard_deny": false
+          },
+          {
+            "name": "Cuddalore",
+            "lat": 11.75,
+            "lon": 79.75,
+            "action": "GO",
+            "risk_level": 0.31,
+            "hard_deny": false
+          },
+          {
+            "name": "Karaikal",
+            "lat": 10.9327,
+            "lon": 79.8319,
+            "action": "GO",
+            "risk_level": 0.3325,
+            "hard_deny": false
+          },
+          {
+            "name": "Nagapattinam",
+            "lat": 10.7672,
+            "lon": 79.8449,
+            "action": "GO",
+            "risk_level": 0.4625,
+            "hard_deny": false
+          },
+          {
+            "name": "Point Calimere",
+            "lat": 10.2845,
+            "lon": 79.8241,
+            "action": "GO",
+            "risk_level": 0.3075,
+            "hard_deny": false
+          },
+          {
+            "name": "Mandapam",
+            "lat": 9.28,
+            "lon": 79.12,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.6174999999999999,
+            "hard_deny": false
+          },
+          {
+            "name": "Rameswaram",
+            "lat": 9.2811,
+            "lon": 79.3151,
+            "action": "SAFER ALTERNATIVE",
+            "risk_level": 0.655,
+            "hard_deny": false
+          },
+          {
+            "name": "Thoothukudi",
+            "lat": 8.473,
+            "lon": 78.1215,
+            "action": "GO",
+            "risk_level": 0.496,
+            "hard_deny": false
+          },
+          {
+            "name": "Kanyakumari",
+            "lat": 8.0883,
+            "lon": 77.5385,
+            "action": "GO",
+            "risk_level": 0.568,
+            "hard_deny": false
+          }
+        ]
+      }
+    }
+  ]
+}
