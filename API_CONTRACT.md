@@ -147,16 +147,42 @@ guarantee, not just a default. When configured and reachable:
   (carried from the prior turn), `"fallback"` (nothing matched -- nearest
   by coordinates). `"fallback"` is the only one that sets
   `coverage_note`.
-- `coverage_note` is an honest caveat string (or `null`) stating that
-  ORCA is answering about a place the user didn't name, and/or that no
-  forecast was cached so the answer reflects current conditions rather
-  than tomorrow's. The UI renders it verbatim; it is never composed in
-  the browser.
+- `coverage_note` is an honest caveat string (or `null`) naming every
+  way this answer is narrower than the question. It covers: answering
+  about a place the user didn't name; no cached forecast, so the answer
+  reflects current conditions rather than tomorrow's; a question about a
+  day further out than tomorrow (ORCA holds two days); and a request
+  ORCA cannot serve at all -- a unit conversion, a second place in the
+  same question, fish species, tides or timings, routing. The UI renders
+  it verbatim; it is never composed in the browser.
+- `ranking` is present (non-`null`) only when the question was a
+  comparison across zones -- "which place has the worst waves?", "where
+  is safest?". It is the true ordering, worst/highest first, computed in
+  plain Python from the same cached observations everything else uses:
+  `[{"zone", "value", "unit"}]` when the question named a measurement,
+  `[{"zone", "action"}]` when it did not (ordered by the risk_level
+  orca/policy.py assigned, with the raw float deliberately withheld --
+  it is a policy output, not a MarineObservation, and rule 3 governs
+  every number that reaches a user).
+
+  It exists because without it these questions were answered anyway. On
+  2026-08-27 "which zone has the worst waves today?" returned
+  "Nagapattinam has the worst waves today" while Nagapattinam was the
+  second *calmest* of the ten zones. The composer is handed one zone's
+  evidence by design; asked a ten-zone question it had nothing to answer
+  from but guessed fluently. It is now given either the real ordering or
+  an explicit instruction that it may not rank places at all.
 - `answer_kind` is `"verdict"` (the default), `"data_lookup"` (they asked
   for one specific measurement), or `"off_topic"` (nothing to do with the
   sea -- the UI suppresses the GO/DO NOT GO badge, evidence and Douglas
   ruler in that case, since none of it was asked about).
-- `time_frame` is `"now"` or `"tomorrow"`. A `"tomorrow"` question is
+- `time_frame` is `"now"` or `"tomorrow"` -- never anything further out.
+  A question about a later day is answered for today and *says so* in
+  `coverage_note`, rather than silently answering a different question.
+  `"now"` readings come from Open-Meteo's `current` block (the model's
+  own nowcast, refreshed every 15 minutes), not from hour 0 of the
+  hourly series; `"tomorrow"` is the same clock hour one day out, not
+  midnight. A `"tomorrow"` question is
   answered from the separately-cached forecast observations, run through
   the **identical** deterministic policy -- a forecast verdict is a real
   verdict, not a weaker one. Those observations carry an honestly lower

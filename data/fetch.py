@@ -81,7 +81,7 @@ def _box_around(lat: float, lon: float, half_width_deg: float = 0.15) -> dict:
 
 
 class OpenMeteoMarineFetcher:
-    """Wave height/period/direction and SST, per point, near-term forecast."""
+    """Wave height/period/direction and SST, per point, as of now."""
 
     BASE_URL = "https://marine-api.open-meteo.com/v1/marine"
     SOURCE_NAME = "Open-Meteo Marine"
@@ -89,6 +89,10 @@ class OpenMeteoMarineFetcher:
         "wave_height,wave_period,wave_direction,sea_surface_temperature,"
         "ocean_current_velocity,ocean_current_direction"
     )
+    # Open-Meteo exposes every hourly variable as a `current` variable
+    # too, under the same name; fetch() uses these, fetch_tomorrow()
+    # still needs the hourly series.
+    CURRENT_VARS = HOURLY_VARS
     _VAR_MAP = {
         "wave_height": "wave_height_m",
         "wave_period": "wave_period_s",
@@ -110,9 +114,8 @@ class OpenMeteoMarineFetcher:
             params = {
                 "latitude": point["lat"],
                 "longitude": point["lon"],
-                "hourly": self.HOURLY_VARS,
+                "current": self.CURRENT_VARS,
                 "timezone": "UTC",
-                "forecast_days": 2,
             }
             resp = requests.get(self.BASE_URL, params=params, timeout=15)
             resp.raise_for_status()
@@ -120,25 +123,39 @@ class OpenMeteoMarineFetcher:
         return observations
 
     def _parse_point(self, raw: dict, point: dict, fetched_at: datetime) -> list[MarineObservation]:
-        hourly = raw["hourly"]
-        units = raw.get("hourly_units", {})
-        idx = 0  # nearest upcoming hourly slot
-        valid_time = datetime.fromisoformat(hourly["time"][idx]).replace(tzinfo=timezone.utc)
+        """Read Open-Meteo's `current` block -- the model's own nowcast
+        for this instant, which the API refreshes every 15 minutes
+        (the response carries `interval: 900`).
+
+        This previously read hourly[0], which with timezone=UTC is
+        00:00 today. By the time the cache was written at 08:38 UTC
+        every "current" reading was already 8.6 hours old (the cached
+        freshness_min said 518 and nobody looked) and drifted further
+        all day -- while still being handed to the user carrying
+        NEAR_TERM_CONFIDENCE 0.9. Measured at Karaikal on 2026-08-27
+        that understated real wind by 64% (13.7 km/h shown vs 22.5
+        actual) and hid 40.7 km/h gusts entirely. A stale reading
+        presented as the current one is the same class of falsehood as
+        a fabricated one, which is what CLAUDE.md rule 3 exists to
+        stop."""
+        current = raw["current"]
+        units = raw.get("current_units", {})
+        valid_time = datetime.fromisoformat(current["time"]).replace(tzinfo=timezone.utc)
 
         request_url = (
             f"{self.BASE_URL}?latitude={point['lat']}&longitude={point['lon']}"
-            f"&hourly={self.HOURLY_VARS}&timezone=UTC&forecast_days=2"
+            f"&current={self.CURRENT_VARS}&timezone=UTC"
         )
 
         observations = []
         for raw_var, schema_var in self._VAR_MAP.items():
-            series = hourly.get(raw_var)
-            if series is None or series[idx] is None:
+            value = current.get(raw_var)
+            if value is None:
                 continue  # absent reading is honest; do not fabricate a value
             observations.append(
                 MarineObservation(
                     variable=schema_var,
-                    value=float(series[idx]),
+                    value=float(value),
                     unit=units.get(raw_var, ""),
                     lat=point["lat"],
                     lon=point["lon"],
@@ -177,7 +194,13 @@ class OpenMeteoMarineFetcher:
             }
             resp = requests.get(self.BASE_URL, params=params, timeout=15)
             resp.raise_for_status()
-            observations.extend(self._parse_point_at_offset(resp.json(), point, fetched_at, hours_ahead=24))
+            observations.extend(
+                self._parse_point_at_offset(
+                    # Same clock hour tomorrow, not 00:00 -- a midnight
+                    # reading is not what anyone means by "tomorrow".
+                    resp.json(), point, fetched_at, hours_ahead=24 + fetched_at.hour
+                )
+            )
         return observations
 
     def _parse_point_at_offset(
@@ -230,6 +253,10 @@ class OpenMeteoForecastFetcher:
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
     SOURCE_NAME = "Open-Meteo Forecast"
     HOURLY_VARS = "wind_speed_10m,wind_gusts_10m,precipitation,rain"
+    # Open-Meteo exposes every hourly variable as a `current` variable
+    # too, under the same name; fetch() uses these, fetch_tomorrow()
+    # still needs the hourly series.
+    CURRENT_VARS = HOURLY_VARS
     _VAR_MAP = {
         "wind_speed_10m": "wind_speed_kmh",
         "wind_gusts_10m": "wind_gusts_kmh",
@@ -246,9 +273,8 @@ class OpenMeteoForecastFetcher:
             params = {
                 "latitude": point["lat"],
                 "longitude": point["lon"],
-                "hourly": self.HOURLY_VARS,
+                "current": self.CURRENT_VARS,
                 "timezone": "UTC",
-                "forecast_days": 2,
             }
             resp = requests.get(self.BASE_URL, params=params, timeout=15)
             resp.raise_for_status()
@@ -256,25 +282,28 @@ class OpenMeteoForecastFetcher:
         return observations
 
     def _parse_point(self, raw: dict, point: dict, fetched_at: datetime) -> list[MarineObservation]:
-        hourly = raw["hourly"]
-        units = raw.get("hourly_units", {})
-        idx = 0
-        valid_time = datetime.fromisoformat(hourly["time"][idx]).replace(tzinfo=timezone.utc)
+        """Wind/rain equivalent of
+        OpenMeteoMarineFetcher._parse_point() -- same `current` nowcast
+        block, same reason. See that method's docstring for the
+        measured staleness this replaced."""
+        current = raw["current"]
+        units = raw.get("current_units", {})
+        valid_time = datetime.fromisoformat(current["time"]).replace(tzinfo=timezone.utc)
 
         request_url = (
             f"{self.BASE_URL}?latitude={point['lat']}&longitude={point['lon']}"
-            f"&hourly={self.HOURLY_VARS}&timezone=UTC&forecast_days=2"
+            f"&current={self.CURRENT_VARS}&timezone=UTC"
         )
 
         observations = []
         for raw_var, schema_var in self._VAR_MAP.items():
-            series = hourly.get(raw_var)
-            if series is None or series[idx] is None:
-                continue
+            value = current.get(raw_var)
+            if value is None:
+                continue  # absent reading is honest; do not fabricate a value
             observations.append(
                 MarineObservation(
                     variable=schema_var,
-                    value=float(series[idx]),
+                    value=float(value),
                     unit=units.get(raw_var, ""),
                     lat=point["lat"],
                     lon=point["lon"],
@@ -303,7 +332,13 @@ class OpenMeteoForecastFetcher:
             }
             resp = requests.get(self.BASE_URL, params=params, timeout=15)
             resp.raise_for_status()
-            observations.extend(self._parse_point_at_offset(resp.json(), point, fetched_at, hours_ahead=24))
+            observations.extend(
+                self._parse_point_at_offset(
+                    # Same clock hour tomorrow, not 00:00 -- a midnight
+                    # reading is not what anyone means by "tomorrow".
+                    resp.json(), point, fetched_at, hours_ahead=24 + fetched_at.hour
+                )
+            )
         return observations
 
     def _parse_point_at_offset(

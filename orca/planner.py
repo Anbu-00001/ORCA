@@ -180,6 +180,12 @@ class Recommendation:
     answer_kind: str = "verdict"  # "verdict" | "data_lookup" | "off_topic"
     time_frame: str = "now"  # "now" | "tomorrow"
     coverage_note: str | None = None  # honest caveat when zone_match == "fallback"
+    # The true cross-zone ordering, present only when the question was a
+    # comparison ("which place has the worst waves?"). Computed in plain
+    # Python from real observations by orca/agentic.py's _rank_zones();
+    # None means no comparison was asked for, and the composer is told in
+    # that case that it may not rank places at all.
+    ranking: list[dict] | None = None
     lookup: dict | None = None  # the one real observation a data_lookup asked for
     # The zone the QUESTION was about, which is not the same thing as
     # chosen_zone (where we're sending them). On a SAFER ALTERNATIVE they
@@ -217,6 +223,7 @@ class Recommendation:
             "answer_kind": self.answer_kind,
             "time_frame": self.time_frame,
             "coverage_note": self.coverage_note,
+            "ranking": self.ranking,
             "lookup": self.lookup,
             "primary_zone": self.primary_zone,
         }

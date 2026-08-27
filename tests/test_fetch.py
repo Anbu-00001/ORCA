@@ -140,7 +140,10 @@ def test_marine_fetcher_tomorrow_offset_is_a_real_different_day_than_now():
     now_wave = next(o for o in now_obs if o.variable == "wave_height_m")
     tomorrow_wave = next(o for o in tomorrow_obs if o.variable == "wave_height_m")
     assert tomorrow_wave.valid_time.date() > now_wave.valid_time.date()
-    assert tomorrow_wave.valid_time - now_wave.valid_time == timedelta(hours=24)
+    # fetch() now reports the `current` nowcast (an arbitrary minute of
+    # today), so a fixed 24h delta no longer holds -- and never was the
+    # point. What must hold is that "tomorrow" is genuinely the next day.
+    assert tomorrow_wave.valid_time.date() == now_wave.valid_time.date() + timedelta(days=1)
     assert tomorrow_wave.source == "Open-Meteo Marine"  # honest about which real source this still is
 
 
@@ -565,3 +568,61 @@ def test_real_imbl_fetch_integration():
     assert len(boundary["segments"]) > 0
     total_points = sum(len(seg) for seg in boundary["segments"])
     assert total_points > 10  # the real boundary is a multi-point treaty line, not a stub
+
+
+# ---------------------------------------------------------------------------
+# "Now" must mean now.
+#
+# fetch() used to read hourly[0], which with timezone=UTC is 00:00 today.
+# The cache written at 08:38 UTC therefore carried readings 8.6 hours old
+# (freshness_min said 518) while presenting them at NEAR_TERM_CONFIDENCE
+# 0.9. Measured against the live API at Karaikal on 2026-08-27 that
+# understated real wind by 64% -- 13.7 km/h shown against 22.5 km/h
+# actual -- and hid 40.7 km/h gusts entirely.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "fetcher_cls,fixture",
+    [
+        (OpenMeteoMarineFetcher, "real_openmeteo_marine_response.json"),
+        (OpenMeteoForecastFetcher, "real_openmeteo_forecast_response.json"),
+    ],
+)
+def test_fetch_reads_the_current_nowcast_not_midnight(fetcher_cls, fixture):
+    raw = json.loads((FIXTURES / fixture).read_text())
+    fetched_at = datetime.fromisoformat(raw["current"]["time"]).replace(tzinfo=timezone.utc)
+
+    observations = fetcher_cls()._parse_point(raw, ZONE_A, fetched_at)
+
+    assert observations, "the current block must yield real observations"
+    for obs in observations:
+        # The nowcast instant, not 00:00 -- and therefore genuinely fresh.
+        assert obs.valid_time.isoformat().startswith(raw["current"]["time"])
+        assert obs.freshness_min == 0
+        # Each value is the current block's own, never the hourly series'.
+        raw_var = next(k for k, v in fetcher_cls._VAR_MAP.items() if v == obs.variable)
+        assert obs.value == float(raw["current"][raw_var])
+
+
+@pytest.mark.parametrize(
+    "fetcher_cls,fixture",
+    [
+        (OpenMeteoMarineFetcher, "real_openmeteo_marine_response.json"),
+        (OpenMeteoForecastFetcher, "real_openmeteo_forecast_response.json"),
+    ],
+)
+def test_tomorrow_is_the_same_clock_hour_not_midnight(fetcher_cls, fixture):
+    """"Tomorrow" meant 00:00 tomorrow, which is nobody's idea of
+    tomorrow's fishing conditions. It now means this time tomorrow."""
+    raw = json.loads((FIXTURES / fixture).read_text())
+    fetched_at = datetime(2026, 8, 27, 14, 30, tzinfo=timezone.utc)
+
+    observations = fetcher_cls()._parse_point_at_offset(
+        raw, ZONE_A, fetched_at, hours_ahead=24 + fetched_at.hour
+    )
+
+    assert observations
+    for obs in observations:
+        assert obs.valid_time.hour == fetched_at.hour
+        assert obs.valid_time.date() == fetched_at.date() + timedelta(days=1)
+        assert obs.confidence == fetcher_cls.NEXT_DAY_CONFIDENCE

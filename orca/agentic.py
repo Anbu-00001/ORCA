@@ -38,6 +38,7 @@ before; this module can only ever add to that, never replace it.
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 import requests
@@ -51,6 +52,8 @@ from orca.planner import (
     observation_id,
     observations_for_zone,
 )
+
+logger = logging.getLogger("orca.agentic")
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 # Both models are Groq-hosted, strict-JSON-schema-capable (verified against
@@ -71,6 +74,44 @@ REQUEST_TIMEOUT_S = 8.0  # fail fast into the deterministic fallback -- never ha
 LANGUAGES = ("en", "ta", "other")
 DEFAULT_LANGUAGE = "en"
 INTENTS = ("verdict", "data_lookup")
+
+# The escape hatches. Everything above describes a question ORCA can
+# answer; without a way to say "this question isn't one of those", the
+# schema silently coerces every unanswerable question into the nearest
+# answerable one -- and the answer comes back sounding just as certain.
+# Measured on 2026-08-27: "which zone has the worst waves today?" was
+# answered "Nagapattinam has the worst waves today" while Nagapattinam
+# was the second CALMEST of the ten zones (0.36 m, against Kanyakumari's
+# 1.42 m). Nothing was broken; the schema simply had no way to represent
+# the question, so it became a single-zone question about the fallback
+# zone. Naming each gap is what lets answer_question() either fill it
+# with real data (all_zones -> a computed ranking) or say plainly that
+# ORCA cannot (everything else).
+EXTRACTION_TIME_FRAMES = ("now", "tomorrow", "beyond")
+SCOPES = ("one_zone", "all_zones")
+DEFAULT_SCOPE = "one_zone"
+UNSUPPORTED_KINDS = (
+    "none", "unit_conversion", "second_zone", "species", "tide_or_time", "route",
+)
+# What each gap costs the user, in their words. Stated up front by the
+# composer rather than left for them to discover by trusting a wrong answer.
+_UNSUPPORTED_NOTES = {
+    "unit_conversion": (
+        "ORCA reports each reading in the unit its source publishes, so this "
+        "is in metres and km/h rather than the unit you asked for."
+    ),
+    "second_zone": (
+        "You asked about more than one place. ORCA answers one place at a "
+        "time, so this covers only the first one."
+    ),
+    "species": "ORCA has no fish-species or catch data, only sea and weather conditions.",
+    "tide_or_time": "ORCA has no tide tables or timings.",
+    "route": "ORCA has no route or navigation planning.",
+}
+_BEYOND_NOTE = (
+    "ORCA only holds readings for today and tomorrow, so this answers for "
+    "today rather than the day you asked about."
+)
 DEFAULT_INTENT = "verdict"
 
 
@@ -138,10 +179,15 @@ def extract_query_intent(
             "language": {"type": "string", "enum": list(LANGUAGES)},
             "intent": {"type": "string", "enum": list(INTENTS)},
             "variable": {"type": ["string", "null"], "enum": variables + [None]},
-            "time_frame": {"type": "string", "enum": list(memory.TIME_FRAMES)},
+            "time_frame": {"type": "string", "enum": list(EXTRACTION_TIME_FRAMES)},
             "on_topic": {"type": "boolean"},
+            "scope": {"type": "string", "enum": list(SCOPES)},
+            "unsupported": {"type": "string", "enum": list(UNSUPPORTED_KINDS)},
         },
-        "required": ["zone_name", "language", "intent", "variable", "time_frame", "on_topic"],
+        "required": [
+            "zone_name", "language", "intent", "variable", "time_frame",
+            "on_topic", "scope", "unsupported",
+        ],
         "additionalProperties": False,
     }
     system = (
@@ -158,11 +204,27 @@ def extract_query_intent(
         "measurement (e.g. 'what is the wave height', 'how windy is it'); "
         "'verdict' if they are asking whether to go out, or anything "
         "broader. When unsure, choose 'verdict'.\n"
-        f"- variable: for a data_lookup, exactly one of {variables} -- the "
-        "measurement being asked for. null for a verdict, or if no listed "
-        "variable matches what they asked for.\n"
-        "- time_frame: 'tomorrow' only if they clearly ask about tomorrow "
-        "or the next day; otherwise 'now'.\n"
+        f"- variable: exactly one of {variables} -- the measurement being "
+        "asked for. Set it whenever the question names a measurement, "
+        "INCLUDING comparisons ('which place has the worst waves' is "
+        "wave_height_m). null only for a general go/don't-go question, or "
+        "if no listed variable matches what they asked for.\n"
+        "- time_frame: 'tomorrow' if they ask about tomorrow or the next "
+        "day; 'beyond' if they ask about any day further out than that "
+        "(day after tomorrow, this weekend, next week); otherwise 'now'.\n"
+        "- scope: 'all_zones' ONLY when answering requires ranking or "
+        "comparing places -- 'which place has the worst waves', 'where is "
+        "safest', 'is it rougher at X than Y'. A question that simply "
+        "names no place is NOT all_zones: 'is it safe out there right "
+        "now?' is one_zone, asked about wherever the person already is. "
+        "Use 'one_zone' unless the question is genuinely a comparison.\n"
+        "- unsupported: name the ONE thing they asked for that this tool "
+        "cannot give, if any. 'unit_conversion' if they asked for a "
+        "reading in a specific unit (feet, knots, miles); 'second_zone' "
+        "if they asked about two or more different places at once; "
+        "'species' for fish types or catch; 'tide_or_time' for tides, "
+        "high/low water or timings; 'route' for directions or navigation. "
+        "'none' if the question needs none of those.\n"
         "- on_topic: false ONLY if the question has nothing to do with the "
         "sea, weather, fishing, or going out on the water. A question "
         "that is about those things is on_topic even if this tool cannot "
@@ -208,13 +270,19 @@ def extract_query_intent(
     time_frame = result.get("time_frame")
     language = result.get("language")
     on_topic = result.get("on_topic")
+    scope = result.get("scope")
+    unsupported = result.get("unsupported")
 
     return {
         "zone_name": zone_name if zone_name in names else None,
         "language": language if language in LANGUAGES else DEFAULT_LANGUAGE,
         "intent": intent if intent in INTENTS else DEFAULT_INTENT,
         "variable": variable if variable in memory.LOOKUP_VARIABLES else None,
-        "time_frame": time_frame if time_frame in memory.TIME_FRAMES else memory.DEFAULT_TIME_FRAME,
+        "time_frame": (
+            time_frame if time_frame in EXTRACTION_TIME_FRAMES else memory.DEFAULT_TIME_FRAME
+        ),
+        "scope": scope if scope in SCOPES else DEFAULT_SCOPE,
+        "unsupported": unsupported if unsupported in UNSUPPORTED_KINDS else "none",
         # Default to on-topic when absent/malformed: wrongly refusing a
         # real fisherman's real question is worse than answering a stray
         # one (the abstention literature's "over-abstention" failure --
@@ -270,6 +338,7 @@ def compose_grounded_answer(
     lookup: dict | None = None,
     coverage_note: str | None = None,
     off_topic: bool = False,
+    ranking: list[dict] | None = None,
 ) -> dict:
     """Rephrase an already-decided Recommendation for a human, in their
     language. The schema has no field for action/risk/numbers -- only
@@ -358,12 +427,48 @@ def compose_grounded_answer(
                 "things that matter about why."
             )
 
-        if coverage_note:
+        # Either it has the true ordering, or it is told in as many words
+        # that it does not have one. There is no third state in which
+        # guessing is the reasonable thing to do.
+        if ranking is not None:
             parts.append(
-                "Coverage caveat you MUST state first, honestly, before "
-                f"anything else: {coverage_note}"
+                "They asked a question that compares places. Here is the "
+                "real ordering across all zones, computed from actual "
+                "readings, worst/highest first: "
+                f"{json.dumps(ranking)}. The list runs WORST/highest "
+                "first, so the safest, calmest or best place is the LAST "
+                "entry in it. Answer the comparison from THIS list only, "
+                "naming places and values exactly as they appear in it. Do "
+                "NOT answer with the zone named in the Decision block "
+                "below unless the list itself puts it there -- that zone is "
+                "just where the question was anchored, not the answer to a "
+                "comparison."
+            )
+        else:
+            parts.append(
+                "You have readings for ONE place only. Never say or imply "
+                "that a place is the worst, best, safest, calmest or "
+                "roughest compared with anywhere else, and never rank or "
+                "order places -- you have not been shown any other place's "
+                "readings. If they asked for a comparison, say you can "
+                "only speak for this one place."
             )
 
+        if coverage_note:
+            parts.append(
+                "Before anything else, tell them this caveat, in your own "
+                "words and addressed to them directly -- do not copy it "
+                "back verbatim, and keep the pronouns pointing at the "
+                f"person asking: {coverage_note}"
+            )
+
+        parts.append(
+            "Never say ORCA lacks, is missing, or does not have a reading "
+            "unless you were told that explicitly above. If something was "
+            "simply not included, say only what you do have and stop -- "
+            "claiming a reading is unavailable when it was merely not "
+            "shown to you is as wrong as inventing one."
+        )
         parts.append(
             "The readings below are already for the day the user asked "
             "about (`readings_are_for`). Never claim ORCA lacks data for "
@@ -398,6 +503,44 @@ def compose_grounded_answer(
     # silently dropped, never shown as if it were real.
     result["cited_evidence_ids"] = [i for i in result.get("cited_evidence_ids", []) if i in evidence_ids]
     return result
+
+
+def _rank_zones(variable: str | None, observations, zones: list[dict], recommendation) -> list[dict]:
+    """The true cross-zone ordering, computed in plain Python from the same
+    cached observations every other answer uses.
+
+    A comparison question ("which place has the worst waves?") needs ten
+    zones' readings. The composer is handed one zone's evidence, by
+    design -- so when it was asked one of these anyway it did the only
+    thing it could and guessed, in a confident declarative sentence.
+    Measured 2026-08-27: it named Nagapattinam the worst when
+    Nagapattinam was the second calmest of the ten. The fix is to hand it
+    the real ordering, not to ask it more firmly not to guess.
+
+    Ranked by the named variable when they named one, otherwise by the
+    deterministic risk_level orca/policy.py already computed per zone --
+    which is what "worst" means here, and is not the model's to decide.
+    """
+    if variable is not None:
+        rows = []
+        for zone in zones:
+            for obs in observations_for_zone(observations, zone):
+                if obs.variable == variable:
+                    rows.append({"zone": zone["name"], "value": obs.value, "unit": obs.unit})
+                    break
+        rows.sort(key=lambda r: r["value"], reverse=True)
+        return rows
+    summaries = sorted(
+        recommendation.to_dict().get("zone_summaries", []),
+        key=lambda z: z["risk_level"],
+        reverse=True,
+    )
+    # Ordering only, and the verdict word policy.py already assigned. The
+    # raw risk_level float is deliberately dropped: it is a policy output,
+    # not a MarineObservation, and CLAUDE.md rule 3 governs every number
+    # that reaches a user. Handed the float, the composer put "risk_level
+    # 0.95" straight into an answer (measured 2026-08-27).
+    return [{"zone": z["name"], "action": z["action"]} for z in summaries]
 
 
 def _resolve_lookup(
@@ -469,6 +612,8 @@ def answer_question(
     intent = "verdict"
     variable = None
     time_frame = memory.DEFAULT_TIME_FRAME
+    scope = DEFAULT_SCOPE
+    unsupported = "none"
     on_topic = True
     agentic_used = False
 
@@ -486,6 +631,8 @@ def answer_question(
             variable = extracted["variable"]
             time_frame = extracted["time_frame"]
             on_topic = extracted["on_topic"]
+            scope = extracted["scope"]
+            unsupported = extracted["unsupported"]
             # Tier 2: the model mapped a landmark/description onto a real
             # zone. Only consulted because tier 1 found nothing.
             if resolved_zone is None and extracted["zone_name"]:
@@ -513,6 +660,15 @@ def answer_question(
     # one asked" dishonesty this whole change set exists to remove.
     # If the forecast cache is empty (data/fetch.py not re-run), we fall
     # back to today's data AND say so, rather than silently pretending.
+    # ORCA holds exactly two days. A question past that gets answered for
+    # today -- which is fine, and dishonest only if unsaid. Left unsaid it
+    # produced a confident answer about right now to a question about the
+    # day after tomorrow (measured 2026-08-27).
+    beyond_note = None
+    if time_frame == "beyond":
+        beyond_note = _BEYOND_NOTE
+        time_frame = memory.DEFAULT_TIME_FRAME
+
     verdict_observations = observations
     stale_forecast_note = None
     if time_frame == "tomorrow" and on_topic:
@@ -545,7 +701,7 @@ def answer_question(
     # answering as though that were what they asked is the dishonest
     # part. Say so instead.
     notes = []
-    if zone_match == "fallback" and on_topic:
+    if zone_match == "fallback" and on_topic and scope != "all_zones":
         chosen = recommendation.chosen_zone or (resolved_zone or {})
         name = chosen.get("name") if isinstance(chosen, dict) else None
         if name:
@@ -553,11 +709,21 @@ def answer_question(
                 f"You didn't name a place ORCA covers, so this is for {name}, "
                 "the nearest of the 10 Tamil Nadu coastal zones it has real data for."
             )
+    if beyond_note and on_topic:
+        notes.append(beyond_note)
+    if on_topic and unsupported in _UNSUPPORTED_NOTES:
+        notes.append(_UNSUPPORTED_NOTES[unsupported])
     if stale_forecast_note:
         notes.append(stale_forecast_note)
 
     coverage_note = " ".join(notes) if notes else None
     recommendation.coverage_note = coverage_note
+
+    # A comparison question gets the real ordering or nothing at all.
+    ranking = None
+    if on_topic and scope == "all_zones":
+        ranking = _rank_zones(variable, verdict_observations, zones, recommendation)
+    recommendation.ranking = ranking
 
     lookup = None
     if on_topic and intent == "data_lookup":
@@ -598,11 +764,17 @@ def answer_question(
                 lookup=lookup,
                 coverage_note=coverage_note,
                 off_topic=not on_topic,
+                ranking=ranking,
             )
             recommendation.recommendation = composed["answer_text"]
             recommendation.cited_evidence_ids = composed["cited_evidence_ids"]
             recommendation.agentic_used = True
-        except AgenticUnavailable:
-            pass  # keep the deterministic template text exactly as-is
+        except AgenticUnavailable as exc:
+            # Falling back is correct; falling back QUIETLY is what let a
+            # server run all day with the agentic layer off while looking
+            # exactly like one that had it on. The deterministic text is
+            # still kept verbatim -- the only change is that the reason is
+            # now on the record (CLAUDE.md rule 2: nothing swallowed).
+            logger.warning("Agentic composition unavailable, using deterministic text: %s", exc)
 
     return recommendation

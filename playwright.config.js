@@ -22,7 +22,12 @@ module.exports = defineConfig({
       timeout: 15000,
     },
     {
-      command: 'bash -c "source .venv/bin/activate && uvicorn orca.api:app --host 127.0.0.1 --port 8011"',
+      // GROQ_API_KEY is deliberately unset: orca/api.py now loads .env, so
+      // without this the whole e2e suite makes real, billed Groq calls and
+      // 429s on the free tier mid-run. These specs assert the deterministic
+      // path; e2e/agentic-exceptions.spec.js spawns its own backend when it
+      // needs a key.
+      command: 'bash -c "source .venv/bin/activate && GROQ_API_KEY= uvicorn orca.api:app --host 127.0.0.1 --port 8011"',
       url: 'http://127.0.0.1:8011/health',
       reuseExistingServer: true,
       timeout: 15000,

@@ -329,6 +329,8 @@ def _intent(**overrides):
         "variable": None,
         "time_frame": "now",
         "on_topic": True,
+        "scope": "one_zone",
+        "unsupported": "none",
     }
     base.update(overrides)
     return base
@@ -495,7 +497,9 @@ def test_out_of_coverage_query_gets_an_honest_coverage_note(monkeypatch):
     assert rec.zone_match == "fallback"
     assert rec.coverage_note is not None
     assert "nearest" in rec.coverage_note
-    assert "Coverage caveat" in captured["system"]
+    # Assert the property -- the caveat reaches the composer -- not the
+    # prompt's exact wording, which is free to be rephrased.
+    assert rec.coverage_note in captured["system"]
 
 
 # ---------------------------------------------------------------------------
@@ -725,3 +729,168 @@ def test_composition_is_told_which_day_the_readings_are_for(monkeypatch):
     )
     assert '"readings_are_for": "tomorrow"' in captured["system"]
     assert "Never claim ORCA lacks data for that day" in captured["system"]
+
+
+# ---------------------------------------------------------------------------
+# The escape hatches.
+#
+# Every test below exists because of one measured failure on 2026-08-27.
+# Asked "which zone has the worst waves today?", ORCA answered
+# "Nagapattinam has the worst waves today" -- Nagapattinam was the second
+# CALMEST of the ten zones (0.36 m; the real worst was Kanyakumari at
+# 1.42 m). Nothing threw, no assertion in this file failed, and the
+# sentence was fluent and confident. The extraction schema simply had no
+# way to represent a ten-zone question, so it became a one-zone question
+# about the fallback zone, and the composer answered the question it was
+# handed rather than the one that was asked.
+# ---------------------------------------------------------------------------
+
+def _wave(zone, value):
+    return MarineObservation(
+        variable="wave_height_m", value=value, unit="m",
+        lat=zone["lat"], lon=zone["lon"],
+        valid_time=datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc),
+        fetched_at=datetime(2026, 8, 27, 12, 5, tzinfo=timezone.utc),
+        source="Open-Meteo Marine", confidence=0.9, freshness_min=5,
+        provenance="https://marine-api.open-meteo.com/v1/marine",
+    )
+
+
+def _capture_composition(monkeypatch, intent_obj):
+    """Run answer_question and hand back both the result and the exact
+    system prompt composition was given."""
+    captured = {}
+
+    def _post(url, headers=None, json=None, timeout=None):
+        if "query_intent" in str(json):
+            return _groq_response(intent_obj)
+        captured["system"] = json["messages"][0]["content"]
+        return _groq_response({"answer_text": "composed", "cited_evidence_ids": []})
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
+    monkeypatch.setattr("orca.agentic.requests.post", _post)
+    return captured
+
+
+def test_comparison_question_gets_the_true_ranking_not_the_anchor_zone(monkeypatch):
+    """The regression that started all of this. ZONE_A is the calmest
+    zone AND the zone the request is anchored at -- exactly the trap the
+    live model fell into."""
+    captured = _capture_composition(
+        monkeypatch, _intent(scope="all_zones", variable="wave_height_m")
+    )
+    observations = [_wave(ZONE_A, 0.36), _wave(ZONE_B, 1.42)]
+
+    rec = answer_question(
+        "which zone has the worst waves today?",
+        ZONE_A["lat"], ZONE_A["lon"], observations=observations,
+    )
+
+    assert rec.ranking is not None
+    # Worst first, and the anchor zone is NOT it.
+    assert rec.ranking[0]["zone"] == ZONE_B["name"]
+    assert rec.ranking[0]["value"] == 1.42
+    assert rec.ranking[-1]["zone"] == ZONE_A["name"]
+    # And the composer was actually shown it, with the ordering spelled out.
+    assert ZONE_B["name"] in captured["system"]
+    assert "WORST/highest" in captured["system"]
+    assert "LAST entry" in captured["system"]
+
+
+def test_risk_ranking_never_leaks_the_raw_policy_float(monkeypatch):
+    """risk_level is a policy output, not a MarineObservation. Handed the
+    float, the live composer wrote "risk_level 0.95" straight into an
+    answer -- a bare number reaching a user, which CLAUDE.md rule 3
+    forbids. Ordering survives; the float does not."""
+    captured = _capture_composition(monkeypatch, _intent(scope="all_zones", variable=None))
+
+    rec = answer_question(
+        "where is safest today?", ZONE_A["lat"], ZONE_A["lon"],
+        observations=[_wave(ZONE_A, 0.36), _wave(ZONE_B, 1.42)],
+    )
+
+    assert rec.ranking
+    for row in rec.ranking:
+        assert set(row) == {"zone", "action"}
+        assert "risk_level" not in row
+    assert "risk_level" not in captured["system"]
+
+
+def test_without_a_ranking_the_composer_is_forbidden_to_compare(monkeypatch):
+    """An ordinary one-zone question must leave the model unable to rank
+    anything -- not trusted to notice it shouldn't."""
+    captured = _capture_composition(monkeypatch, _intent(scope="one_zone"))
+
+    rec = answer_question(
+        "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+        observations=[_wave(ZONE_A, 0.36), _wave(ZONE_B, 1.42)],
+    )
+
+    assert rec.ranking is None
+    assert "ONE place only" in captured["system"]
+    assert "never rank or" in captured["system"]
+
+
+def test_a_question_past_tomorrow_is_answered_for_today_and_says_so(monkeypatch):
+    """ORCA holds two days. Answering a day-after-tomorrow question for
+    today is fine; doing it silently is not. Measured live: "what about
+    the day after tomorrow near Karaikal?" came back as a confident
+    verdict about right now, with no caveat at all."""
+    captured = _capture_composition(monkeypatch, _intent(time_frame="beyond"))
+
+    rec = answer_question(
+        "what about the day after tomorrow near Karaikal?",
+        ZONE_A["lat"], ZONE_A["lon"], observations=[_wave(ZONE_A, 0.36)],
+    )
+
+    assert rec.time_frame == "now"
+    assert rec.coverage_note is not None
+    assert "today and tomorrow" in rec.coverage_note
+    assert rec.coverage_note in captured["system"]
+
+
+@pytest.mark.parametrize(
+    "kind,fragment",
+    [
+        ("unit_conversion", "unit its source publishes"),
+        ("second_zone", "one place at a time"),
+        ("species", "no fish-species"),
+        ("tide_or_time", "no tide tables"),
+        ("route", "no route or navigation"),
+    ],
+)
+def test_each_unsupported_request_kind_is_disclosed(monkeypatch, kind, fragment):
+    _capture_composition(monkeypatch, _intent(unsupported=kind))
+
+    rec = answer_question(
+        "some question", ZONE_A["lat"], ZONE_A["lon"], observations=[_wave(ZONE_A, 0.36)],
+    )
+
+    assert rec.coverage_note is not None and fragment in rec.coverage_note
+
+
+def test_comparison_question_is_not_told_it_named_no_place(monkeypatch):
+    """"Which zone has the worst waves?" deliberately names no zone. The
+    fallback note ("you didn't name a place ORCA covers") is true but
+    irrelevant there, and reads as though the question was misunderstood."""
+    _capture_composition(monkeypatch, _intent(scope="all_zones", variable="wave_height_m"))
+
+    rec = answer_question(
+        "which zone has the worst waves today?",
+        ZONE_A["lat"], ZONE_A["lon"], observations=[_wave(ZONE_A, 0.36), _wave(ZONE_B, 1.42)],
+    )
+
+    assert rec.coverage_note is None
+
+
+def test_composer_is_told_not_to_invent_an_absence(monkeypatch):
+    """Live, asked for two places at once, it answered the first and
+    added "we don't have a wind reading for Kanyakumari" -- which ORCA
+    did have. A fabricated absence is as wrong as a fabricated value."""
+    captured = _capture_composition(monkeypatch, _intent())
+
+    answer_question(
+        "is it safe?", ZONE_A["lat"], ZONE_A["lon"], observations=[_wave(ZONE_A, 0.36)],
+    )
+
+    assert "Never say ORCA lacks" in captured["system"]

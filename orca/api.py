@@ -14,6 +14,8 @@ Does not modify orca/schema.py or orca/policy.py.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import socket
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,8 +26,53 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from orca.agentic import answer_question
+from orca.agentic import answer_question, is_configured
 from orca.planner import load_cached_observations, load_forecast_observations, observation_id
+
+logger = logging.getLogger("orca.api")
+
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+
+def _load_env_file(path: Path = ENV_FILE) -> None:
+    """Read KEY=VALUE lines from a git-ignored .env into os.environ.
+
+    Fifteen lines of stdlib instead of a dependency (CLAUDE.md rule 6).
+    It exists because of a real, silent, day-long failure: .env held a
+    valid GROQ_API_KEY, nothing ever read it, so is_configured() was
+    False on the running server and every /ask fell back to the
+    deterministic template. That fallback is correct behaviour -- but it
+    is indistinguishable, from the outside, from the agentic layer
+    working, which is how it went unnoticed until the answers were read
+    side by side. Hence the startup log below: ORCA now states which
+    mode it is in rather than leaving it to be inferred.
+
+    An already-set variable always wins, so a real environment (CI, a
+    container, `export`) is never overridden by a stale file.
+    """
+    if not path.is_file():
+        return
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_env_file()
+logger.warning(
+    "ORCA agentic layer: %s",
+    "ON (GROQ_API_KEY found)" if is_configured()
+    else "OFF (no GROQ_API_KEY) -- /ask will return deterministic template text",
+)
 
 app = FastAPI(title="ORCA", description="Marine advisory reasoning layer")
 
