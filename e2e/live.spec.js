@@ -120,6 +120,50 @@ test.describe('frontend against the real live API', () => {
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
   });
 
+  // R-33a: the tooltip used to read "Offline — cached evidence, confidence
+  // adjusted". Nothing in the running system reduces confidence at read time
+  // (chlorophyll decays per-source at *fetch* time, a different thing), so
+  // that clause was a claim the backend does not honour. Same /health
+  // intercept as the test above -- it's the only way to reach the string.
+  test('R-33a: the offline tooltip claims cached evidence and nothing about confidence', async ({ page }) => {
+    await page.route(`${API}/health`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', offline_mode: true, cache_age_min: 5, cache_observation_count: 42 }),
+      })
+    );
+    await page.reload();
+
+    const badge = page.getByTestId('offline-badge');
+    await expect(badge).toHaveText('OFFLINE');
+    await expect(badge).toHaveAttribute('title', 'Offline — cached evidence');
+    expect(await badge.getAttribute('title')).not.toMatch(/confidence/i);
+  });
+
+  // R-33b: every MarineObservation carries freshness_min (orca/schema.py
+  // requires it), so against the real backend every row must show a real
+  // formatted age. The age is formatted from that field only, never
+  // recomputed from the browser clock.
+  test('R-33b: every evidence reading shows a readable age built from freshness_min', async ({ page }) => {
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
+    await page.getByTestId('ask-button').click();
+
+    const items = page.getByTestId('evidence-item');
+    await expect(items.first()).toBeVisible({ timeout: 10000 });
+
+    const ages = await page.getByTestId('evidence-age').allTextContents();
+    expect(ages.length).toBe(await items.count());
+    for (const age of ages) {
+      // "10 min old" / "3 h 5 min old" / "29 d old" -- and a stale cache's
+      // large freshness_min must still land in this shape, not overflow
+      // into raw minutes.
+      expect(age).toMatch(/^(\d+ min|\d+ h( \d+ min)?|\d+ d( \d+ h)?) old$/);
+    }
+  });
+
   test('a clean GO zone does NOT show the override banner', async ({ page }) => {
     await page.getByTestId('query-input').fill('Nagapattinam');
     await page.getByTestId('lat-input').fill('10.7672');

@@ -83,6 +83,21 @@ test.describe('frontend in mock mode', () => {
     await expect(first.getByTestId('evidence-detail')).toContainText('0.71');
   });
 
+  // R-33b: each age is formatted from that observation's own freshness_min
+  // and nothing else -- never recomputed from the browser clock, which is
+  // why these strings are fixed and not relative to when the suite runs.
+  // mock_response.json's four values pick out one band of the formatter
+  // each: under an hour, hours+minutes, whole hours, and days.
+  test('R-33b: every evidence reading shows the human age of its own freshness_min', async ({ page }) => {
+    const ages = page.getByTestId('evidence-age');
+    await expect(ages).toHaveCount(4);
+    // Same order as mock_response.json's evidence array.
+    await expect(ages.nth(0)).toHaveText('10 min old');   // wave,  freshness_min 10
+    await expect(ages.nth(1)).toHaveText('1 h 30 min old'); // sst,  freshness_min 90
+    await expect(ages.nth(2)).toHaveText('2 d old');      // chl,   freshness_min 2880
+    await expect(ages.nth(3)).toHaveText('2 h old');      // wind,  freshness_min 120
+  });
+
   test('map container is present', async ({ page }) => {
     await expect(page.getByTestId('map')).toBeAttached();
   });

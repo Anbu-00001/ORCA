@@ -327,6 +327,10 @@
   .evidence-summary { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.92rem; }
   .evidence-summary .var-name { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85em; }
   .evidence-summary .var-value { font-weight: 700; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  /* R-33b: the reading's age sits with the variable name on the left, so
+     the value stays right-aligned. nowrap because a stale cache can make
+     this "29 d 4 h old" and it must not wrap the row. */
+  .evidence-summary .var-age { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.8em; margin-left: 0.5rem; white-space: nowrap; }
   .evidence-detail { display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); font-size: 0.82rem; color: var(--muted); line-height: 1.6; font-family: "IBM Plex Mono", ui-monospace, monospace; }
   .evidence-detail.expanded { display: block; }
   .evidence-detail dt { font-weight: 600; color: var(--ink); display: inline; }
@@ -618,8 +622,12 @@
     offlineBadge.textContent = offline ? "OFFLINE" : "ONLINE";
     offlineBadge.classList.toggle("offline", !!offline);
     offlineBadge.classList.toggle("online", !offline);
+    // R-33a: this used to add "confidence adjusted". Nothing reduces
+    // confidence at read time -- per-source decay happens at fetch time,
+    // which is a different thing -- so the tooltip claims only what the
+    // running system actually does.
     offlineBadge.title = offline
-      ? "Offline — cached evidence, confidence adjusted"
+      ? "Offline — cached evidence"
       : "Live connectivity available";
   }
 
@@ -639,6 +647,28 @@
     return String(rounded);
   }
 
+  // R-33b: the backend's own freshness_min, rendered readably. Never
+  // recomputed from the browser clock -- an age derived here would quietly
+  // disagree with the number the backend reasoned over, and on a phone with
+  // a wrong clock it would be fiction. A missing or malformed value gets
+  // "age unknown"; we never invent one. Runs once per evidence row, so it
+  // stays plain integer arithmetic.
+  function formatAge(freshnessMin) {
+    if (typeof freshnessMin !== "number" || !isFinite(freshnessMin) || freshnessMin < 0) {
+      return "age unknown";
+    }
+    const mins = Math.floor(freshnessMin);
+    if (mins < 60) return mins + " min old";
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) {
+      const remMin = mins % 60;
+      return remMin ? hours + " h " + remMin + " min old" : hours + " h old";
+    }
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    return remHours ? days + " d " + remHours + " h old" : days + " d old";
+  }
+
   function renderEvidence(evidence) {
     evidenceList.innerHTML = "";
     (evidence || []).forEach((obs) => {
@@ -649,7 +679,8 @@
       const summary = document.createElement("div");
       summary.className = "evidence-summary";
       summary.innerHTML =
-        '<span class="var-name">' + obs.variable + '</span>' +
+        '<span class="var-label"><span class="var-name">' + obs.variable + '</span>' +
+        '<span class="var-age" data-testid="evidence-age">' + formatAge(obs.freshness_min) + '</span></span>' +
         '<span class="var-value">' + formatNumber(obs.value) + " " + (obs.unit || "") + "</span>";
 
       const detail = document.createElement("dl");
