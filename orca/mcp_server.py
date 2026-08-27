@@ -11,17 +11,17 @@ Run directly (stdio transport, for a local MCP client config):
 """
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from orca.planner import build_recommendation, load_cached_observations, observation_id
 
-mcp = FastMCP("orca")
+mcp = MCPServer("orca")
 
 
 def ask_marine_advisory(query: str, lat: float, lon: float) -> dict:
     """Get a fishing-safety recommendation for a location on the
     Nagapattinam/Chennai coast, Bay of Bengal. Returns action (GO /
-    DO NOT GO / SAFER ALTERNATIVE), the reason, the chosen zone, any
+    DO NOT GO / SAFER ALTERNATIVE / CANNOT ASSESS), the reason, the chosen zone, any
     overridden findings, and evidence with source/timestamp/confidence
     for every number.
     """
@@ -36,8 +36,22 @@ def get_evidence(observation_id_: str) -> dict:
     return {"error": f"no observation with id {observation_id_!r}"}
 
 
-mcp.tool()(ask_marine_advisory)
-mcp.tool()(get_evidence)
+@mcp.tool(name="ask_marine_advisory")
+async def _ask_marine_advisory_tool(query: str, lat: float, lon: float) -> dict:
+    """Protocol adapter for :func:`ask_marine_advisory`.
+
+    MCPServer 2.x dispatches synchronous tools through AnyIO's worker-thread
+    pool.  Keeping the protocol adapters async avoids making this small,
+    cache-only operation depend on thread-pool availability while preserving
+    the plain synchronous functions used by Python callers and unit tests.
+    """
+    return ask_marine_advisory(query, lat, lon)
+
+
+@mcp.tool(name="get_evidence")
+async def _get_evidence_tool(observation_id_: str) -> dict:
+    """Protocol adapter for :func:`get_evidence`; reads committed cache only."""
+    return get_evidence(observation_id_)
 
 
 if __name__ == "__main__":
