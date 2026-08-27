@@ -11,6 +11,26 @@ test.describe('frontend in mock mode', () => {
     await page.goto('/index.html?mock=1');
   });
 
+  // R-55: ?mock=1 renders a fabricated advisory through the same
+  // renderRecommendation() a live answer uses, so on its own it is
+  // screenshot-identical to a real safety verdict. The banner is the only
+  // thing that marks it -- assert it is really there and really readable,
+  // not merely attached to the DOM.
+  test('R-55: a mock render is visibly marked as mock and not a live advisory', async ({ page }) => {
+    const banner = page.getByTestId('mock-mode-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText(/MOCK DATA/i);
+    await expect(banner).toContainText(/NOT A LIVE ADVISORY/i);
+
+    // It has to survive a screenshot, so it must occupy real space near the
+    // top of the page -- a hairline border or an offscreen element passes
+    // toBeVisible() but fails the thing R-55 actually asks for.
+    const box = await banner.boundingBox();
+    expect(box.height).toBeGreaterThan(20);
+    expect(box.width).toBeGreaterThan(200);
+    expect(box.y).toBeLessThan(100);
+  });
+
   test('renders the answer card from the mock response', async ({ page }) => {
     await expect(page.getByTestId('answer-action')).toHaveText('SAFER ALTERNATIVE');
     await expect(page.getByTestId('answer-text')).toContainText('Karaikal');
@@ -94,6 +114,17 @@ test.describe('frontend in mock mode', () => {
     await button.click();
     const input = page.getByTestId('query-input');
     await expect(input).not.toHaveValue('');
+  });
+});
+
+// The other half of R-55: the marking must be specific to mock mode. A
+// banner that leaked onto the live path would be worse than none at all --
+// it would teach the reader to ignore it. Separate describe because the
+// suite above forces ?mock=1 in its beforeEach.
+test.describe('frontend on the live path', () => {
+  test('R-55: no mock banner without ?mock=1', async ({ page }) => {
+    await page.goto('/index.html');
+    await expect(page.getByTestId('mock-mode-banner')).toBeHidden();
   });
 });
 

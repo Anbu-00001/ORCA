@@ -120,6 +120,35 @@
   }
   [lang="ta"] { font-family: "Hind Madurai", "Noto Sans Tamil UI", "Public Sans", sans-serif; line-height: 1.8; }
   .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  /* R-55: ?mock=1 renders web/mock_response.json through the same
+     renderRecommendation() a real advisory uses, so the result is otherwise
+     screenshot-identical to a live safety verdict. This bar is the one thing
+     that tells them apart, so it is a solid filled band at the very top of
+     the viewport -- body is `height: 100vh; overflow: hidden`, so as the
+     first flex child it can never scroll out of a screenshot, and no
+     cropping short of deliberate removal loses it.
+     Chart magenta (--amber-border/--amber-bg), inverted into a solid fill.
+     Deliberately NOT --accent: that is starboard green and means GO. Both
+     tokens exist in Day/Dusk/Night and are already a contrasting pair in
+     each, so this needs no per-palette colour of its own. */
+  #mock-mode-banner {
+    flex: 0 0 auto;
+    background: var(--amber-border);
+    color: var(--amber-bg);
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
+    font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.08em;
+    text-align: center;
+    padding: 0.6rem 1.25rem;
+  }
+  #mock-mode-banner span {
+    display: block;
+    font-family: "Public Sans", sans-serif; font-weight: 500;
+    font-size: 0.75rem; text-transform: none; letter-spacing: 0.01em;
+    opacity: 0.9; margin-top: 0.15rem;
+  }
+  /* Hidden by default: on the live path the element takes no space at all. */
+  #mock-mode-banner.hidden { display: none; }
+
   header {
     display: flex;
     align-items: center;
@@ -369,6 +398,14 @@
 </head>
 <body>
 
+<!-- Revealed only by the MOCK_MODE branch in init() below. Kept hidden here
+     rather than injected at runtime so the live path never has a moment
+     where it exists unstyled. -->
+<div id="mock-mode-banner" class="hidden" data-testid="mock-mode-banner" role="alert">
+  MOCK DATA — NOT A LIVE ADVISORY
+  <span>Rendered from web/mock_response.json for testing. These readings are not a real sea state and must not be used at sea.</span>
+</div>
+
 <header>
   <div style="display:flex; align-items:center;">
     <h1>ORCA <span>— marine advisory</span></h1>
@@ -509,6 +546,7 @@
   const agenticBadge = document.getElementById("agentic-badge");
   const coverageNote = document.getElementById("coverage-note");
   const overrideBanner = document.getElementById("override-banner");
+  const mockBanner = document.getElementById("mock-mode-banner");
   const evidenceList = document.getElementById("evidence-list");
   const queryInput = document.getElementById("query-input");
   const latInput = document.getElementById("lat-input");
@@ -838,6 +876,11 @@
   }
 
   async function init() {
+    // R-55: mark the page before anything paints, and before the awaits
+    // below -- if mock_response.json fails to load, a half-rendered mock
+    // page must still say it isn't live. Same MOCK_MODE constant the
+    // render below reads; there is no second source of truth for it.
+    if (MOCK_MODE) mockBanner.classList.remove("hidden");
     initMap();
     await refreshHealth();
     if (MOCK_MODE) {
