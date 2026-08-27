@@ -25,6 +25,7 @@
       "valid_time": "2026-08-26T04:00:00Z",
       "source": "Open-Meteo Marine",
       "confidence": 0.71,
+      "freshness_min": 10,
       "provenance": "https://marine-api.open-meteo.com/v1/marine"
     },
     {
@@ -37,6 +38,7 @@
       "valid_time": "2026-08-26T04:00:00Z",
       "source": "Open-Meteo Marine",
       "confidence": 0.9,
+      "freshness_min": 90,
       "provenance": "https://marine-api.open-meteo.com/v1/marine"
     },
     {
@@ -49,6 +51,7 @@
       "valid_time": "2026-08-25T12:00:00Z",
       "source": "NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)",
       "confidence": 0.85,
+      "freshness_min": 2880,
       "provenance": "https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPVIIRSchlaDaily.csv"
     },
     {
@@ -61,6 +64,7 @@
       "valid_time": "2026-08-26T04:00:00Z",
       "source": "Open-Meteo Forecast",
       "confidence": 0.9,
+      "freshness_min": 120,
       "provenance": "https://api.open-meteo.com/v1/forecast"
     }
   ],
