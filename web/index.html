@@ -223,6 +223,14 @@
   }
   #answer-action.action-do-not-go { background: var(--danger-bg); color: var(--danger); }
   #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
+  /* CANNOT ASSESS and any future unrecognised action. Deliberately not
+     green and not red: it is neither a clean bill of health nor a
+     danger finding, it is the absence of a judgement (R-39). */
+  #answer-action.action-cannot-assess {
+    background: var(--panel);
+    color: var(--muted);
+    border: 1px solid var(--muted);
+  }
   #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
   #answer-placeholder { color: var(--muted); font-style: italic; }
   /* Shown only when the backend actually used orca/agentic.py this
@@ -585,9 +593,16 @@
   }
 
   function actionClass(action) {
+    // R-25: the default branch must be NON-PERMISSIVE. This previously
+    // returned "action-go", so any action value the page did not know
+    // about -- including CANNOT ASSESS (R-39) -- rendered as a confident
+    // green GO badge. Widening an enum server-side must not be able to
+    // build a fail-open here. GO is now the value that must be named
+    // explicitly; everything else falls through to the neutral badge.
+    if (action === "GO") return "action-go";
     if (action === "DO NOT GO") return "action-do-not-go";
     if (action === "SAFER ALTERNATIVE") return "action-safer-alternative";
-    return "action-go";
+    return "action-cannot-assess";
   }
 
   function formatNumber(value) {

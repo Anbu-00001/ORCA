@@ -336,3 +336,162 @@ def test_recommendation_agentic_fields_default_to_plain_behaviour():
     assert d["agentic_used"] is False
     assert d["detected_language"] == "en"
     assert d["cited_evidence_ids"] == []
+
+
+# ---------------------------------------------------------------------------
+# R-59 / G-14 — danger with no opportunity must never resolve to GO
+#
+# policy.py gates rule 2 on opportunity AND danger, so a zone with hazards
+# but nothing suggesting go falls through to rule 3 and returns GO with the
+# reason "No hazards found; conditions acceptable" -- contradicted by the
+# same response's own evidence. The correction is in the planner;
+# policy.py stays frozen (N-5), and tests/test_policy.py's
+# test_danger_without_opportunity_does_not_trigger_rule_2 must stay green.
+# ---------------------------------------------------------------------------
+
+def _danger_without_opportunity(zone, wind_speed_kmh=30.0):
+    """Hazardous wind, and nothing an agent would call an opportunity:
+    water too cold to be productive and effectively no chlorophyll. This
+    is the live Kanyakumari/Colachel shape -- the trigger is inverted, so
+    the worse the fishing looks, the more likely the override is skipped.
+    """
+    return [
+        _obs("wave_height_m", 1.2, "m", zone),
+        _obs("wind_speed_kmh", wind_speed_kmh, "km/h", zone),
+        _obs("sst_c", 21.0, "°C", zone),
+        _obs("chlorophyll_mg_m3", 0.05, "mg m^-3", zone, source="NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)"),
+    ]
+
+
+def test_r59_danger_without_opportunity_never_resolves_to_go():
+    obs = _danger_without_opportunity(ZONE_A)
+    findings = run_agents(obs)
+    # Precondition: this really is the R-59 shape, not an R-39 one --
+    # there IS evidence, and there IS danger, and nothing suggests go.
+    assert any(f.observations for f in findings)
+    assert any(f.risk_level >= 0.6 for f in findings)
+    assert not any(f.suggests_go for f in findings)
+
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    assert rec.action != "GO"
+    assert "No hazards found" not in rec.reason
+
+
+def test_r59_overridden_is_empty_because_nothing_was_sacrificed():
+    """R-11: overridden names what was given up. Nothing suggested go, so
+    nothing was given up -- an empty list is the honest answer here.
+    """
+    rec = build_recommendation(
+        "Nagapattinam", ZONE_A["lat"], ZONE_A["lon"],
+        observations=_danger_without_opportunity(ZONE_A),
+    )
+    assert rec.overridden == []
+
+
+def test_r59_names_the_worst_danger_not_the_first():
+    """R-37's principle applied on the path written for R-59: with wind and
+    waves both over threshold, the more severe one is named.
+    """
+    obs = [
+        _obs("wave_height_m", 2.4, "m", ZONE_A),      # high risk, under the 2.5 hard deny
+        _obs("wind_speed_kmh", 26.0, "km/h", ZONE_A),  # over threshold, but milder
+        _obs("sst_c", 21.0, "°C", ZONE_A),
+        _obs("chlorophyll_mg_m3", 0.05, "mg m^-3", ZONE_A, source="NOAA CoastWatch ERDDAP (VIIRS chlorophyll-a)"),
+    ]
+    findings = run_agents(obs)
+    danger = [f for f in findings if f.risk_level >= 0.6]
+    assert len(danger) >= 2, "fixture must produce more than one danger for this to mean anything"
+    worst = max(danger, key=lambda f: f.risk_level)
+
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    assert rec.reason == worst.reason
+
+
+def test_g14_no_live_zone_resolves_to_go_while_carrying_a_hazard():
+    """The G-14 gate, over the real cache rather than a fixture. Kanyakumari
+    (0.67) and Colachel (0.63) are the two live regressions.
+    """
+    observations = load_cached_observations()
+    for zone in ZONES:
+        rec = build_recommendation(f"fishing at {zone['name']}", zone["lat"], zone["lon"], observations=observations)
+        worst = max((f.risk_level for f in rec.agent_findings), default=0.0)
+        if worst >= 0.6:
+            assert rec.action != "GO", f"{zone['name']} resolves to GO carrying risk {worst}"
+            assert "No hazards found" not in rec.reason, f"{zone['name']} claims no hazards at risk {worst}"
+
+
+# ---------------------------------------------------------------------------
+# R-39 / G-13 — no evidence at all must never resolve to GO
+# ---------------------------------------------------------------------------
+
+def test_r39_zone_with_no_observations_cannot_be_assessed():
+    """Five neutral findings are not five clean bills of health. Deliberately
+    CANNOT ASSESS and not DO NOT GO: conflating "I do not know" with "I know
+    it is dangerous" teaches users to discount the verdict that must never
+    be discounted (Open Decision 8, resolved).
+    """
+    blind = {"name": "Blind Zone", "lat": 12.0, "lon": 85.0}
+    rec = build_recommendation("fishing at Blind Zone", blind["lat"], blind["lon"], observations=_clean_go_observations(ZONE_A), zones=[blind])
+    assert rec.action == "CANNOT ASSESS"
+    assert rec.evidence == []
+    assert rec.chosen_zone is None
+    assert "cannot assess" in rec.recommendation.lower()
+    # It must not read as a safety judgement in either direction.
+    assert not rec.recommendation.startswith("Go to")
+    assert "Do not go" not in rec.recommendation
+
+
+def test_r39b_cannot_assess_still_offers_a_genuine_nearby_alternative():
+    """Inability to assess one zone is not inability to help -- but the
+    verdict stays CANNOT ASSESS, because ORCA still cannot assess where
+    they actually asked about.
+    """
+    blind = {"name": "Blind Zone", "lat": ZONE_B["lat"] + 0.2, "lon": ZONE_B["lon"] + 0.1}
+    rec = build_recommendation(
+        "fishing at Blind Zone", blind["lat"], blind["lon"],
+        observations=_clean_go_observations(ZONE_B), zones=[blind, ZONE_B],
+    )
+    assert rec.action == "CANNOT ASSESS"
+    assert rec.chosen_zone["name"] == ZONE_B["name"]
+    assert "Do not go" not in rec.recommendation
+
+
+# ---------------------------------------------------------------------------
+# R-60 — the alternative search is bounded by distance
+# ---------------------------------------------------------------------------
+
+def test_r60_nearby_alternative_is_still_offered():
+    """The cap must not break the §8.4 demo: Nagapattinam -> Karaikal is
+    18 km, comfortably inside it.
+    """
+    obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(ZONE_B)
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs)
+    assert rec.action == "SAFER ALTERNATIVE"
+    assert rec.chosen_zone["name"] == ZONE_B["name"]
+
+
+def test_r60_alternative_beyond_the_cap_is_not_offered():
+    """Chennai is 267 km from Nagapattinam -- a real zone, genuinely clean,
+    and not a place a boat diverts to. The honest answer is the no-swap text.
+    """
+    far = next(z for z in ZONES if z["name"] == "Chennai")
+    obs = _dangerous_observations(ZONE_A, wave_height=3.1) + _clean_go_observations(far)
+    rec = build_recommendation("Nagapattinam", ZONE_A["lat"], ZONE_A["lon"], observations=obs, zones=[ZONE_A, far])
+    assert rec.chosen_zone is None
+    assert "Chennai" not in rec.recommendation
+
+
+def test_r60_cap_matches_the_prd():
+    """The cap is a documented figure (PRD R-60), not an incidental one.
+    If it moves, the PRD row moves with it -- §16.2.
+    """
+    from orca import planner
+    assert planner.MAX_ALTERNATIVE_KM == 100.0
+
+
+def test_r60_uses_the_existing_haversine_not_a_second_one():
+    """R-60 explicitly reuses orca.agents._haversine_km, which is already
+    tested. A second distance function is the thing to avoid.
+    """
+    from orca import agents, planner
+    assert planner._haversine_km is agents._haversine_km
