@@ -131,10 +131,14 @@ def test_ask_and_evidence_are_unaffected_by_connectivity(monkeypatch):
     assert offline_data["action"] == online_data["action"]
     assert offline_data["chosen_zone"] == online_data["chosen_zone"]
     assert len(offline_data["evidence"]) == len(online_data["evidence"])
-    # offline_mode is echoed onto the recommendation payload too, so the
-    # frontend can badge individual answers, not just the header.
+    # R-54: /ask's offline_mode is constant True and no longer echoes the
+    # probe. It states how the answer was produced -- read from
+    # data/cache/, which is unconditional -- rather than measuring the
+    # network, because measuring the network meant a live socket connect
+    # in the request path (N-6, N-7). The live connectivity reading is
+    # /health's, asserted above, and that is what the badge renders.
     assert offline_data["offline_mode"] is True
-    assert online_data["offline_mode"] is False
+    assert online_data["offline_mode"] is True
 
 
 def test_ask_different_zones_can_produce_different_actions():
