@@ -4,6 +4,34 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ORCA — Marine Advisory</title>
+<script>
+  // Set the palette attribute before first paint (not after the stylesheet
+  // loads) so there's no flash of the wrong palette on reload. IHO S-52
+  // requires certified chart displays to carry three calibrated colour
+  // tables -- Day, Dusk, Night -- because a bridge at night is destroyed
+  // by bright light; ORCA ships the same three for the same reason, not
+  // as a "dark mode" toggle. See the :root / [data-palette] blocks below.
+  try {
+    var saved = localStorage.getItem("orca-palette");
+    document.documentElement.setAttribute("data-palette", saved || "day");
+  } catch (e) {
+    document.documentElement.setAttribute("data-palette", "day");
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Archivo (condensed width axis): instrument/signage labelling, not an
+     editorial display face -- used for the verdict and section heads.
+     Public Sans: US federal government interface face, plain and civic --
+     body text. IBM Plex Mono: ORCA's rule is that monospace means "this
+     is a transmissible safety message" (coordinates, evidence values,
+     the NavIC-style ticket) and nothing else uses it. Hind Madurai /
+     Noto Sans Tamil UI: Tamil UI text, both verified real Google Fonts
+     families (not assumed -- see SCRATCH.md). -->
+<link
+  href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,75,400;0,75,600;0,75,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Hind+Madurai:wght@400;500;600&family=Noto+Sans+Tamil+UI:wght@400;500&display=swap"
+  rel="stylesheet"
+/>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <!-- three.js: pinned version (not "latest"), same convention as maplibre-gl
@@ -18,28 +46,80 @@
 }
 </script>
 <style>
-  :root {
-    --ink: #10241f;
-    --paper: #f6f4ee;
+  /* Colour tokens borrowed from nautical chart convention (IHO S-52 /
+     Admiralty chart), not an invented palette -- see SCRATCH.md for the
+     reasoning. --accent/--danger/--amber-* are the original token names
+     (kept so the many rules below didn't need a risky mass rename);
+     their *values* now carry chart meaning: --accent = starboard green
+     (GO), --danger = port red (DO NOT GO), --amber-border = chart
+     magenta (the Admiralty convention for cautions/restricted features,
+     used here for SAFER ALTERNATIVE and geofence warnings).
+     --unknown is deliberately its own token: a missing observation is
+     never shown as a guessed colour. */
+  :root, :root[data-palette="day"] {
+    --ink: #101418;
+    --paper: #fbfcfb;      /* chart white -- deep water */
     --panel: #ffffff;
-    --line: #d9d4c6;
-    --accent: #0f6e5c;
-    --danger: #a4321d;
-    --amber-bg: #fff3d6;
-    --amber-border: #c98a12;
-    --muted: #6b6558;
+    --card-bg: #f7f9f8;
+    --line: #c7d2d6;
+    --muted: #4a555c;
+    --accent: #007f3f;     /* starboard */
+    --accent-bg: #e1f3e8;
+    --danger: #c4161c;     /* port */
+    --danger-bg: #fbe2e1;
+    --amber-border: #c6006e; /* chart magenta */
+    --amber-bg: #f9dcec;
+    --map-placeholder: #c9e4ec; /* shoal blue */
+    --unknown: #6b7a82;
+  }
+  :root[data-palette="dusk"] {
+    --ink: #c6d2d8;
+    --paper: #1b2429;
+    --panel: #222e35;
+    --card-bg: #24313a;
+    --line: #3c4a52;
+    --muted: #8c9ba3;
+    --accent: #2e9460;
+    --accent-bg: #23372c;
+    --danger: #d8433f;
+    --danger-bg: #3a2422;
+    --amber-border: #c4479a;
+    --amber-bg: #362533;
+    --map-placeholder: #263a42;
+    --unknown: #5c6a72;
+  }
+  :root[data-palette="night"] {
+    /* S-52 logic: low-saturation red on black, so the eye keeps its dark
+       adaptation -- not a generic "dark mode" inversion. */
+    --ink: #a8534b;
+    --paper: #000000;
+    --panel: #120a0a;
+    --card-bg: #170d0d;
+    --line: #2a1614;
+    --muted: #6e3833;
+    --accent: #2c6e48;
+    --accent-bg: #10231a;
+    --danger: #e0564a;
+    --danger-bg: #2a1210;
+    --amber-border: #96395f;
+    --amber-bg: #200d18;
+    --map-placeholder: #150a0a;
+    --unknown: #4a3330;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     background: var(--paper);
     color: var(--ink);
     display: flex;
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
+  [lang="ta"] { font-family: "Hind Madurai", "Noto Sans Tamil UI", "Public Sans", sans-serif; line-height: 1.8; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
   header {
     display: flex;
     align-items: center;
@@ -48,26 +128,37 @@
     border-bottom: 1px solid var(--line);
     background: var(--panel);
   }
-  header h1 { font-size: 1.15rem; margin: 0; letter-spacing: 0.02em; }
-  header h1 span { color: var(--accent); }
+  header h1 {
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
+    font-size: 1.3rem; margin: 0; letter-spacing: 0.02em; text-transform: uppercase;
+  }
+  header h1 span { color: var(--accent); text-transform: none; font-weight: 500; }
+  .palette-switch { display: flex; gap: 0.25rem; margin-left: 1rem; }
+  .palette-btn {
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 600;
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 0.3rem 0.55rem; border-radius: 5px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--muted); cursor: pointer;
+  }
+  .palette-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   #offline-badge {
     font-size: 0.8rem;
     font-weight: 600;
     padding: 0.3rem 0.7rem;
     border-radius: 999px;
     border: 1px solid var(--line);
-    background: #eef1ee;
+    background: var(--card-bg);
     color: var(--muted);
   }
-  #offline-badge.online { background: #e4f4ec; color: var(--accent); border-color: #bfe3d2; }
-  #offline-badge.offline { background: var(--amber-bg); color: var(--danger); border-color: var(--amber-border); }
+  #offline-badge.online { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+  #offline-badge.offline { background: var(--amber-bg); color: var(--amber-border); border-color: var(--amber-border); }
 
   main {
     flex: 1;
     display: flex;
     min-height: 0;
   }
-  #map-wrap { flex: 0 0 60%; position: relative; background: #dce7e3; min-width: 0; }
+  #map-wrap { flex: 0 0 60%; position: relative; background: var(--map-placeholder); min-width: 0; }
   #map-2d-layer { position: absolute; inset: 0; }
   #map-2d-layer.hidden-view { display: none; }
   #map { position: absolute; inset: 0; }
@@ -87,7 +178,7 @@
     background: rgba(255,255,255,0.92); color: var(--ink); font-size: 0.78rem;
     font-weight: 600; cursor: pointer;
   }
-  .view-toggle-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .view-toggle-btn.active { background: var(--accent); color: var(--panel); border-color: var(--accent); }
   #ocean3d-container { position: absolute; inset: 0; display: none; background: #0d2233; }
   #ocean3d-container.visible { display: block; }
   #ocean3d-container.awaiting::after {
@@ -112,28 +203,33 @@
     border: 1px solid var(--line);
     border-radius: 10px;
     padding: 1rem;
-    background: #fbfbf7;
+    background: var(--card-bg);
   }
+  /* The verdict badge -- Archivo condensed, the same face used for the
+     Douglas ruler's band labels, since both are "instrument readout"
+     text, not prose. */
   #answer-action {
     display: inline-block;
-    font-size: 0.75rem;
+    font-family: "Archivo", sans-serif; font-stretch: condensed;
+    font-size: 0.85rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 0.25rem 0.6rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.7rem;
     border-radius: 6px;
-    background: #e4f4ec;
+    background: var(--accent-bg);
     color: var(--accent);
     margin-bottom: 0.5rem;
   }
-  #answer-action.action-do-not-go { background: #fbe3dc; color: var(--danger); }
-  #answer-action.action-safer-alternative { background: var(--amber-bg); color: #7a5606; }
+  #answer-action.action-do-not-go { background: var(--danger-bg); color: var(--danger); }
+  #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
   #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
   #answer-placeholder { color: var(--muted); font-style: italic; }
 
   #override-banner {
     border: 1px solid var(--amber-border);
     background: var(--amber-bg);
-    color: #6b4a05;
+    color: var(--amber-border);
     border-radius: 8px;
     padding: 0.75rem 0.9rem;
     font-size: 0.9rem;
@@ -144,27 +240,34 @@
 
   #reasoning3d-toggle {
     width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--line);
-    background: #fff; color: var(--accent); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+    background: var(--panel); color: var(--accent); font-weight: 600; font-size: 0.85rem; cursor: pointer;
   }
   #reasoning3d-container {
     position: relative; height: 280px; margin-top: 0.6rem;
-    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #faf9f4;
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card-bg);
   }
   #reasoning3d-container.collapsed { display: none; }
 
-  #evidence-panel h3 { margin: 0 0 0.4rem 0; font-size: 0.95rem; }
+  #evidence-panel h3 {
+    margin: 0 0 0.4rem 0; font-size: 0.85rem;
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
   #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .evidence-item {
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 0.55rem 0.7rem;
     cursor: pointer;
-    background: #fff;
+    background: var(--panel);
   }
+  /* Values and provenance are transmissible-safety-message data, per the
+     mono-means-data rule -- same face as the Douglas ruler and any
+     coordinate pair in the app. */
   .evidence-summary { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.92rem; }
-  .evidence-summary .var-name { color: var(--muted); }
-  .evidence-summary .var-value { font-weight: 700; }
-  .evidence-detail { display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+  .evidence-summary .var-name { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85em; }
+  .evidence-summary .var-value { font-weight: 700; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .evidence-detail { display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); font-size: 0.82rem; color: var(--muted); line-height: 1.6; font-family: "IBM Plex Mono", ui-monospace, monospace; }
   .evidence-detail.expanded { display: block; }
   .evidence-detail dt { font-weight: 600; color: var(--ink); display: inline; }
   .evidence-detail dd { display: inline; margin: 0 0.8rem 0 0.3rem; }
@@ -179,26 +282,74 @@
     align-items: center;
     flex-wrap: wrap;
   }
-  footer input[type="text"] { flex: 1 1 260px; padding: 0.55rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; font-size: 0.95rem; }
-  footer input.coord { flex: 0 0 90px; padding: 0.55rem 0.5rem; border: 1px solid var(--line); border-radius: 8px; font-size: 0.85rem; }
+  footer input[type="text"] { flex: 1 1 260px; padding: 0.55rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; font-size: 0.95rem; background: var(--panel); color: var(--ink); }
+  footer input.coord {
+    flex: 0 0 90px; padding: 0.55rem 0.5rem; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 0.85rem; background: var(--panel); color: var(--ink);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; /* a coordinate pair is data, not prose */
+  }
   footer button {
     padding: 0.55rem 1rem;
     border-radius: 8px;
     border: 1px solid var(--accent);
     background: var(--accent);
-    color: white;
+    color: var(--paper);
     font-weight: 600;
     cursor: pointer;
     font-size: 0.9rem;
   }
-  footer button.secondary { background: white; color: var(--accent); }
+  footer button.secondary { background: var(--panel); color: var(--accent); }
   footer label { font-size: 0.72rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.15rem; }
+
+  /* Douglas sea scale ruler -- see orca/agents.py's WAVE_HARD_DENY_M
+     comment. Real WMO/Douglas band boundaries, not invented; the marker
+     sits on the latest real wave_height_m evidence and the double bar at
+     2.5 m is ORCA's actual hard-deny threshold, so "change the wave
+     height, watch the marker cross the bar" needs no narration. */
+  #douglas-ruler {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 0.8rem 0.5rem;
+    background: var(--card-bg);
+  }
+  #douglas-ruler h3 {
+    margin: 0 0 0.5rem 0; font-size: 0.85rem;
+    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  #douglas-ruler .no-data { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+  .ruler-track { position: relative; height: 22px; display: flex; border-radius: 4px; overflow: visible; }
+  .ruler-band { height: 100%; position: relative; }
+  .ruler-band:first-child { border-radius: 4px 0 0 4px; }
+  .ruler-band:last-child { border-radius: 0 4px 4px 0; }
+  .ruler-deny-line {
+    position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--danger);
+  }
+  .ruler-marker {
+    position: absolute; top: -14px; width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-top: 8px solid var(--ink); transform: translateX(-6px);
+  }
+  .ruler-scale { display: flex; justify-content: space-between; margin-top: 0.3rem; font-size: 0.65rem; color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .ruler-reading {
+    margin-top: 0.6rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.95rem; color: var(--ink);
+  }
+  .ruler-reading .band-name { font-weight: 700; text-transform: uppercase; }
+  .ruler-reading .stop-note { color: var(--danger); font-weight: 700; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>ORCA <span>— marine advisory</span></h1>
+  <div style="display:flex; align-items:center;">
+    <h1>ORCA <span>— marine advisory</span></h1>
+    <!-- Visible, not hidden in a settings menu -- the palette switch is
+         part of the pitch: certified marine chart displays are required
+         (IHO S-52) to carry Day/Dusk/Night tables, and ORCA does too. -->
+    <div class="palette-switch" data-testid="palette-switch">
+      <button class="palette-btn" data-palette-choice="day" data-testid="palette-day">Day</button>
+      <button class="palette-btn" data-palette-choice="dusk" data-testid="palette-dusk">Dusk</button>
+      <button class="palette-btn" data-palette-choice="night" data-testid="palette-night">Night</button>
+    </div>
+  </div>
   <div id="offline-badge" data-testid="offline-badge">…</div>
 </header>
 
@@ -253,6 +404,16 @@
     </div>
 
     <div id="override-banner" class="hidden" data-testid="override-banner"></div>
+
+    <!-- Douglas sea scale ruler: real WMO band boundaries (0-9, Calm to
+         Phenomenal), the real 2.5m hard-deny line, and a marker on the
+         latest wave_height_m evidence. Populated by renderDouglasRuler()
+         below -- see orca/agents.py's WAVE_HARD_DENY_M comment for why
+         2.5m is the real Douglas 4/5 boundary, not an arbitrary number. -->
+    <div id="douglas-ruler" data-testid="douglas-ruler">
+      <h3>Douglas sea scale</h3>
+      <div id="douglas-ruler-body"><span class="no-data">No wave height in this answer's evidence yet.</span></div>
+    </div>
 
     <div id="evidence-panel" data-testid="evidence-panel">
       <h3>Evidence</h3>
@@ -321,6 +482,65 @@
   const askButton = document.getElementById("ask-button");
   const tamilButton = document.getElementById("tamil-sample-button");
   const tamilAudio = document.getElementById("tamil-audio");
+  const douglasRulerBody = document.getElementById("douglas-ruler-body");
+
+  // Real WMO Douglas sea scale (H.P. Douglas, c.1917-1920) -- degree,
+  // name, band start/end in metres. Not ORCA's own scheme; see
+  // orca/agents.py's WAVE_HARD_DENY_M comment. WAVE_HARD_DENY_M below
+  // mirrors that real backend constant for display -- same pattern as
+  // the ZONES mirror above.
+  const WAVE_HARD_DENY_M = 2.5;
+  const DOUGLAS_SCALE = [
+    { degree: 0, name: "Calm (glassy)", min: 0, max: 0 },
+    { degree: 1, name: "Calm (rippled)", min: 0, max: 0.10 },
+    { degree: 2, name: "Smooth", min: 0.10, max: 0.50 },
+    { degree: 3, name: "Slight", min: 0.50, max: 1.25 },
+    { degree: 4, name: "Moderate", min: 1.25, max: 2.50 },
+    { degree: 5, name: "Rough", min: 2.50, max: 4.00 },
+    { degree: 6, name: "Very rough", min: 4.00, max: 6.00 },
+  ];
+  const RULER_MAX_M = 6.0;
+
+  function douglasBandFor(waveM) {
+    if (waveM === 0) return DOUGLAS_SCALE[0]; // degree 0 is exactly 0m, degenerate
+    for (const band of DOUGLAS_SCALE.slice(1)) {
+      if (waveM >= band.min && waveM < band.max) return band;
+    }
+    return waveM < 0 ? DOUGLAS_SCALE[1] : DOUGLAS_SCALE[DOUGLAS_SCALE.length - 1];
+  }
+
+  function renderDouglasRuler(evidence) {
+    const wave = (evidence || []).find((o) => o.variable === "wave_height_m");
+    if (!wave) {
+      douglasRulerBody.innerHTML = '<span class="no-data">No wave height in this answer\'s evidence yet.</span>';
+      return;
+    }
+    const waveM = wave.value;
+    const pct = (v) => Math.min(v, RULER_MAX_M) / RULER_MAX_M * 100;
+    const denyPct = pct(WAVE_HARD_DENY_M);
+    const markerPct = pct(waveM);
+
+    const bands = DOUGLAS_SCALE.map((b) => {
+      const widthPct = (Math.min(b.max, RULER_MAX_M) - b.min) / RULER_MAX_M * 100;
+      // Below the 2.5m line: safe green-ish; at/above: danger red-ish --
+      // reuses the same GO/DO-NOT-GO chart colours as the rest of the app.
+      const color = b.min >= WAVE_HARD_DENY_M ? "var(--danger-bg)" : "var(--accent-bg)";
+      return `<div class="ruler-band" style="width:${widthPct}%;background:${color};" title="Douglas ${b.degree}: ${b.name} (${b.min}-${b.max === Infinity ? "+" : b.max}m)"></div>`;
+    }).join("");
+
+    const band = douglasBandFor(waveM);
+    const stopNote = waveM > WAVE_HARD_DENY_M
+      ? '<span class="stop-note">— ORCA stops here (exceeds ' + WAVE_HARD_DENY_M + 'm)</span>'
+      : "";
+
+    douglasRulerBody.innerHTML =
+      '<div class="ruler-track">' + bands +
+      '<div class="ruler-deny-line" style="left:' + denyPct + '%;" title="ORCA hard-deny line: ' + WAVE_HARD_DENY_M + 'm"></div>' +
+      '<div class="ruler-marker" style="left:' + markerPct + '%;"></div>' +
+      '</div>' +
+      '<div class="ruler-scale"><span>0</span><span>' + WAVE_HARD_DENY_M + 'm deny line</span><span>' + RULER_MAX_M + 'm+</span></div>' +
+      '<div class="ruler-reading">' + formatNumber(waveM) + ' m — <span class="band-name">Douglas ' + band.degree + ' ' + band.name + '</span> ' + stopNote + '</div>';
+  }
 
   function setOfflineBadge(offline) {
     offlineBadge.textContent = offline ? "OFFLINE" : "ONLINE";
@@ -407,7 +627,28 @@
     }
 
     renderEvidence(data.evidence);
+    renderDouglasRuler(data.evidence);
   }
+
+  function wirePaletteSwitch() {
+    const buttons = document.querySelectorAll(".palette-btn");
+    function setActive(name) {
+      buttons.forEach((b) => b.classList.toggle("active", b.dataset.paletteChoice === name));
+    }
+    setActive(document.documentElement.getAttribute("data-palette") || "day");
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const name = btn.dataset.paletteChoice;
+        document.documentElement.setAttribute("data-palette", name);
+        setActive(name);
+        try { localStorage.setItem("orca-palette", name); } catch (e) {
+          // Private browsing / storage blocked -- the choice just won't
+          // persist across reloads, which is a harmless degradation.
+        }
+      });
+    });
+  }
+  wirePaletteSwitch();
 
   async function submitQuery() {
     const query = queryInput.value.trim();
@@ -453,9 +694,14 @@
   queryInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submitQuery();
   });
+  queryInput.addEventListener("input", () => queryInput.setAttribute("lang", "en"));
 
   tamilButton.addEventListener("click", () => {
     queryInput.value = TAMIL_SAMPLE_TEXT;
+    // Hind Madurai / larger line-height for Tamil script (see [lang="ta"]
+    // rule above) -- reverts to the page default once the user types
+    // over it, via the plain "input" listener below.
+    queryInput.setAttribute("lang", "ta");
     tamilAudio.play().catch(() => {
       // No audio file yet in this environment -- filling the transcription
       // is still the documented, demo-safe behaviour (see MANUAL_TASKS.md).

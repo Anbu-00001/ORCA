@@ -2,7 +2,7 @@
   "source": "NOAA NCEI ETOPO 2022 (60 arc-second)",
   "dataset_id": "ETOPO_2022_v1_60s",
   "provenance": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/ETOPO_2022_v1_60s.csv?z[(7.8):4:(13.4)][(76.9):4:(80.6)]",
-  "fetched_at": "2026-08-27T05:29:33.169603+00:00",
+  "fetched_at": "2026-08-27T06:00:58.807326+00:00",
   "bbox": {
     "min_lat": 7.8,
     "max_lat": 13.4,

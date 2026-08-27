@@ -80,3 +80,54 @@ coastal fishing locations before touching `data/fetch.py`.
   friction: no API key, no signup, `https://tiles.openfreemap.org/styles/
   liberty` returns a real styled vector basemap. Replaced
   `demotiles.maplibre.org` in `web/index.html`.
+
+## 2026-08-27 — verifying the "Authenticity & Feature Upgrade Plan" doc's endpoints
+
+A teammate-sourced research doc claimed several Indian government API
+endpoints as ready to use. Verified each one directly rather than trusting
+the doc (it says to do this itself) -- two of its central claims turned
+out to be wrong or incomplete in ways worth recording before anyone
+builds on them:
+
+- **`erddap.incois.gov.in`** (INCOIS's own ERDDAP -- the single biggest
+  win the doc proposes) is real and live -- `curl -k` confirms a genuine
+  INCOIS-issued cert (`CN=*.incois.gov.in`, issued by GlobalSign) -- but
+  the server has a TLS chain misconfiguration: it doesn't send the
+  GlobalSign intermediate certificate, so standard verification fails
+  with "unable to get local issuer certificate". This is NOT something
+  to work around with `verify=False` (a real security regression, ruled
+  out) -- it needs either the missing intermediate bundled explicitly
+  (attempted; `secure.globalsign.com` was itself unreachable from this
+  sandbox to fetch it) or for INCOIS to fix their server. Blocked, not
+  abandoned -- retry from an environment that can reach GlobalSign's
+  cert repository.
+- **`api.imd.gov.in`** (IMD's marine/cyclone/nowcast API) -- the doc
+  claims "No key required on the endpoints I checked." Every single
+  endpoint tested, including the most basic (`cityforecast`), returned
+  `401 {"error":"API key missing"}`. The 28KB public API reference page
+  contains zero mention of "key", "register", "contact", or "apisetu" --
+  no visible self-service path to get one. Real blocker, needs a human to
+  find IMD's actual key-issuance process (possibly a direct request to
+  IMD, not a web form) -- added to MANUAL_TASKS.md.
+- **Confirmed working, no auth needed:** Marine Regions WFS
+  (`geo.vliz.be`, real India-Sri Lanka IMBL treaty-line geometry -- now
+  wired into `orca/agents.py`'s `geofence_agent`, see below) and
+  INCOIS's PFZ text advisory page (`incois.gov.in/MarineFisheries/
+  TextDataHome`, real "Forecast Date"/"Valid upto" fields confirmed in
+  the HTML) -- not yet ingested into the app, just verified reachable.
+- **Google Fonts family names, verified before use, one was wrong as
+  written:** "Archivo Condensed" is not a real family -- Archivo is a
+  variable font and "condensed" is its `wdth` axis, requested as
+  `family=Archivo:ital,wdth,wght@0,75,700` and applied via CSS
+  `font-stretch: condensed`, not a separate `font-family` name. "Noto
+  Sans Tamil UI" (which sounded like it might be an OS-only naming
+  convention) is in fact a real, distinct Google Fonts family --
+  confirmed by fetching its actual `@font-face` CSS.
+- **A real bug caught before shipping:** the first draft of the Douglas
+  sea scale table in `web/index.html` was off by one band -- it had the
+  2.5 m boundary sitting between "Slight" and "Moderate" instead of the
+  real "Moderate" and "Rough", which would have directly contradicted
+  the whole point of the feature (that `WAVE_HARD_DENY_M` sits exactly
+  on the real Douglas 4/5 boundary). Caught by re-checking the rendered
+  band name for a known input (3.1 m) against the WMO table before
+  trusting the first draft.

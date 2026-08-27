@@ -26,11 +26,13 @@ from data.fetch import (
     CACHE_DIR,
     ERDDAPBathymetryFetcher,
     ERDDAPChlorophyllFetcher,
+    MarineRegionsIMBLFetcher,
     OpenMeteoForecastFetcher,
     OpenMeteoMarineFetcher,
     fetch_all,
     write_bathymetry_cache,
     write_cache,
+    write_imbl_cache,
 )
 from orca.planner import load_cached_observations
 
@@ -58,6 +60,10 @@ requires_network = pytest.mark.skipif(
 requires_bathymetry_network = pytest.mark.skipif(
     not _network_reachable(host="oceanwatch.pifsc.noaa.gov"),
     reason="ETOPO ERDDAP host unreachable from this sandbox",
+)
+
+requires_marineregions_network = pytest.mark.skipif(
+    not _network_reachable(host="geo.vliz.be"), reason="Marine Regions WFS host unreachable from this sandbox"
 )
 
 
@@ -377,3 +383,74 @@ def test_real_bathymetry_fetch_integration():
     assert min(elevations) < 0  # some real seafloor in-box
     assert max(elevations) > -8000
     assert min(elevations) > -11000
+
+
+# ---------------------------------------------------------------------------
+# MarineRegionsIMBLFetcher -- the real India-Sri Lanka maritime boundary
+# (IMBL), for a real distance-to-boundary geofence check. Same shape as
+# bathymetry: reference geometry, not a MarineObservation, cached to its
+# own subdirectory so it can't collide with load_cached_observations().
+# ---------------------------------------------------------------------------
+
+def test_imbl_fetcher_parses_real_fixture_into_segments():
+    raw = json.loads((FIXTURES / "real_marineregions_imbl_response.json").read_text())
+    segments = MarineRegionsIMBLFetcher()._parse_geojson(raw)
+
+    assert len(segments) == 4  # 4 real treaty-line features in the fixture
+    for seg in segments:
+        assert len(seg) >= 2
+        for lat, lon in seg:
+            # Sanity bounds for this boundary's real extent -- catches an
+            # accidental (lat, lon) vs (lon, lat) swap, a classic GeoJSON bug.
+            assert 0 < lat < 15
+            assert 70 < lon < 85
+
+
+def test_imbl_fetcher_build_url_uses_cql_filter():
+    fetcher = MarineRegionsIMBLFetcher()
+    params = fetcher._build_params()
+    assert params["typeName"] == "eez_boundaries"
+    assert "Sri Lanka - India" in params["CQL_FILTER"]
+
+
+def test_imbl_fetcher_raises_not_fabricates_on_zero_segments(monkeypatch):
+    class _FakeResponse:
+        url = "https://example.test/wfs?empty"
+
+        def json(self):
+            return {"type": "FeatureCollection", "features": []}
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr("data.fetch.requests.get", lambda *a, **k: _FakeResponse())
+    with pytest.raises(ValueError):
+        MarineRegionsIMBLFetcher().fetch()
+
+
+def test_write_imbl_cache_is_not_swept_by_load_cached_observations(tmp_path):
+    raw = json.loads((FIXTURES / "real_marineregions_imbl_response.json").read_text())
+    segments = MarineRegionsIMBLFetcher()._parse_geojson(raw)
+    boundary = {
+        "source": MarineRegionsIMBLFetcher.SOURCE_NAME,
+        "provenance": "https://example.test/provenance",
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "segments": segments,
+    }
+    write_imbl_cache(boundary, cache_dir=tmp_path / "imbl")
+
+    raw_obs = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
+    obs = OpenMeteoMarineFetcher()._parse_point(raw_obs, ZONE_A, datetime.now(timezone.utc))
+    write_cache("Open-Meteo Marine", obs, cache_dir=tmp_path)
+
+    loaded = load_cached_observations(cache_dir=tmp_path)  # must not raise
+    assert len(loaded) == len(obs)
+
+
+@requires_marineregions_network
+@pytest.mark.integration
+def test_real_imbl_fetch_integration():
+    boundary = MarineRegionsIMBLFetcher().fetch()
+    assert len(boundary["segments"]) > 0
+    total_points = sum(len(seg) for seg in boundary["segments"])
+    assert total_points > 10  # the real boundary is a multi-point treaty line, not a stub

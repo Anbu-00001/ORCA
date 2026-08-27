@@ -97,6 +97,28 @@ is in progress"). This needs a human with institutional credentials —
 not something to automate. Not on ORCA's critical path either way, since
 the adapter layer is source-agnostic by design.
 
+### 10. Find IMD's actual API key process
+`api.imd.gov.in` (coastal bulletin, cyclone track/wind/cone, lightning
+nowcast — a real, valuable, India-specific source) requires an API key on
+every single endpoint, including the most basic one. Confirmed by testing
+directly, not assumed. The public reference page
+(`api.imd.gov.in/public/api_reference.html`) documents every endpoint but
+contains **zero** mention of how to actually get a key — no signup link,
+no contact email, no form. This needs a human to either find an
+undocumented registration path or contact IMD directly. See SCRATCH.md
+for exactly what was checked.
+
+### 11. Fix INCOIS ERDDAP's TLS chain (or route around it)
+`erddap.incois.gov.in` — India's own ERDDAP, the biggest real-data win
+available — is live and genuinely INCOIS-owned (verified cert subject),
+but the server doesn't send its GlobalSign intermediate certificate, so
+standard TLS verification fails. Do **not** "fix" this with
+`verify=False` in any fetcher — that's a real security regression, not a
+workaround. Proper fix: bundle GlobalSign's intermediate cert explicitly
+(couldn't fetch it from this sandbox — `secure.globalsign.com` was itself
+unreachable) and pass it as `requests.get(..., verify=<bundle path>)`,
+or report the misconfiguration to INCOIS. See SCRATCH.md.
+
 ### 10. Sleep
 War plan S10 stages this deliberately: presenter and QA sleep a full
 block, operators stagger. Not a joke item — it's in the plan for a

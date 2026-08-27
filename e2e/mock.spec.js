@@ -16,6 +16,18 @@ test.describe('frontend in mock mode', () => {
     await expect(page.getByTestId('answer-text')).toContainText('Karaikal');
   });
 
+  test('Douglas ruler renders the real wave-height evidence with the correct band', async ({ page }) => {
+    // mock_response.json's wave_height_m is 3.1 -- above the 2.5m hard-deny
+    // line, so this must land in Douglas band 5 (Rough, per WMO's 2.50-4.00m)
+    // and show the "ORCA stops here" note.
+    const ruler = page.getByTestId('douglas-ruler');
+    await expect(ruler).toContainText('3.1 m');
+    await expect(ruler).toContainText('Douglas 5 Rough');
+    await expect(ruler).toContainText('ORCA stops here');
+    await expect(page.locator('.ruler-deny-line')).toBeAttached();
+    await expect(page.locator('.ruler-marker')).toBeAttached();
+  });
+
   test('shows the amber override banner because overridden is non-empty', async ({ page }) => {
     const banner = page.getByTestId('override-banner');
     await expect(banner).toBeVisible();
@@ -40,6 +52,19 @@ test.describe('frontend in mock mode', () => {
 
   test('map container is present', async ({ page }) => {
     await expect(page.getByTestId('map')).toBeAttached();
+  });
+
+  test('palette switch changes data-palette and persists across reload', async ({ page }) => {
+    await expect(page.locator('html')).toHaveAttribute('data-palette', 'day');
+    await expect(page.getByTestId('palette-day')).toHaveClass(/active/);
+
+    await page.getByTestId('palette-night').click();
+    await expect(page.locator('html')).toHaveAttribute('data-palette', 'night');
+    await expect(page.getByTestId('palette-night')).toHaveClass(/active/);
+    await expect(page.getByTestId('palette-day')).not.toHaveClass(/active/);
+
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-palette', 'night');
   });
 
   test('Tamil sample button fills the query input with a known transcription', async ({ page }) => {

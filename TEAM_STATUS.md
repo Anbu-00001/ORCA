@@ -1,7 +1,7 @@
 # ORCA — Team Status
 
 **For:** other ICARUS teammates and their agents/assistants working on this repo.
-**Last updated:** 2026-08-27, real zones + basemap overhaul (the 4 mock "Zone A/B/C/D" points are gone).
+**Last updated:** 2026-08-27, real IMBL geofence + Douglas sea scale + three-palette design system.
 **Read this before touching the repo.** It tells you what's real, what's
 verified, what's still a manual/human job, and where not to step.
 
@@ -21,9 +21,26 @@ risk columns) — see "3D visualizations" below. **The 4 mock "Zone
 A/B/C/D" points are gone**, replaced by 10 real, named, Wikipedia-sourced
 Tamil Nadu coastal fishing harbours spanning the whole coast, and the map
 basemap changed from generic demo tiles to a real, labeled OpenStreetMap
-style — see "Real zones" below. Backend suite is **114 pytest tests, all
-green** (excluding `orca/mcp_server.py`, still broken — see below,
-unchanged); e2e is **20 Playwright tests, all green**.
+style — see "Real zones" below. `geofence_agent` now also checks real
+distance to the actual India-Sri Lanka maritime boundary (IMBL), and the
+UI ships a real WMO Douglas sea scale ruler plus a three-palette
+(Day/Dusk/Night) design system inspired by IHO S-52 chart convention —
+see "IMBL geofence + design system" below. Backend suite is **124 pytest
+tests, all green** (excluding `orca/mcp_server.py`, still broken — see
+below, unchanged); e2e is **22 Playwright tests, all green**.
+
+Two teammate-sourced research documents (`ORCA_AUTHENTICITY_UPGRADE.md`-
+style data/feature plan, and a design-system spec) proposed a large body
+of further work — real Indian data sources (INCOIS ERDDAP, IMD, MOSDAC),
+an LLM planning/agentic layer, multi-turn conversation, vessel-class
+thresholds, a field-condition mobile redesign, and more. **Only the
+tractable, zero-new-architecture-risk slice of both is done** (see
+below); the rest is a prioritized backlog, not started — see "What's
+proposed but not built" near the end of this file. The LLM/agentic layer
+specifically needs your explicit go-ahead before anyone builds it: it's a
+new paid dependency and it's the first thing that would put a live
+network call in `orca/api.py`'s request path, which every test in this
+repo currently assumes never happens.
 
 **⚠️ `orca/mcp_server.py` still does not import** (unrelated to the 3D
 work below): a parallel edit broke it against the installed `mcp` package,
@@ -310,6 +327,114 @@ attempted. Protected Planet (WDPA) requires an API token for the Gulf of
 Mannar's *exact* official boundary polygon — the Krusadai Island box
 above is a real, verifiable point-based approximation, not that official
 shape. All of this is written up in more detail in `SCRATCH.md`.
+
+---
+
+## IMBL geofence + design system (real Indian maritime data, real chart convention)
+
+**Real India-Sri Lanka maritime boundary (IMBL) geofencing.** New
+`MarineRegionsIMBLFetcher` in `data/fetch.py` pulls the real 4-segment
+India-Sri Lanka treaty boundary line from Marine Regions (Flanders Marine
+Institute / IOC-UNESCO — the standard worldwide reference for this),
+cached to `data/cache/imbl/` (its own subdirectory, same
+not-swept-by-`load_cached_observations()` reasoning as bathymetry).
+`geofence_agent` in `orca/agents.py` now computes real distance from the
+queried point to the nearest point on that boundary and escalates:
+≤10km advisory (risk 0.3), ≤5km warning (risk 0.6), ≤2km urgent — hard
+deny. **This is proximity-based, not a side-of-line crossing test** —
+robustly determining which side of a multi-segment treaty line a point
+falls on is a harder problem than this prototype takes on, and getting it
+wrong could wrongly clear a boat that's actually crossed. Being this
+close to an international boundary is, on its own, a legitimate reason to
+stop — a documented, honest simplification, not a claim of exact crossing
+detection. None of the 10 real `ZONES` themselves are anywhere near the
+IMBL (closest is Rameswaram at ~23km) — this only engages for a
+custom-coordinate query near the actual strait, which the UI already
+supports (free-text lat/lon fields, not locked to the 10 named zones).
+
+**Douglas sea scale.** `WAVE_HARD_DENY_M = 2.5` in `orca/agents.py` isn't
+an arbitrary cutoff — it's the real WMO/Douglas scale boundary between
+degree 4 "Moderate" and degree 5 "Rough" (the same vocabulary IMD's own
+Coastal Bulletin uses). `web/index.html` now renders a real Douglas ruler
+(0-6, correct WMO band boundaries) with a marker on the latest
+`wave_height_m` evidence and a visible line at the real 2.5m deny
+threshold — see `#douglas-ruler`. **Caught a real bug before shipping
+this:** the first draft had the bands off by one (2.5m landing between
+"Slight"/"Moderate" instead of the real "Moderate"/"Rough" — exactly the
+detail that makes this feature meaningful) — caught by checking a known
+input's rendered band name against the WMO table, not by trusting the
+first draft. If you touch `DOUGLAS_SCALE` in `web/index.html`, re-check
+it the same way.
+
+**Three-palette design system (Day/Dusk/Night).** IHO S-52 requires
+certified marine chart displays to carry three calibrated colour tables
+— Day, Dusk, and Night — because bright UI light at night destroys a
+watchkeeper's dark adaptation. `web/index.html` ships the same three,
+switchable via visible header buttons (not buried in settings),
+persisted to `localStorage`, applied via a `data-palette` attribute set
+*before* first paint (a tiny inline `<script>` at the very top of
+`<head>`, to avoid a flash of the wrong palette). Colours are drawn from
+real navigation-light/chart convention, not invented: starboard green for
+GO, port red for DO NOT GO, chart magenta for SAFER ALTERNATIVE and
+geofence warnings. The existing CSS custom property *names*
+(`--accent`, `--danger`, `--amber-border`, etc.) were kept rather than
+mass-renamed to the newer semantic names a design document proposed
+(`--go`/`--stop`/`--caution`) — same visual/conceptual result, far lower
+risk than a mechanical rename across every rule in the stylesheet.
+
+**Typography.** Archivo (requested with `wdth` axis, NOT a separate
+"Archivo Condensed" family — verify this before touching the Google
+Fonts URL, see SCRATCH.md) for instrument-style labels; Public Sans for
+body text; IBM Plex Mono for anything that's transmissible safety-message
+data (coordinates, evidence values) — nothing else uses monospace, that's
+a deliberate rule, not a leftover default; Hind Madurai / Noto Sans Tamil
+UI for Tamil text (`[lang="ta"]`, line-height 1.8). All 4 families
+verified as real, resolvable Google Fonts families before use.
+
+**Verified, not built:** INCOIS's own ERDDAP (the single best real-data
+upgrade available) and IMD's marine/cyclone/lightning API are both
+blocked by real, specific infrastructure issues, not skipped casually —
+see MANUAL_TASKS.md items 10-11 and SCRATCH.md for exactly what was
+checked. Marine Regions and INCOIS's PFZ text advisory are confirmed
+live and auth-free but only the IMBL boundary has been wired into the app
+so far — ingesting the PFZ advisory itself as a cross-check source is
+real, valuable, unstarted work.
+
+---
+
+## What's proposed but not built (two teammate research docs)
+
+Two large research documents were dropped into this session: a
+data/feature authenticity plan and a design-system spec. Both are
+genuinely good — real endpoints, real domain research, not filler — and
+both propose far more than one pass can build. What's real above is the
+tractable slice; everything below is a prioritized backlog, not started:
+
+- **LLM/agentic planning layer** ("LLM proposes, policy disposes" —
+  a planner agent with tool-calling, an evidence-whitelist-constrained
+  explanation agent). Architecturally sound and compatible with
+  CLAUDE.md rule 4 (policy.py stays LLM-free either way), but it's a new
+  paid dependency and the first thing that would put a live network call
+  in `orca/api.py`'s request path — **get explicit sign-off before
+  building this**, don't just start.
+- Multi-turn conversation / session memory, language auto-detection
+  beyond the single Tamil sample phrase.
+- Vessel-class-dependent hazard thresholds (the design doc calls the
+  current single global `WAVE_HARD_DENY_M` "a correctness bug, not a
+  feature request" — a fair point, real future work, not attempted here).
+- Route planning / return-window advisory, multi-source
+  cross-validation/divergence reporting, historical cyclone back-test.
+- Field-condition mobile redesign (giant verdict card, press-and-hold
+  voice input, confidence-decay bar using the already-real
+  `confidence`/`freshness_min` fields), a real landing page, shore mode,
+  nearest-safe-landing-centre routing, departure ticket, catch log, peer
+  proximity, haptic feedback.
+- INCOIS PFZ advisory ingestion as an official cross-check source (data
+  confirmed reachable, not yet wired in — see above).
+
+None of this is silently dropped — it's listed here specifically so the
+next person (human or agent) doesn't have to re-derive the plan from
+scratch or wonder whether it was rejected.
 
 ---
 

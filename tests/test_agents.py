@@ -220,6 +220,65 @@ def test_geofence_empty_observations_does_not_fabricate_a_denial():
 
 
 # ---------------------------------------------------------------------------
+# geofence_agent + real IMBL (India-Sri Lanka maritime boundary) proximity.
+# A simple straight test segment (not real geometry -- see file docstring
+# convention: hand-built fixtures only to exercise a specific numeric
+# branch) at latitude 10.0N lets us place points at known approximate
+# distances south of it. ~111 km/degree of latitude is used to pick each
+# point comfortably inside one risk band, not at its exact edge, so this
+# doesn't become a floating-point boundary test.
+# ---------------------------------------------------------------------------
+
+_TEST_IMBL_SEGMENT = [[(10.0, 80.0), (10.0, 81.0)]]
+
+
+def test_geofence_far_from_imbl_is_clear():
+    obs = [_obs("wave_height_m", 0.5, "m", lat=9.0, lon=80.5)]  # ~111 km south
+    finding = geofence_agent(obs, imbl_segments=_TEST_IMBL_SEGMENT)
+    assert finding.hard_deny is False
+    assert finding.risk_level == 0.0
+
+
+def test_geofence_within_advisory_band_raises_risk_but_not_hard_deny():
+    obs = [_obs("wave_height_m", 0.5, "m", lat=9.93, lon=80.5)]  # ~7.8 km south
+    finding = geofence_agent(obs, imbl_segments=_TEST_IMBL_SEGMENT)
+    assert finding.hard_deny is False
+    assert 0.0 < finding.risk_level < 1.0
+    assert "IMBL" in finding.reason
+
+
+def test_geofence_within_urgent_band_hard_denies():
+    obs = [_obs("wave_height_m", 0.5, "m", lat=9.99, lon=80.5)]  # ~1.1 km south
+    finding = geofence_agent(obs, imbl_segments=_TEST_IMBL_SEGMENT)
+    assert finding.hard_deny is True
+    assert finding.risk_level == 1.0
+    assert "IMBL" in finding.reason
+
+
+def test_geofence_missing_imbl_data_does_not_fabricate_proximity():
+    """No cached boundary (fresh clone, data/fetch.py not run yet) must
+    degrade to "can't check that", never a fabricated safe/unsafe claim."""
+    obs = [_obs("wave_height_m", 0.5, "m", lat=9.99, lon=80.5)]
+    finding = geofence_agent(obs, imbl_segments=[])
+    assert finding.hard_deny is False
+    assert finding.risk_level == 0.0
+
+
+def test_geofence_mpa_and_imbl_risk_combine_as_the_worse_of_the_two():
+    from orca.agents import PROHIBITED_ZONE
+
+    lats = [v[0] for v in PROHIBITED_ZONE]
+    lons = [v[1] for v in PROHIBITED_ZONE]
+    inside_mpa = (sum(lats) / len(lats), sum(lons) / len(lons))
+
+    obs = [_obs("wave_height_m", 0.5, "m", lat=inside_mpa[0], lon=inside_mpa[1])]
+    # Far from the test IMBL segment -- the MPA hit alone must still hard-deny.
+    finding = geofence_agent(obs, imbl_segments=_TEST_IMBL_SEGMENT)
+    assert finding.hard_deny is True
+    assert finding.risk_level == 1.0
+
+
+# ---------------------------------------------------------------------------
 # Every agent returns a Finding with risk_level in [0,1] (enforced by
 # Finding's own validator) for a range of real-shaped inputs.
 # ---------------------------------------------------------------------------

@@ -420,6 +420,79 @@ def write_bathymetry_cache(grid: dict, cache_dir: Path) -> Path:
     return path
 
 
+class MarineRegionsIMBLFetcher:
+    """The real India-Sri Lanka maritime boundary (IMBL), from Marine
+    Regions (Flanders Marine Institute / IOC-UNESCO) -- the standard
+    reference used worldwide for EEZ/boundary geometry, not an ORCA
+    approximation. Like bathymetry, this is real reference geometry, not
+    a MarineObservation: orca/agents.py's geofence_agent reads the cached
+    segments directly to compute a real distance-to-boundary, rather than
+    this flowing through orca/policy.py as "evidence".
+
+    Only the 4 real "Sri Lanka - India" treaty-line segments are kept
+    (not the full global eez_boundaries layer) -- verified by hand
+    against the fetched geometry that these cover Gulf of Mannar and
+    Palk Bay/Strait, i.e. exactly the water off the Tamil Nadu coast in
+    data/fetch.py's ZONES (see SCRATCH.md for the verification).
+    """
+
+    BASE_URL = "https://geo.vliz.be/geoserver/MarineRegions/wfs"
+    SOURCE_NAME = "Marine Regions (Flanders Marine Institute / IOC-UNESCO) -- India-Sri Lanka IMBL"
+    LINE_NAME = "Sri Lanka - India"
+
+    def fetch(self) -> dict:
+        params = self._build_params()
+        resp = requests.get(self.BASE_URL, params=params, timeout=30)
+        resp.raise_for_status()
+
+        segments = self._parse_geojson(resp.json())
+        if not segments:
+            raise ValueError(
+                "Marine Regions WFS returned no India-Sri Lanka IMBL segments -- "
+                "refusing to cache an empty boundary as if it were real geometry"
+            )
+
+        return {
+            "source": self.SOURCE_NAME,
+            "provenance": resp.url,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "segments": segments,
+        }
+
+    def _build_params(self) -> dict:
+        return {
+            "service": "WFS",
+            "version": "1.0.0",
+            "request": "GetFeature",
+            "typeName": "eez_boundaries",
+            "outputformat": "application/json",
+            "CQL_FILTER": f"line_name='{self.LINE_NAME}'",
+        }
+
+    def _parse_geojson(self, data: dict) -> list[list[tuple[float, float]]]:
+        segments = []
+        for feature in data.get("features", []):
+            for line in feature.get("geometry", {}).get("coordinates", []):
+                # GeoJSON is [lon, lat]; we store (lat, lon) to match
+                # MarineObservation's field order everywhere else.
+                segments.append([(pt[1], pt[0]) for pt in line])
+        return segments
+
+
+def write_imbl_cache(boundary: dict, cache_dir: Path) -> Path:
+    """Writes to its own subdirectory (data/cache/imbl/), for the same
+    reason write_bathymetry_cache() does: load_cached_observations()
+    globs data/cache/*.json non-recursively and would choke on this
+    dict-with-a-`segments`-key shape if it landed next to the
+    point-observation files.
+    """
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / "imbl_boundary.json"
+    path.write_text(__import__("json").dumps(boundary, indent=2))
+    return path
+
+
 def fetch_all(points: list[dict] | None = None) -> tuple[dict[str, list[MarineObservation]], dict[str, str]]:
     """Run every fetcher. Returns (results_by_source, errors_by_source).
 
@@ -479,9 +552,9 @@ def main() -> int:
     for source_name, error in errors.items():
         print(f"FAIL  {source_name}: {error}", file=sys.stderr)
 
-    # Bathymetry is map context, not advisory evidence (see
-    # ERDDAPBathymetryFetcher docstring) -- fetched and reported
-    # separately, and its failure never fails the advisory-critical run
+    # Bathymetry and IMBL boundary are map/geofence context, not advisory
+    # evidence (see their fetcher docstrings) -- fetched and reported
+    # separately, and their failure never fails the advisory-critical run
     # above or below (returned exit code still reflects `results`/`errors`
     # from the point fetchers only).
     try:
@@ -490,6 +563,14 @@ def main() -> int:
         print(f"PASS  {ERDDAPBathymetryFetcher.SOURCE_NAME}: {len(grid['points'])} grid points -> {path}")
     except Exception as exc:  # noqa: BLE001 — logged loudly, never swallowed
         print(f"FAIL  {ERDDAPBathymetryFetcher.SOURCE_NAME}: {exc}", file=sys.stderr)
+
+    try:
+        boundary = MarineRegionsIMBLFetcher().fetch()
+        path = write_imbl_cache(boundary, cache_dir=CACHE_DIR / "imbl")
+        n_points = sum(len(seg) for seg in boundary["segments"])
+        print(f"PASS  {MarineRegionsIMBLFetcher.SOURCE_NAME}: {n_points} boundary points -> {path}")
+    except Exception as exc:  # noqa: BLE001 — logged loudly, never swallowed
+        print(f"FAIL  {MarineRegionsIMBLFetcher.SOURCE_NAME}: {exc}", file=sys.stderr)
 
     return 1 if errors and not results else 0
 

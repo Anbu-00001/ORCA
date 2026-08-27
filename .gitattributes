@@ -1,9 +1,11 @@
-# Exclude Graphify outputs and cache data from GitHub language statistics
+# Exclude Graphify generated files, HTML reports, and cache data from GitHub language statistics
 graphify-out/** linguist-detectable=false
 graphify-out/** linguist-vendored=true
+graphify-out/** linguist-generated=true
 graphify-out/** linguist-documentation=true
-graphify-out/*.html linguist-detectable=false
-graphify-out/*.html linguist-vendored=true
-
+graphify-out/graph.html linguist-detectable=false
+graphify-out/graph.html linguist-vendored=true
+graphify-out/graph.html linguist-generated=true
+graphify-out/graph.html linguist-documentation=true
 data/cache/** linguist-detectable=false
 data/cache/** linguist-vendored=true

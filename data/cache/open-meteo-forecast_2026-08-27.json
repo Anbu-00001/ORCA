@@ -6,10 +6,10 @@
     "lat": 13.1251,
     "lon": 80.2955,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -19,10 +19,10 @@
     "lat": 13.1251,
     "lon": 80.2955,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -32,10 +32,10 @@
     "lat": 13.1251,
     "lon": 80.2955,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -45,10 +45,10 @@
     "lat": 13.1251,
     "lon": 80.2955,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=13.1251&longitude=80.2955&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -58,10 +58,10 @@
     "lat": 11.75,
     "lon": 79.75,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.75&longitude=79.75&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -71,10 +71,10 @@
     "lat": 11.75,
     "lon": 79.75,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.75&longitude=79.75&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -84,10 +84,10 @@
     "lat": 11.75,
     "lon": 79.75,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.75&longitude=79.75&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -97,10 +97,10 @@
     "lat": 11.75,
     "lon": 79.75,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=11.75&longitude=79.75&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -110,10 +110,10 @@
     "lat": 10.9327,
     "lon": 79.8319,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.9327&longitude=79.8319&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -123,10 +123,10 @@
     "lat": 10.9327,
     "lon": 79.8319,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.9327&longitude=79.8319&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -136,10 +136,10 @@
     "lat": 10.9327,
     "lon": 79.8319,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.9327&longitude=79.8319&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -149,10 +149,10 @@
     "lat": 10.9327,
     "lon": 79.8319,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.9327&longitude=79.8319&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -162,10 +162,10 @@
     "lat": 10.7672,
     "lon": 79.8449,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.7672&longitude=79.8449&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -175,10 +175,10 @@
     "lat": 10.7672,
     "lon": 79.8449,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.7672&longitude=79.8449&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -188,10 +188,10 @@
     "lat": 10.7672,
     "lon": 79.8449,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.7672&longitude=79.8449&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -201,10 +201,10 @@
     "lat": 10.7672,
     "lon": 79.8449,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.7672&longitude=79.8449&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -214,10 +214,10 @@
     "lat": 10.2845,
     "lon": 79.8241,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.2845&longitude=79.8241&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -227,10 +227,10 @@
     "lat": 10.2845,
     "lon": 79.8241,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.2845&longitude=79.8241&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -240,10 +240,10 @@
     "lat": 10.2845,
     "lon": 79.8241,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.2845&longitude=79.8241&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -253,10 +253,10 @@
     "lat": 10.2845,
     "lon": 79.8241,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=10.2845&longitude=79.8241&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -266,10 +266,10 @@
     "lat": 9.28,
     "lon": 79.12,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.28&longitude=79.12&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -279,10 +279,10 @@
     "lat": 9.28,
     "lon": 79.12,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.28&longitude=79.12&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -292,10 +292,10 @@
     "lat": 9.28,
     "lon": 79.12,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.28&longitude=79.12&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -305,10 +305,10 @@
     "lat": 9.28,
     "lon": 79.12,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.28&longitude=79.12&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -318,10 +318,10 @@
     "lat": 9.2811,
     "lon": 79.3151,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.2811&longitude=79.3151&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -331,10 +331,10 @@
     "lat": 9.2811,
     "lon": 79.3151,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.2811&longitude=79.3151&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -344,10 +344,10 @@
     "lat": 9.2811,
     "lon": 79.3151,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.2811&longitude=79.3151&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -357,10 +357,10 @@
     "lat": 9.2811,
     "lon": 79.3151,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=9.2811&longitude=79.3151&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -370,10 +370,10 @@
     "lat": 8.473,
     "lon": 78.1215,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.473&longitude=78.1215&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -383,10 +383,10 @@
     "lat": 8.473,
     "lon": 78.1215,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.473&longitude=78.1215&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -396,10 +396,10 @@
     "lat": 8.473,
     "lon": 78.1215,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.473&longitude=78.1215&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -409,10 +409,10 @@
     "lat": 8.473,
     "lon": 78.1215,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.473&longitude=78.1215&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -422,10 +422,10 @@
     "lat": 8.0883,
     "lon": 77.5385,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.0883&longitude=77.5385&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -435,10 +435,10 @@
     "lat": 8.0883,
     "lon": 77.5385,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.0883&longitude=77.5385&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -448,10 +448,10 @@
     "lat": 8.0883,
     "lon": 77.5385,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.0883&longitude=77.5385&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -461,10 +461,10 @@
     "lat": 8.0883,
     "lon": 77.5385,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.0883&longitude=77.5385&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -474,10 +474,10 @@
     "lat": 8.1786,
     "lon": 77.2561,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.1786&longitude=77.2561&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -487,10 +487,10 @@
     "lat": 8.1786,
     "lon": 77.2561,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.1786&longitude=77.2561&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -500,10 +500,10 @@
     "lat": 8.1786,
     "lon": 77.2561,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.1786&longitude=77.2561&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   },
   {
@@ -513,10 +513,10 @@
     "lat": 8.1786,
     "lon": 77.2561,
     "valid_time": "2026-08-27T00:00:00+00:00",
-    "fetched_at": "2026-08-27T05:28:53.942370+00:00",
+    "fetched_at": "2026-08-27T06:00:18.704666+00:00",
     "source": "Open-Meteo Forecast",
     "confidence": 0.9,
-    "freshness_min": 328,
+    "freshness_min": 360,
     "provenance": "https://api.open-meteo.com/v1/forecast?latitude=8.1786&longitude=77.2561&hourly=wind_speed_10m,wind_gusts_10m,precipitation,rain&timezone=UTC&forecast_days=2"
   }
 ]
