@@ -25,7 +25,14 @@ let oceanDiorama = null;
 window.addEventListener("orca:recommendation", (event) => {
   latestRecommendation = event.detail;
   if (reasoningGraph) reasoningGraph.render(latestRecommendation);
-  if (oceanDiorama) oceanDiorama.setZoneSummaries(latestRecommendation.zone_summaries || []);
+  if (oceanDiorama) {
+    oceanDiorama.setZoneSummaries(latestRecommendation.zone_summaries || []);
+    // A new answer is new evidence, so the sandbox re-seeds onto it and
+    // any held hypothesis is dropped. Silently keeping a stale
+    // counterfactual on top of a fresh reading is exactly the confusion
+    // P8 exists to prevent.
+    seedSandbox();
+  }
 });
 
 async function loadBathymetry() {
@@ -62,14 +69,110 @@ function ensureReasoningGraph() {
 function ensureOceanDiorama() {
   if (!oceanDiorama) {
     oceanDiorama = new OceanDiorama(document.getElementById("ocean3d-container"));
+    oceanDiorama.onWaveChange(renderSandbox);
     if (latestBathymetry) {
       oceanDiorama.setBathymetry(latestBathymetry);
       if (latestRecommendation) oceanDiorama.setZoneSummaries(latestRecommendation.zone_summaries || []);
     }
+    seedSandbox();
   } else {
     oceanDiorama.start();
   }
   return oceanDiorama;
+}
+
+// ---------------------------------------------------------------------
+// Environment sandbox
+// ---------------------------------------------------------------------
+// The panel is a thin skin over OceanDiorama's wave state. It reads the
+// measured wave_height_m out of the current /ask response's evidence and
+// lets the user push it somewhere else; the sea redraws, the 2.5 m plane
+// stays put, and everything the user sees says which of the two they are
+// looking at.
+//
+// What this deliberately does NOT do: call /ask, mutate the verdict, or
+// touch the Douglas ruler. The advisory on the rail stays the advisory
+// for the measured sea state, so a hypothesis can never be mistaken for
+// one ORCA actually issued (CLAUDE.md rules 1 and 3).
+
+// Real WMO Douglas sea-state bands, the same scale index.html's ruler
+// draws. Labelling the slider position with the standard name is the
+// honest way to say "this is what you just asked for" without inventing
+// a number to describe it.
+const DOUGLAS_BANDS = [
+  { max: 0.1, name: "Calm (glassy)" },
+  { max: 0.5, name: "Smooth" },
+  { max: 1.25, name: "Slight" },
+  { max: 2.5, name: "Moderate" },
+  { max: 4.0, name: "Rough" },
+  { max: 6.0, name: "Very rough" },
+  { max: Infinity, name: "High" },
+];
+
+function douglasName(waveM) {
+  return DOUGLAS_BANDS.find((b) => waveM <= b.max).name;
+}
+
+function seedSandbox() {
+  const panel = document.getElementById("sandbox-panel");
+  if (!oceanDiorama || !panel) return;
+  const seeded = oceanDiorama.setWaveFromEvidence(
+    (latestRecommendation && latestRecommendation.evidence) || []
+  );
+  // No wave reading in this answer means there is nothing to perturb.
+  // An absent value is correct; a placeholder would not be.
+  panel.classList.toggle("visible", seeded);
+  if (!seeded) return;
+  const slider = document.getElementById("sandbox-wave");
+  if (slider) slider.value = String(oceanDiorama.waveState.heightM);
+}
+
+function renderSandbox(state) {
+  const panel = document.getElementById("sandbox-panel");
+  if (!panel) return;
+  const flag = document.getElementById("sandbox-flag");
+  const note = document.getElementById("sandbox-note");
+  const resetBtn = document.getElementById("sandbox-reset");
+
+  document.getElementById("sandbox-value").textContent = state.heightM.toFixed(1);
+  document.getElementById("sandbox-band").textContent = douglasName(state.heightM);
+
+  panel.classList.toggle("is-hypothetical", state.hypothetical);
+  flag.className = state.hypothetical ? "hypothetical" : "observed";
+  flag.textContent = state.hypothetical ? "HYPOTHETICAL" : "OBSERVED";
+  resetBtn.classList.toggle("hidden", !state.hypothetical);
+
+  if (!state.hypothetical) {
+    note.textContent =
+      `Measured sea state — ${state.periodS.toFixed(1)} s period, ` +
+      `from ${Math.round(state.directionDeg)}°. Drag to explore another.`;
+    return;
+  }
+
+  const base = state.baseline;
+  const crossed =
+    state.heightM > 2.5 !== base.heightM > 2.5
+      ? state.heightM > 2.5
+        ? " Crosses the 2.5 m hard-deny line."
+        : " Falls back under the 2.5 m hard-deny line."
+      : "";
+  note.textContent =
+    `Not measured. ${base.heightM.toFixed(1)} m → ${state.heightM.toFixed(1)} m.` + crossed;
+}
+
+function wireSandbox() {
+  const slider = document.getElementById("sandbox-wave");
+  const resetBtn = document.getElementById("sandbox-reset");
+  if (!slider || !resetBtn) return;
+
+  slider.addEventListener("input", () => {
+    if (oceanDiorama) oceanDiorama.setHypotheticalWaveHeight(parseFloat(slider.value));
+  });
+  resetBtn.addEventListener("click", () => {
+    if (!oceanDiorama) return;
+    oceanDiorama.resetWave();
+    slider.value = String(oceanDiorama.waveState.heightM);
+  });
 }
 
 function wireViewToggle() {
@@ -83,7 +186,10 @@ function wireViewToggle() {
     ocean3dEl.classList.add("visible");
     view3dBtn.classList.add("active");
     view2dBtn.classList.remove("active");
+    document.getElementById("ocean3d-legend")?.classList.add("visible");
+    document.getElementById("cam-bar")?.classList.add("visible");
     ensureOceanDiorama();
+    seedSandbox(); // re-seed on every open, not just first construction
   });
 
   view2dBtn.addEventListener("click", () => {
@@ -91,7 +197,23 @@ function wireViewToggle() {
     map2dLayer.classList.remove("hidden-view");
     view2dBtn.classList.add("active");
     view3dBtn.classList.remove("active");
-    if (oceanDiorama) oceanDiorama.stop();
+    // Leaving the 3D view drops any held hypothesis as well as hiding
+    // the panel, so coming back always starts on the measurement.
+    document.getElementById("sandbox-panel")?.classList.remove("visible");
+    document.getElementById("ocean3d-legend")?.classList.remove("visible");
+    document.getElementById("cam-bar")?.classList.remove("visible");
+    if (oceanDiorama) {
+      oceanDiorama.resetWave();
+      // Back to orbit before hiding: free cam's key listeners live on
+      // window, and they must not still be swallowing keystrokes once
+      // the 3D view is gone.
+      oceanDiorama.setCameraMode("orbit");
+      oceanDiorama.setAutoRotate(true);
+      document.getElementById("cam-free")?.classList.remove("active");
+      document.getElementById("cam-orbit")?.classList.add("active");
+      document.getElementById("cam-help")?.classList.add("hidden");
+      oceanDiorama.stop();
+    }
   });
 }
 
@@ -108,6 +230,51 @@ function wireReasoningToggle() {
   });
 }
 
+// Orbit is the default because it demos itself -- the scene turns on its
+// own with nobody touching it. Free cam is the deliberate opt-in for
+// actually flying the coast.
+function wireCameraBar() {
+  const orbitBtn = document.getElementById("cam-orbit");
+  const freeBtn = document.getElementById("cam-free");
+  const resetBtn = document.getElementById("cam-reset");
+  const help = document.getElementById("cam-help");
+  if (!orbitBtn || !freeBtn || !resetBtn) return;
+
+  function setMode(mode) {
+    if (!oceanDiorama) return;
+    oceanDiorama.setCameraMode(mode);
+    const free = mode === "free";
+    freeBtn.classList.toggle("active", free);
+    orbitBtn.classList.toggle("active", !free);
+    help.classList.toggle("hidden", !free);
+    // Auto-rotate would fight a user who is orbiting by hand, and means
+    // nothing in free mode.
+    oceanDiorama.setAutoRotate(!free);
+  }
+
+  orbitBtn.addEventListener("click", () => setMode("orbit"));
+  freeBtn.addEventListener("click", () => setMode("free"));
+  resetBtn.addEventListener("click", () => {
+    if (!oceanDiorama) return;
+    oceanDiorama.resetCamera();
+    setMode("orbit");
+    oceanDiorama.setAutoRotate(true);
+  });
+}
+
+function wireLegend() {
+  const legend = document.getElementById("ocean3d-legend");
+  const toggle = document.getElementById("legend-toggle");
+  if (!legend || !toggle) return;
+  toggle.addEventListener("click", () => {
+    const collapsed = legend.classList.toggle("collapsed");
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+  });
+}
+
 wireViewToggle();
 wireReasoningToggle();
+wireSandbox();
+wireLegend();
+wireCameraBar();
 loadBathymetry();

@@ -46,31 +46,45 @@
 }
 </script>
 <style>
-  /* Colour tokens borrowed from nautical chart convention (IHO S-52 /
-     Admiralty chart), not an invented palette -- see SCRATCH.md for the
-     reasoning. --accent/--danger/--amber-* are the original token names
-     (kept so the many rules below didn't need a risky mass rename);
-     their *values* now carry chart meaning: --accent = starboard green
-     (GO), --danger = port red (DO NOT GO), --amber-border = chart
-     magenta (the Admiralty convention for cautions/restricted features,
-     used here for SAFER ALTERNATIVE and geofence warnings).
-     --unknown is deliberately its own token: a missing observation is
-     never shown as a guessed colour. */
-  /* The four safety colours -- --accent (GO), --danger (DO NOT GO),
-     --amber-border (SAFER ALTERNATIVE / caution) and --unknown (CANNOT
-     ASSESS) -- are unchanged from the chart-convention values above and
-     must stay that way; the surrounding chrome is what got brighter.
-     --marine is the new *non-semantic* brand colour (header, links,
-     primary buttons, view toggles). It exists precisely so that chrome
-     stops borrowing starboard green: in this app green means GO and
-     nothing else. */
+  /* ============================================================
+     ORCA — "Signal Mast" visual direction.
+
+     Indian ports hoist a numbered storm-warning cone on a harbour
+     mast; a fisherman reads it from the beach and decides before he
+     is close enough to read words. That is the register this page is
+     in, and it is why the verdict is not a badge here: it is the
+     ground. #answer-card floods with the safety colour and sets the
+     action in Archivo condensed at display size, because this is read
+     pre-dawn, on a phone, in glare, by someone who may not read
+     English fluently.
+
+     The four safety colours below are unchanged chart convention
+     (IHO S-52 / Admiralty): --accent starboard green (GO), --danger
+     port red (DO NOT GO), --amber-border chart magenta (SAFER
+     ALTERNATIVE / caution), --unknown grey (CANNOT ASSESS). They are
+     the small-type colours and must stay exactly as they are.
+
+     The --flood-* tokens are their large-field counterparts: the same
+     four hues shaded for AA contrast against white ink when they fill
+     half a viewport, the same move #mock-mode-banner already makes
+     when it inverts chart magenta into a solid band. They are defined
+     per palette, which is the point -- in Night they are near-black,
+     because S-52's Night table exists so a bridge keeps its dark
+     adaptation. A flooding red verdict at 3am would destroy the thing
+     the palette is for.
+
+     --brass is the one new non-semantic token: instrument bezel and
+     tick colour, for horizon rules and scale numerals. It is never
+     used to state a verdict.
+     ============================================================ */
+
   :root, :root[data-palette="day"] {
-    --ink: #0d2733;
-    --paper: #eef7fb;      /* chart white -- deep water, in coastal daylight */
+    --ink: #10242c;
+    --paper: #e9eeec;      /* Admiralty chart buff -- grey-green, not blue */
     --panel: #ffffff;
-    --card-bg: #f4fafd;    /* sea mist */
-    --line: #d3e4ec;
-    --muted: #4d6773;
+    --card-bg: #f2f6f5;
+    --line: #c9d5d2;
+    --muted: #566a70;
     --accent: #007f3f;     /* starboard */
     --accent-bg: #e1f3e8;
     --danger: #c4161c;     /* port */
@@ -82,23 +96,28 @@
     --marine: #0a5d76;
     --marine-soft: #e6f3f8;
     --on-marine: #ffffff;
-    --header-bg: linear-gradient(120deg, #06455a 0%, #0a5d76 55%, #11798f 100%);
-    --header-ink: #ffffff;
-    --header-muted: #b7dbe8;
-    --header-line: rgba(255, 255, 255, 0.24);
-    --header-chip: rgba(255, 255, 255, 0.13);
-    --header-active-bg: #ffffff;
-    --header-active-ink: #06455a;
-    --aside-bg: linear-gradient(180deg, #f8fcfe 0%, #eaf5fa 100%);
-    --shadow-card: 0 1px 2px rgba(9, 52, 68, 0.05), 0 6px 16px rgba(9, 52, 68, 0.07);
-    --shadow-bar: 0 -2px 14px rgba(9, 52, 68, 0.07);
+    --hull: #071c26;       /* header ground -- flat, no gradient */
+    --hull-ink: #eaf2f4;
+    --hull-muted: #7d9aa5;
+    --brass: #b8912f;
+    --header-line: rgba(255, 255, 255, 0.16);
+    --aside-bg: var(--panel);
+    --flood-go: #00693a;
+    --flood-deny: #ab1319;
+    --flood-alt: #9c005a;
+    --flood-unknown: #43535c;
+    --flood-ink: #ffffff;
+    --flood-ink-soft: rgba(255, 255, 255, 0.74);
+    --flood-rule: rgba(255, 255, 255, 0.28);
+    --shadow-card: 0 1px 2px rgba(9, 40, 52, 0.06);
+    --shadow-flood: 0 12px 34px rgba(9, 40, 52, 0.16);
   }
   :root[data-palette="dusk"] {
     --ink: #c6d2d8;
-    --paper: #1b2429;
-    --panel: #222e35;
-    --card-bg: #24313a;
-    --line: #3c4a52;
+    --paper: #141c21;
+    --panel: #1b262c;
+    --card-bg: #202c33;
+    --line: #33434b;
     --muted: #8c9ba3;
     --accent: #2e9460;
     --accent-bg: #23372c;
@@ -111,23 +130,28 @@
     --marine: #58a9c2;
     --marine-soft: #223640;
     --on-marine: #10202a;
-    --header-bg: linear-gradient(120deg, #17242b 0%, #1f313a 100%);
-    --header-ink: #d3dfe5;
-    --header-muted: #8c9ba3;
-    --header-line: #3c4a52;
-    --header-chip: #26343d;
-    --header-active-bg: #d3dfe5;
-    --header-active-ink: #17242b;
+    --hull: #0b1418;
+    --hull-ink: #cfdde3;
+    --hull-muted: #7b8e97;
+    --brass: #a98a3f;
+    --header-line: #2b383f;
     --aside-bg: var(--panel);
+    --flood-go: #1d5f3d;
+    --flood-deny: #8c2b28;
+    --flood-alt: #7d2d61;
+    --flood-unknown: #37454c;
+    --flood-ink: #e8f0f3;
+    --flood-ink-soft: rgba(232, 240, 243, 0.72);
+    --flood-rule: rgba(232, 240, 243, 0.22);
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-bar: 0 -2px 10px rgba(0, 0, 0, 0.3);
+    --shadow-flood: 0 12px 30px rgba(0, 0, 0, 0.4);
   }
   :root[data-palette="night"] {
-    /* S-52 logic: low-saturation red on black, so the eye keeps its dark
-       adaptation -- not a generic "dark mode" inversion. The brightening
-       pass deliberately stops at this palette's edge: --marine here is
-       another muted red, never a teal, and the gradients/shadows above
-       flatten to nothing. */
+    /* S-52 Night: low-saturation red on black so the eye keeps its
+       dark adaptation. The flood tokens here are near-black on
+       purpose -- the WORD carries the verdict at night, never a
+       bright field. This is the one place the direction gives ground,
+       and it gives it deliberately. */
     --ink: #a8534b;
     --paper: #000000;
     --panel: #120a0a;
@@ -145,17 +169,23 @@
     --marine: #94493f;
     --marine-soft: #1c0f0e;
     --on-marine: #1a0c0a;
-    --header-bg: #0a0505;
-    --header-ink: #a8534b;
-    --header-muted: #6e3833;
+    --hull: #060202;
+    --hull-ink: #a8534b;
+    --hull-muted: #6e3833;
+    --brass: #6b4a2a;
     --header-line: #2a1614;
-    --header-chip: #170d0d;
-    --header-active-bg: #3a1c19;
-    --header-active-ink: #a8534b;
     --aside-bg: var(--panel);
+    --flood-go: #0f2418;
+    --flood-deny: #33100e;
+    --flood-alt: #250f1c;
+    --flood-unknown: #1a1414;
+    --flood-ink: #b45c53;
+    --flood-ink-soft: rgba(180, 92, 83, 0.72);
+    --flood-rule: rgba(180, 92, 83, 0.24);
     --shadow-card: none;
-    --shadow-bar: none;
+    --shadow-flood: none;
   }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
   body {
@@ -170,23 +200,32 @@
   }
   [lang="ta"] { font-family: "Hind Madurai", "Noto Sans Tamil UI", "Public Sans", sans-serif; line-height: 1.8; }
   .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  /* Two type roles used often enough to name once. "Instrument" is
+     Archivo at condensed width -- signage and readouts, never prose.
+     "Data" is IBM Plex Mono and means a transmissible safety value:
+     a coordinate, a reading, a source. Nothing else takes mono. */
+  .brand h1, .palette-btn, #answer-action, #override-banner strong,
+  #douglas-ruler h3, #evidence-panel h3, .view-toggle-btn, footer button {
+    font-family: "Archivo", "Archivo Narrow", system-ui, sans-serif;
+    font-stretch: condensed;
+  }
+
   /* R-55: ?mock=1 renders web/mock_response.json through the same
-     renderRecommendation() a real advisory uses, so the result is otherwise
-     screenshot-identical to a live safety verdict. This bar is the one thing
-     that tells them apart, so it is a solid filled band at the very top of
-     the viewport -- body is `height: 100vh; overflow: hidden`, so as the
-     first flex child it can never scroll out of a screenshot, and no
-     cropping short of deliberate removal loses it.
-     Chart magenta (--amber-border/--amber-bg), inverted into a solid fill.
-     Deliberately NOT --accent: that is starboard green and means GO. Both
-     tokens exist in Day/Dusk/Night and are already a contrasting pair in
-     each, so this needs no per-palette colour of its own. */
+     renderRecommendation() a real advisory uses, so the result is
+     otherwise screenshot-identical to a live safety verdict. This bar
+     is the one thing that tells them apart, so it is a solid filled
+     band at the very top of the viewport -- body is `height: 100vh;
+     overflow: hidden`, so as the first flex child it can never scroll
+     out of a screenshot. Chart magenta, deliberately NOT starboard
+     green. */
   #mock-mode-banner {
     flex: 0 0 auto;
     background: var(--amber-border);
-    color: var(--amber-bg);
-    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
-    font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #ffffff;
+    font-family: "Archivo", "Archivo Narrow", system-ui, sans-serif;
+    font-stretch: condensed; font-weight: 700;
+    font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.1em;
     text-align: center;
     padding: 0.6rem 1.25rem;
   }
@@ -194,78 +233,102 @@
     display: block;
     font-family: "Public Sans", sans-serif; font-weight: 500;
     font-size: 0.75rem; text-transform: none; letter-spacing: 0.01em;
-    opacity: 0.9; margin-top: 0.15rem;
+    opacity: 0.92; margin-top: 0.15rem;
   }
-  /* Hidden by default: on the live path the element takes no space at all. */
   #mock-mode-banner.hidden { display: none; }
 
-  /* Keyboard focus is visible everywhere -- a demo laptop gets driven by
-     tab as often as by mouse. Overridden inside the (dark) header, where
-     the marine outline would disappear into the gradient. */
-  :focus-visible { outline: 2px solid var(--marine); outline-offset: 2px; border-radius: 4px; }
-  header :focus-visible { outline-color: var(--header-ink); }
+  /* Keyboard focus is visible everywhere -- a demo laptop gets driven
+     by tab as often as by mouse. Brass reads against every palette
+     ground including the flooded verdict, which marine did not. */
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; border-radius: 2px; }
 
+  /* ---------- Masthead ----------------------------------------
+     Flat hull black with a brass hairline at its foot, not a
+     gradient. The rule is the horizon this whole page hangs from. */
   header {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 0.8rem 1.35rem;
-    border-bottom: 1px solid var(--header-line);
-    background: var(--header-bg);
-    color: var(--header-ink);
+    padding: 0.7rem 1.4rem;
+    background: var(--hull);
+    color: var(--hull-ink);
+    border-bottom: 1px solid var(--brass);
   }
   .brand { display: flex; align-items: center; min-width: 0; }
-  /* Sun over two swells, drawn in currentColor so it inherits whichever
-     palette's header ink is active -- no second asset, no second colour
-     table to keep in step. */
-  .brand-mark { flex: 0 0 auto; width: 30px; height: 30px; margin-right: 0.65rem; }
+  .brand-mark { flex: 0 0 auto; width: 28px; height: 28px; margin-right: 0.7rem; color: var(--brass); }
   header h1 {
-    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
-    font-size: 1.32rem; margin: 0; letter-spacing: 0.03em; text-transform: uppercase;
-    color: var(--header-ink); white-space: nowrap;
+    font-weight: 700;
+    font-size: 1.5rem; margin: 0; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--hull-ink); white-space: nowrap;
   }
-  header h1 span { color: var(--header-muted); text-transform: none; font-weight: 400; letter-spacing: 0.01em; }
+  header h1 span {
+    color: var(--hull-muted); text-transform: uppercase; font-weight: 400;
+    letter-spacing: 0.1em; font-size: 0.62rem;
+  }
+  /* Square tabs with a brass underline, not pills. Certified chart
+     displays are required (IHO S-52) to carry Day/Dusk/Night colour
+     tables; ORCA carries the same three for the same reason, so the
+     switch stays visible rather than hiding in a settings menu. */
   .palette-switch {
-    display: flex; gap: 0.15rem; margin-left: 1.1rem;
-    padding: 0.2rem; background: var(--header-chip); border-radius: 999px;
+    display: flex; gap: 0; margin-left: 1.6rem;
+    border-left: 1px solid var(--header-line); padding-left: 1.1rem;
   }
   .palette-btn {
-    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 600;
-    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
-    padding: 0.3rem 0.65rem; border-radius: 999px; border: 1px solid transparent;
-    background: transparent; color: var(--header-muted); cursor: pointer;
-    transition: background-color 0.18s ease, color 0.18s ease;
+    font-weight: 600;
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.14em;
+    padding: 0.4rem 0.7rem 0.3rem; border: 0; border-bottom: 2px solid transparent;
+    background: transparent; color: var(--hull-muted); cursor: pointer;
+    transition: color 0.18s ease, border-color 0.18s ease;
   }
-  .palette-btn:hover { color: var(--header-ink); }
-  .palette-btn.active { background: var(--header-active-bg); color: var(--header-active-ink); }
+  .palette-btn:hover { color: var(--hull-ink); }
+  .palette-btn.active { color: var(--brass); border-bottom-color: var(--brass); }
+
   #offline-badge {
     flex: 0 0 auto;
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    padding: 0.35rem 0.8rem;
-    border-radius: 999px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.75rem;
     border: 1px solid var(--header-line);
-    background: var(--header-chip);
-    color: var(--header-ink);
+    background: transparent;
+    color: var(--hull-muted);
   }
-  /* Purely decorative status lamp -- currentColor, so it is always the
-     same colour as the word next to it and can never disagree with it. */
+  /* Decorative status lamp -- currentColor, so it is always the same
+     colour as the word beside it and can never disagree with it. */
   #offline-badge::before {
-    content: ""; display: inline-block; width: 7px; height: 7px;
-    border-radius: 50%; background: currentColor;
-    margin-right: 0.45rem; vertical-align: middle;
+    content: ""; display: inline-block; width: 6px; height: 6px;
+    background: currentColor;
+    margin-right: 0.5rem; vertical-align: middle;
   }
-  #offline-badge.online { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-bg); }
-  #offline-badge.offline { background: var(--amber-bg); color: var(--amber-border); border-color: var(--amber-bg); }
+  #offline-badge.online { color: var(--accent); border-color: var(--accent); }
+  #offline-badge.offline { color: var(--brass); border-color: var(--brass); }
 
-  main {
-    flex: 1;
+  /* ---------- Deck -------------------------------------------- */
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* Verdict rail leads. The map supports it. This is the whole
+     hierarchy argument of the redesign, and it is done with `order`
+     so the markup and its test hooks are untouched. */
+  aside {
+    order: 1;
+    flex: 0 0 42%;
+    min-width: 0;
     display: flex;
-    min-height: 0;
+    flex-direction: column;
+    border-right: 1px solid var(--line);
+    background: var(--aside-bg);
+    overflow-y: auto;
+    padding: 0;
+    gap: 0;
   }
-  #map-wrap { flex: 0 0 60%; position: relative; background: var(--map-placeholder); min-width: 0; }
+  aside::-webkit-scrollbar { width: 9px; }
+  aside::-webkit-scrollbar-track { background: transparent; }
+  aside::-webkit-scrollbar-thumb { background: var(--line); border: 3px solid transparent; background-clip: content-box; }
+
+  #map-wrap { order: 2; flex: 1 1 58%; position: relative; background: var(--map-placeholder); min-width: 0; }
   #map-2d-layer { position: absolute; inset: 0; }
   #map-2d-layer.hidden-view { display: none; }
   #map { position: absolute; inset: 0; }
@@ -276,334 +339,657 @@
   }
   #map-fallback.visible { display: flex; }
   #map-fallback svg { width: 90%; height: 90%; }
-  .zone-dot { fill: #ffffff; stroke: var(--ink); stroke-width: 1.5; }
-  .zone-label { font-size: 9px; fill: var(--ink); font-weight: 600; }
+  .zone-dot { fill: #ffffff; stroke: #10242c; stroke-width: 1.5; }
+  .zone-label { font-size: 9px; fill: #10242c; font-weight: 600; font-family: "IBM Plex Mono", ui-monospace, monospace; }
 
-  /* The toggle bar floats over live basemap tiles, which are bright in
-     every palette, so it keeps its own light chrome rather than the
-     palette's panel colour. */
+  /* Floats over live basemap tiles, bright in every palette, so it
+     keeps its own light chrome rather than the palette's panel. */
   .view-toggle-bar {
-    position: absolute; top: 12px; left: 12px; z-index: 10;
-    display: flex; gap: 0.2rem; padding: 0.25rem;
-    background: rgba(255, 255, 255, 0.86);
-    border-radius: 999px;
-    box-shadow: 0 2px 10px rgba(9, 52, 68, 0.18);
+    position: absolute; top: 14px; left: 14px; z-index: 10;
+    display: flex; gap: 0; padding: 0;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(7, 28, 38, 0.18);
+    box-shadow: 0 2px 10px rgba(9, 40, 52, 0.18);
     backdrop-filter: blur(6px);
   }
   .view-toggle-btn {
-    padding: 0.38rem 0.85rem; border-radius: 999px; border: 1px solid transparent;
-    background: transparent; color: #14343f; font-size: 0.78rem;
-    font-weight: 600; cursor: pointer;
+    padding: 0.42rem 0.9rem; border: 0; border-right: 1px solid rgba(7, 28, 38, 0.12);
+    background: transparent; color: #14343f; font-size: 0.7rem;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer;
     transition: background-color 0.18s ease, color 0.18s ease;
   }
+  .view-toggle-btn:last-child { border-right: 0; }
   .view-toggle-btn:hover { background: rgba(10, 93, 118, 0.1); }
-  .view-toggle-btn.active { background: var(--marine); color: var(--on-marine); border-color: var(--marine); }
-  #ocean3d-container { position: absolute; inset: 0; display: none; background: #0d2233; }
+  .view-toggle-btn.active { background: var(--hull); color: var(--brass); }
+  #ocean3d-container { position: absolute; inset: 0; display: none; background: #061520; }
   #ocean3d-container.visible { display: block; }
-  #ocean3d-container.awaiting::after {
-    content: "Loading seafloor relief…"; position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    color: #cfe3ee; font-size: 0.85rem; pointer-events: none;
+
+  /* ---------- 3D camera bar ------------------------------------ */
+  #cam-bar { position: absolute; top: 14px; right: 14px; z-index: 10; display: none; }
+  #cam-bar.visible { display: block; }
+  .cam-row {
+    display: flex;
+    background: rgba(6, 21, 32, 0.86);
+    border: 1px solid rgba(159, 200, 219, 0.24);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(8px);
+  }
+  .cam-btn {
+    padding: 0.42rem 0.8rem; border: 0;
+    border-right: 1px solid rgba(159, 200, 219, 0.18);
+    background: transparent; color: #9fc8db; cursor: pointer;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.64rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    transition: background-color 0.16s ease, color 0.16s ease;
+  }
+  .cam-btn:last-child { border-right: 0; }
+  .cam-btn:hover { background: rgba(159, 200, 219, 0.14); color: #ffffff; }
+  .cam-btn.active { background: var(--brass, #c9a227); color: #06151f; }
+  .cam-btn.cam-icon { font-size: 0.86rem; padding: 0.3rem 0.6rem; letter-spacing: 0; }
+  #cam-help {
+    margin: 0.4rem 0 0; padding: 0.45rem 0.6rem; max-width: 224px;
+    background: rgba(6, 21, 32, 0.86);
+    border: 1px solid rgba(159, 200, 219, 0.2);
+    backdrop-filter: blur(8px);
+    color: #b7d0de; font-size: 0.6rem; line-height: 1.6; text-align: right;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  #cam-help b { color: #ffffff; font-weight: 700; }
+  #cam-help.hidden { display: none; }
+
+  /* ---------- 3D map key ---------------------------------------
+     Sits under the view toggle, top-left, so it never collides with the
+     sandbox panel bottom-right. Same dark floating chrome as the
+     sandbox: both sit on a scene whose colours we do not control. */
+  #ocean3d-legend {
+    position: absolute; top: 58px; left: 14px; z-index: 10;
+    display: none; width: 226px;
+    background: rgba(6, 21, 32, 0.86);
+    border: 1px solid rgba(159, 200, 219, 0.24);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(8px);
+    color: #dceaf3;
+  }
+  #ocean3d-legend.visible { display: block; }
+  #legend-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; padding: 0.5rem 0.7rem; background: transparent; border: 0;
+    color: #9fc8db; cursor: pointer;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.64rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.14em;
+  }
+  #legend-toggle:hover { color: #ffffff; }
+  #legend-chevron { transition: transform 0.18s ease; }
+  #ocean3d-legend.collapsed #legend-chevron { transform: rotate(-90deg); }
+  #ocean3d-legend.collapsed #legend-body { display: none; }
+  #legend-body { padding: 0 0.7rem 0.65rem; }
+
+  .legend-row { display: flex; gap: 0.55rem; align-items: flex-start; margin-bottom: 0.55rem; }
+  .legend-swatch { flex: 0 0 22px; height: 22px; margin-top: 0.1rem; border-radius: 2px; }
+  /* Mirrors riskColor() in web/three-viz.js: --accent, --amber-border,
+     --danger. If those move, move these. */
+  .legend-swatch.risk-ramp { background: linear-gradient(180deg, #a4321d 0%, #c98a12 50%, #0f6e5c 100%); }
+  .legend-swatch.beacon {
+    background: radial-gradient(circle at 50% 50%, #ff9a7a 0%, #ff5a34 42%, rgba(255, 90, 52, 0) 72%);
+  }
+  .legend-swatch.deny-plane {
+    background: repeating-linear-gradient(180deg, rgba(164, 50, 29, 0.75) 0 2px, transparent 2px 7px);
+    border: 1px solid rgba(164, 50, 29, 0.5);
+  }
+  .legend-swatch.depth-ramp { background: linear-gradient(180deg, #3f9c9a 0%, #17567a 55%, #0a2036 100%); }
+
+  .legend-text { font-size: 0.66rem; line-height: 1.42; color: #b7d0de; }
+  .legend-text b {
+    display: block; color: #ffffff; font-weight: 600; font-size: 0.7rem;
+    letter-spacing: 0.02em; margin-bottom: 0.08rem;
+  }
+  .legend-scale {
+    display: flex; justify-content: space-between;
+    margin: -0.3rem 0 0.7rem 2.35rem; font-size: 0.54rem;
+    letter-spacing: 0.08em; text-transform: uppercase; color: #7fa6bb;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  .legend-hint {
+    margin: 0; padding-top: 0.5rem;
+    border-top: 1px solid rgba(159, 200, 219, 0.18);
+    font-size: 0.6rem; line-height: 1.45; color: #7fa6bb;
+  }
+  /* On a narrow deck the key would eat the scene, so it gives back some
+     width -- but it stays openable, which a display:none here would not. */
+  @media (max-width: 900px) {
+    #ocean3d-legend { width: 186px; }
+    .legend-text { font-size: 0.62rem; }
   }
 
-  aside {
-    flex: 0 0 40%;
-    min-width: 0;
+  /* ---------- Environment sandbox ------------------------------
+     Floats over the 3D canvas, same bargain as .view-toggle-bar: it
+     sits on a scene whose colours we do not control, so it carries its
+     own dark chrome rather than the palette's panel. Hidden entirely
+     until the 3D view is open -- there is nothing to perturb on a flat
+     basemap. */
+  #sandbox-panel {
+    position: absolute; right: 14px; bottom: 14px; z-index: 10;
+    display: none; width: 268px; padding: 0.85rem 0.95rem 0.75rem;
+    background: rgba(6, 21, 32, 0.88);
+    border: 1px solid rgba(159, 200, 219, 0.28);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(8px);
+    color: #dceaf3;
+    font-size: 0.78rem;
+  }
+  #sandbox-panel.visible { display: block; }
+  #sandbox-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  #sandbox-panel h4 {
+    margin: 0; font-size: 0.66rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.14em; color: #9fc8db;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  #sandbox-flag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em;
+    padding: 0.16rem 0.42rem; border: 1px solid currentColor; white-space: nowrap;
+  }
+  #sandbox-flag.observed { color: #6fd0b4; }
+  #sandbox-flag.hypothetical { color: #f0c04a; background: rgba(240, 192, 74, 0.12); }
+
+  #sandbox-readout { display: flex; align-items: baseline; gap: 0.3rem; margin: 0.55rem 0 0.1rem; }
+  #sandbox-value {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 1.9rem; font-weight: 600; line-height: 1; color: #ffffff;
+    font-variant-numeric: tabular-nums;
+  }
+  #sandbox-unit { font-size: 0.8rem; color: #9fc8db; }
+  #sandbox-band {
+    margin-left: auto; font-size: 0.62rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #9fc8db;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: right;
+  }
+
+  #sandbox-wave {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 3px; margin: 0.7rem 0 0.3rem;
+    background: linear-gradient(90deg, #2f7d8f 0%, #2f7d8f 41.6%, #a4321d 41.6%, #a4321d 100%);
+    cursor: pointer; outline-offset: 4px;
+  }
+  #sandbox-wave::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #ffffff; border: 2px solid #06151f; cursor: grab;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+  }
+  #sandbox-wave::-moz-range-thumb {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #ffffff; border: 2px solid #06151f; cursor: grab;
+  }
+  #sandbox-scale {
+    display: flex; justify-content: space-between; font-size: 0.56rem;
+    letter-spacing: 0.08em; color: #7fa6bb;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  /* 2.5 of 6 m = 41.6%, the same fraction the slider track gradient
+     changes colour at. */
+  #sandbox-scale .deny-tick { color: #d97a63; margin-right: 8.4%; }
+
+  #sandbox-note { margin: 0.6rem 0 0; font-size: 0.7rem; line-height: 1.45; color: #cfe3ee; min-height: 2.05em; }
+  #sandbox-reset {
+    display: block; width: 100%; margin-top: 0.6rem; padding: 0.4rem;
+    background: transparent; color: #9fc8db;
+    border: 1px solid rgba(159, 200, 219, 0.4);
+    font-size: 0.64rem; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; cursor: pointer;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  #sandbox-reset:hover { background: rgba(159, 200, 219, 0.12); color: #ffffff; }
+  #sandbox-reset.hidden { display: none; }
+  #sandbox-foot {
+    margin: 0.65rem 0 0; padding-top: 0.55rem;
+    border-top: 1px solid rgba(159, 200, 219, 0.18);
+    font-size: 0.6rem; line-height: 1.5; color: #7fa6bb;
+  }
+
+  /* The whole panel takes the hypothesis treatment, not just the badge:
+     P8 asks for "visually distinct and unmistakable", and a small badge
+     on otherwise identical chrome is neither. */
+  #sandbox-panel.is-hypothetical {
+    border-color: rgba(240, 192, 74, 0.65);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(240, 192, 74, 0.16);
+    background:
+      repeating-linear-gradient(135deg, rgba(240, 192, 74, 0.07) 0 9px, transparent 9px 18px),
+      rgba(24, 20, 6, 0.9);
+  }
+  #sandbox-panel.is-hypothetical #sandbox-note { color: #f4dda3; }
+
+  @media (max-width: 900px) {
+    #sandbox-panel { left: 14px; right: 14px; width: auto; bottom: 10px; }
+    #sandbox-foot { display: none; }
+  }
+  #ocean3d-container.awaiting::after {
+    content: "Reading seafloor relief…"; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #cfe3ee; font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; pointer-events: none;
+  }
+
+  /* ---------- The verdict field -------------------------------
+     The signature element. Half the rail, flooded with the large-
+     field counterpart of the safety colour, action set at display
+     size. :has() drives it; where :has() is unsupported the field
+     simply stays on --panel and the badge colours below still carry
+     the verdict, which is the same progressive-enhancement bargain
+     the previous border-left rail made. */
+  #answer-card {
+    --flood: var(--panel);
+    --on-flood: var(--ink);
+    --on-flood-soft: var(--muted);
+    --rule-on-flood: var(--line);
+    flex: 0 0 auto;
+    position: relative;
+    min-height: 44vh;
     display: flex;
     flex-direction: column;
-    border-left: 1px solid var(--line);
-    background: var(--aside-bg);
-    overflow-y: auto;
-    padding: 1.1rem 1.15rem 1.4rem;
-    gap: 1rem;
+    justify-content: flex-end;
+    padding: 1.6rem 1.5rem 2rem;
+    background: var(--flood);
+    color: var(--on-flood);
+    border-bottom: 1px solid var(--brass);
+    box-shadow: var(--shadow-flood);
+    /* Verdicts wash between colours rather than cutting. */
+    transition: background-color 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.5s ease;
   }
-  aside::-webkit-scrollbar { width: 10px; }
-  aside::-webkit-scrollbar-track { background: transparent; }
-  aside::-webkit-scrollbar-thumb {
-    background: var(--line); border-radius: 999px;
-    border: 3px solid transparent; background-clip: content-box;
-  }
+  #answer-card:has(#answer-action.action-go) { --flood: var(--flood-go); --on-flood: var(--flood-ink); --on-flood-soft: var(--flood-ink-soft); --rule-on-flood: var(--flood-rule); }
+  #answer-card:has(#answer-action.action-do-not-go) { --flood: var(--flood-deny); --on-flood: var(--flood-ink); --on-flood-soft: var(--flood-ink-soft); --rule-on-flood: var(--flood-rule); }
+  #answer-card:has(#answer-action.action-safer-alternative) { --flood: var(--flood-alt); --on-flood: var(--flood-ink); --on-flood-soft: var(--flood-ink-soft); --rule-on-flood: var(--flood-rule); }
+  #answer-card:has(#answer-action.action-unknown) { --flood: var(--flood-unknown); --on-flood: var(--flood-ink); --on-flood-soft: var(--flood-ink-soft); --rule-on-flood: var(--flood-rule); }
 
-  /* Shared card shell for the four panels in the rail. */
-  #answer-card, #override-banner, #douglas-ruler, #evidence-panel {
-    border-radius: 14px;
-    box-shadow: var(--shadow-card);
+  /* The horizon: a brass rule at the foot of the sky, with the sea
+     (the Douglas ruler) directly beneath it. Sky -> horizon -> sea ->
+     soundings is the reading order of the whole left column. */
+  #answer-card::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.16) 100%);
+    pointer-events: none;
   }
+  /* No verdict yet -- no horizon. An empty field must not look like a
+     rendered one that happens to say nothing. */
+  #answer-card:not(:has(#answer-action:not(:empty)))::after { content: none; }
 
-  #answer-card {
-    border: 1px solid var(--line);
-    border-left: 5px solid var(--unknown);
-    padding: 1.05rem 1.15rem;
-    background: var(--panel);
-  }
-  /* Verdict rail: the card edge repeats the badge's colour so the answer
-     reads at a glance from across a room, using the same four safety
-     colours and no others. Progressive enhancement -- where :has() is
-     unsupported the rail simply stays neutral. */
-  #answer-card:has(#answer-action.action-go) { border-left-color: var(--accent); }
-  #answer-card:has(#answer-action.action-do-not-go) { border-left-color: var(--danger); }
-  #answer-card:has(#answer-action.action-safer-alternative) { border-left-color: var(--amber-border); }
-  #answer-card:has(#answer-action.action-unknown) { border-left-color: var(--unknown); }
-  /* The verdict badge -- Archivo condensed, the same face used for the
-     Douglas ruler's band labels, since both are "instrument readout"
-     text, not prose. */
   #answer-action {
-    display: inline-block;
-    font-family: "Archivo", sans-serif; font-stretch: condensed;
-    font-size: 0.85rem;
+    display: block;
+    order: 2;
+    font-size: clamp(2.4rem, 5.6vw, 5.4rem);
     font-weight: 700;
-    letter-spacing: 0.05em;
+    line-height: 0.9;
+    letter-spacing: -0.005em;
     text-transform: uppercase;
-    padding: 0.32rem 0.8rem;
-    border-radius: 999px;
-    background: var(--accent-bg);
-    color: var(--accent);
-    margin-bottom: 0.55rem;
+    text-wrap: balance;
+    color: var(--on-flood);
+    margin: 0 0 0.9rem;
   }
-  /* Before the first answer -- and on an off-topic reply, where
-     renderRecommendation() deliberately blanks the verdict -- there is no
-     verdict to show, so no empty coloured pill is drawn either. */
+  /* The eyebrow rides on the badge, not the card, so it disappears
+     with it -- display:none on the element takes its pseudo-elements
+     too. Before the first answer, and on an off-topic reply where
+     renderRecommendation() deliberately blanks the verdict, there is
+     no verdict and therefore no label claiming one. */
+  #answer-action::before {
+    content: "Verdict";
+    display: block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.66rem; font-weight: 400;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--on-flood-soft);
+    margin-bottom: 0.85rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--rule-on-flood);
+  }
   #answer-action:empty { display: none; }
-  #answer-action.action-do-not-go { background: var(--danger-bg); color: var(--danger); }
-  #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
+  /* No per-action colour rules on the badge itself: at this size the
+     field behind it carries the colour and the word carries the
+     verdict. Kept as selectors so the four actions remain
+     individually addressable, and so an unrecognised action can
+     never inherit GO. */
+  #answer-action.action-go, #answer-action.action-do-not-go,
+  #answer-action.action-safer-alternative, #answer-action.action-unknown { color: var(--on-flood); }
   /* CANNOT ASSESS and any future unrecognised action. Deliberately
-     non-permissive: absence of a judgement must never look like GO. */
-  #answer-action.action-unknown {
-    background: transparent;
-    color: var(--unknown);
-    border: 1px solid var(--unknown);
+     non-permissive: absence of a judgement must never look like GO.
+     The dashed underline is the visual difference from the three
+     decided verdicts -- a rule that has not closed. */
+  #answer-action.action-unknown::before { border-bottom-style: dashed; }
+
+  #answer-text {
+    order: 3;
+    font-size: 1.12rem; line-height: 1.55; margin: 0;
+    color: var(--on-flood);
+    max-width: 46ch;
   }
-  #answer-text { font-size: 1.05rem; line-height: 1.5; margin: 0; }
-  #answer-placeholder { color: var(--muted); font-style: italic; }
+  #answer-placeholder { color: var(--muted); font-style: normal; font-size: 0.95rem; }
+
+  /* Qualifier chips ride above the verdict, in the small type. Order
+     puts them first in the flexbox regardless of source order, which
+     is what lets the verdict be the last and largest thing read. */
+  #agentic-badge, #severity-indicator { order: 1; align-self: flex-start; }
+
   /* Shown only when the backend actually used orca/agentic.py this
      request (GROQ_API_KEY set + a live call succeeded) -- honest, not
      decorative: with the key unset or the call unreachable this stays
-     hidden and the plain deterministic phrasing is exactly what's shown,
-     with nothing implying otherwise. */
+     hidden and the plain deterministic phrasing is exactly what is
+     shown, with nothing implying otherwise. */
   #agentic-badge {
     display: inline-block;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.03em;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
-    /* Marine, not starboard green: this badge says how the sentence was
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 0.24rem 0.55rem;
+    /* Never starboard green: this badge says how the sentence was
        phrased, never whether it is safe to sail. */
-    border: 1px solid var(--marine);
-    background: var(--marine-soft);
-    color: var(--marine);
-    margin-left: 0.5rem;
+    border: 1px solid var(--rule-on-flood);
+    color: var(--on-flood-soft);
+    margin: 0 0 0.75rem;
   }
   #agentic-badge.hidden { display: none; }
-  /* R-38 severity. `action` alone cannot carry the strength of a verdict:
-     a hard deny that got rerouted renders as SAFER ALTERNATIVE, today
-     indistinguishable from a mild wind override. This is deliberately
-     NOT a second verdict badge -- no fill, mono rather than the badge's
-     Archivo condensed, and a "severity" prefix -- so it reads as a
-     qualifier of the badge beside it, never as another GO/DO NOT GO.
-     Colours are the existing semantic tokens, all three palettes:
-     advisory takes chart magenta (the SAFER ALTERNATIVE colour), a hard
-     denial takes port red, and "none"/"unknown" take --unknown -- never
-     green, which is starboard and means GO. Only the badge says GO. */
+
+  /* R-38 severity. `action` alone cannot carry the strength of a
+     verdict: a hard deny that got rerouted renders as SAFER
+     ALTERNATIVE, otherwise indistinguishable from a mild wind
+     override. Deliberately NOT a second verdict -- it is a small mono
+     qualifier sitting above the field, never a competing badge. */
   #severity-indicator {
     display: inline-block;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.03em;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    color: var(--unknown);
-    margin-left: 0.5rem;
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 0.24rem 0.55rem;
+    border: 1px solid var(--rule-on-flood);
+    color: var(--on-flood-soft);
+    margin: 0 0 0.5rem;
     white-space: nowrap;
   }
-  #severity-indicator .severity-label {
-    color: var(--muted); text-transform: uppercase;
-    font-size: 0.85em; letter-spacing: 0.06em; margin-right: 0.35rem;
-  }
-  #severity-indicator.severity-advisory { border-color: var(--amber-border); color: var(--amber-border); }
-  #severity-indicator.severity-hard_deny { border-color: var(--danger); color: var(--danger); }
+  #severity-indicator .severity-label { opacity: 0.7; margin-right: 0.4rem; }
+  #severity-indicator .severity-value { font-weight: 600; color: var(--on-flood); }
+  /* On the flooded field the chip cannot use its old red/magenta -- it
+     would vanish into the ground it sits on. Weight and a solid
+     ink-coloured edge carry the escalation instead. */
+  #severity-indicator.severity-advisory { border-color: var(--on-flood-soft); }
+  #severity-indicator.severity-hard_deny { border-color: var(--on-flood); border-width: 2px; }
   #severity-indicator.hidden { display: none; }
-  /* R-40 blind agents: the decision-bearing agents that had no
-     observations at all at the answered zone. Muted and informational,
-     the same register as the coverage note below -- lack of evidence is
-     an honesty/degradation signal, not a hazard verdict, so it is
-     deliberately not one of the red/magenta hazard bands. */
+
+  /* R-40 blind agents: decision-bearing agents that had no
+     observations at all at the answered zone. Lack of evidence is an
+     honesty signal, not a hazard verdict, so it stays in the quiet
+     register under the sentence rather than becoming a warning band. */
   #blind-agents {
-    font-size: 0.8rem;
-    line-height: 1.45;
-    color: var(--muted);
-    margin-top: 0.5rem;
+    order: 4;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--on-flood-soft);
+    margin-top: 0.9rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--rule-on-flood);
   }
-  #blind-agents .blind-agents-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.9em; }
+  #blind-agents .blind-agents-label { text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.85em; }
   #blind-agents .blind-agents-names {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
     word-break: break-word;
+    color: var(--on-flood);
   }
   #blind-agents.hidden { display: none; }
-  /* Honest caveat strip: shown only when ORCA is answering about a zone
-     the user did not actually name, or from data that isn't for the day
-     they asked about. Muted rather than alarming -- it's a clarification,
-     not a hazard warning (those are the amber/red bands above). */
+
+  /* Honest caveat strip: shown only when ORCA is answering about a
+     zone the user did not name, or from data that is not for the day
+     they asked about. A clarification, not a hazard warning. */
   #coverage-note {
-    font-size: 0.85rem;
-    line-height: 1.5;
-    color: var(--muted);
-    background: var(--marine-soft);
-    border-left: 3px solid var(--marine);
-    border-radius: 0 8px 8px 0;
-    padding: 0.55rem 0.7rem;
-    margin-top: 0.75rem;
+    order: 5;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--on-flood-soft);
+    border-left: 2px solid var(--rule-on-flood);
+    padding: 0.1rem 0 0.1rem 0.75rem;
+    margin-top: 0.9rem;
   }
   #coverage-note.hidden { display: none; }
 
+  /* ---------- Instrument shelves ------------------------------
+     Everything below the horizon is quiet: hairline-separated bands
+     on the panel ground, no cards, no radii, no shadows. The verdict
+     spent the whole boldness budget. */
+  #override-banner, #douglas-ruler, #evidence-panel, #reasoning3d-panel {
+    flex: 0 0 auto;
+    padding: 1.15rem 1.5rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
   #override-banner {
-    border: 1px solid var(--amber-border);
-    background: var(--amber-bg);
     color: var(--amber-border);
-    padding: 0.8rem 1rem;
-    font-size: 0.9rem;
-    line-height: 1.45;
+    background: var(--amber-bg);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    border-bottom-color: var(--amber-border);
   }
   #override-banner.hidden { display: none; }
   #override-banner strong {
-    display: block; margin-bottom: 0.3rem;
-    font-family: "Archivo", sans-serif; font-stretch: condensed;
-    text-transform: uppercase; letter-spacing: 0.05em;
+    display: block; margin-bottom: 0.35rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.72rem;
   }
 
-  #reasoning3d-toggle {
-    width: 100%; padding: 0.6rem; border-radius: 12px;
-    border: 1px dashed var(--line);
-    background: var(--panel); color: var(--marine); font-weight: 600; font-size: 0.85rem; cursor: pointer;
-    transition: border-color 0.18s ease, background-color 0.18s ease;
+  #douglas-ruler h3, #evidence-panel h3 {
+    margin: 0 0 0.2rem 0; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted);
   }
-  #reasoning3d-toggle:hover { border-color: var(--marine); background: var(--marine-soft); }
+  /* One-line hint under a section head. Makes a real interaction
+     discoverable (evidence rows expand); never decoration. */
+  .panel-sub { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.85rem; line-height: 1.45; opacity: 0.85; }
+
+  /* ---------- Douglas sea scale, as a waterline ----------------
+     Real WMO/Douglas band boundaries, not invented; the marker sits
+     on the latest real wave_height_m evidence and the line at 2.5m is
+     ORCA's actual hard-deny threshold -- see orca/agents.py's
+     WAVE_HARD_DENY_M comment. Restyled from a flat ruler into a
+     sounding: the plummet drops from the brass rule to the reading,
+     and the deny line is the depth past which ORCA stops. Markup and
+     inline left:% positions are unchanged, so renderDouglasRuler()
+     and the e2e assertions on .ruler-marker / .ruler-deny-line are
+     untouched. */
+  #douglas-ruler .no-data { color: var(--muted); font-size: 0.82rem; }
+  .ruler-track {
+    position: relative; height: 30px; display: flex; overflow: visible;
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--brass);
+  }
+  .ruler-band { height: 100%; position: relative; opacity: 0.92; }
+  .ruler-deny-line {
+    position: absolute; top: -10px; bottom: -6px; width: 2px; background: var(--danger);
+  }
+  /* Plummet: a hairline dropping from the brass rule to the reading,
+     with the bob at its head. Overrides the old triangle's borders. */
+  .ruler-marker {
+    position: absolute; top: -18px; bottom: -10px; width: 2px; height: auto;
+    border: 0; background: var(--ink); transform: translateX(-1px);
+  }
+  .ruler-marker::after {
+    content: ""; position: absolute; top: -5px; left: -4px;
+    width: 10px; height: 10px; border-radius: 50%; background: var(--ink);
+  }
+  .ruler-scale {
+    display: flex; justify-content: space-between; margin-top: 1rem;
+    font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  .ruler-reading {
+    margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.05rem; color: var(--ink);
+  }
+  .ruler-reading .band-name { font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8em; }
+  .ruler-reading .stop-note { color: var(--danger); font-weight: 600; }
+
+  /* ---------- Evidence ---------------------------------------- */
+  #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .evidence-item {
+    border: 0; border-top: 1px solid var(--line);
+    padding: 0.7rem 0;
+    cursor: pointer;
+    background: transparent;
+    transition: background-color 0.18s ease, padding-left 0.18s ease;
+  }
+  .evidence-item:first-child { border-top: 0; }
+  .evidence-item:hover { background: var(--card-bg); padding-left: 0.5rem; }
+  /* Values and provenance are transmissible-safety-message data, per
+     the mono-means-data rule -- same face as the Douglas reading and
+     any coordinate pair in the app. */
+  .evidence-summary { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; font-size: 0.9rem; }
+  .evidence-summary .var-name {
+    color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.78em; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .evidence-summary .var-value { font-weight: 600; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.05em; white-space: nowrap; }
+  /* R-33b: the reading's age sits with the variable name on the left
+     so the value stays right-aligned. nowrap because a stale cache
+     can make this "29 d 4 h old" and it must not wrap the row. */
+  .evidence-summary .var-age { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72em; margin-left: 0.6rem; white-space: nowrap; opacity: 0.8; }
+  .evidence-detail {
+    display: none; margin-top: 0.6rem; padding: 0.6rem 0 0.1rem 0.75rem;
+    border-left: 2px solid var(--brass);
+    font-size: 0.78rem; color: var(--muted); line-height: 1.7;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  .evidence-detail.expanded { display: block; }
+  .evidence-detail dt { font-weight: 600; color: var(--ink); display: inline; text-transform: uppercase; font-size: 0.9em; letter-spacing: 0.06em; }
+  .evidence-detail dd { display: inline; margin: 0 0.9rem 0 0.35rem; }
+  .evidence-detail a { color: var(--marine); word-break: break-all; }
+
+  /* ---------- Reasoning graph --------------------------------- */
+  #reasoning3d-panel { border-bottom: 0; }
+  #reasoning3d-toggle {
+    width: 100%; padding: 0.7rem; border: 1px solid var(--line);
+    background: transparent; color: var(--muted);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 400; font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.18s ease, color 0.18s ease;
+  }
+  #reasoning3d-toggle:hover { border-color: var(--brass); color: var(--ink); }
   #reasoning3d-container {
-    position: relative; height: 280px; margin-top: 0.6rem;
-    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card-bg);
+    position: relative; height: 280px; margin-top: 0.75rem;
+    border: 1px solid var(--line); overflow: hidden; background: var(--card-bg);
   }
   #reasoning3d-container.collapsed { display: none; }
 
-  #evidence-panel {
-    border: 1px solid var(--line);
-    background: var(--panel);
-    padding: 0.95rem 1rem 1rem;
-  }
-  #evidence-panel h3 {
-    margin: 0 0 0.15rem 0; font-size: 0.85rem;
-    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.05em;
-  }
-  /* One-line hint under a section head. Used to make a real interaction
-     discoverable (evidence rows expand), not for decoration. */
-  .panel-sub { display: block; font-size: 0.76rem; color: var(--muted); margin-bottom: 0.6rem; line-height: 1.4; }
-  #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
-  .evidence-item {
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 0.6rem 0.75rem;
-    cursor: pointer;
-    background: var(--card-bg);
-    transition: border-color 0.18s ease, background-color 0.18s ease;
-  }
-  .evidence-item:hover { border-color: var(--marine); background: var(--marine-soft); }
-  /* Values and provenance are transmissible-safety-message data, per the
-     mono-means-data rule -- same face as the Douglas ruler and any
-     coordinate pair in the app. */
-  .evidence-summary { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.92rem; }
-  .evidence-summary .var-name { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85em; }
-  .evidence-summary .var-value { font-weight: 700; font-family: "IBM Plex Mono", ui-monospace, monospace; }
-  /* R-33b: the reading's age sits with the variable name on the left, so
-     the value stays right-aligned. nowrap because a stale cache can make
-     this "29 d 4 h old" and it must not wrap the row. */
-  .evidence-summary .var-age { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.8em; margin-left: 0.5rem; white-space: nowrap; }
-  .evidence-detail { display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); font-size: 0.82rem; color: var(--muted); line-height: 1.6; font-family: "IBM Plex Mono", ui-monospace, monospace; }
-  .evidence-detail.expanded { display: block; }
-  .evidence-detail dt { font-weight: 600; color: var(--ink); display: inline; }
-  .evidence-detail dd { display: inline; margin: 0 0.8rem 0 0.3rem; }
-  .evidence-detail a { color: var(--marine); word-break: break-all; }
-
+  /* ---------- Ask bar -----------------------------------------
+     One tall input on the hull ground, brass rule above it. It is the
+     only place on the page the user types, so it gets the full width
+     and none of the competition. */
   footer {
-    border-top: 1px solid var(--line);
-    background: var(--panel);
-    padding: 0.85rem 1.25rem;
+    flex: 0 0 auto;
+    border-top: 1px solid var(--brass);
+    background: var(--hull);
+    padding: 0.85rem 1.4rem;
     display: flex;
-    gap: 0.6rem;
+    gap: 0.55rem;
     align-items: flex-end;
     flex-wrap: wrap;
-    box-shadow: var(--shadow-bar);
   }
-  footer input[type="text"] { flex: 1 1 260px; padding: 0.6rem 0.8rem; border: 1px solid var(--line); border-radius: 10px; font-size: 0.95rem; background: var(--card-bg); color: var(--ink); }
-  /* width, not flex-basis. A coord input is also input[type="text"], so it
-     matches the rule above; its parent is the column-flex <label>, where a
-     flex-basis is a HEIGHT. Left to inherit `flex: 1 1 260px` these boxes
-     grow 260px tall and swallow the map -- hence the explicit reset. */
+  footer input[type="text"] {
+    flex: 1 1 280px; padding: 0.7rem 0.85rem;
+    border: 1px solid var(--header-line); border-radius: 0;
+    font-size: 0.98rem; font-family: inherit;
+    background: rgba(255, 255, 255, 0.06); color: var(--hull-ink);
+  }
+  footer input[type="text"]::placeholder { color: var(--hull-muted); }
+  /* width, not flex-basis. A coord input is also input[type="text"],
+     so it matches the rule above; its parent is the column-flex
+     <label>, where a flex-basis is a HEIGHT. Left to inherit
+     `flex: 1 1 280px` these boxes grow 280px tall and swallow the
+     map -- hence the explicit reset. */
   footer input.coord {
-    flex: 0 0 auto; width: 92px;
-    padding: 0.6rem 0.55rem; border: 1px solid var(--line); border-radius: 10px;
-    font-size: 0.85rem; background: var(--card-bg); color: var(--ink);
+    flex: 0 0 auto; width: 96px;
+    padding: 0.7rem 0.6rem; border: 1px solid var(--header-line); border-radius: 0;
+    font-size: 0.82rem; background: rgba(255, 255, 255, 0.06); color: var(--hull-ink);
     font-family: "IBM Plex Mono", ui-monospace, monospace; /* a coordinate pair is data, not prose */
   }
   footer input[type="text"]:focus, footer input.coord:focus {
-    outline: none; border-color: var(--marine); background: var(--panel);
-    box-shadow: 0 0 0 3px var(--marine-soft);
+    outline: none; border-color: var(--brass); background: rgba(255, 255, 255, 0.1);
   }
   footer button {
-    padding: 0.6rem 1.15rem;
-    border-radius: 10px;
-    /* Marine, not starboard green -- a button the user presses must not
-       look like the verdict they are pressing it to find out. */
-    border: 1px solid var(--marine);
-    background: var(--marine);
-    color: var(--on-marine);
-    font-weight: 600;
+    padding: 0.7rem 1.4rem;
+    border-radius: 0;
+    /* Brass, not starboard green -- a button the user presses must
+       not look like the verdict they are pressing it to find out. */
+    border: 1px solid var(--brass);
+    background: var(--brass);
+    color: var(--hull);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
     cursor: pointer;
-    font-size: 0.9rem;
-    transition: box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+    font-size: 0.78rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
-  footer button:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(9, 52, 68, 0.18); transform: translateY(-1px); }
-  footer button:disabled { opacity: 0.55; cursor: progress; transform: none; }
-  footer button.secondary { background: var(--panel); color: var(--marine); border-color: var(--line); }
-  footer button.secondary:hover:not(:disabled) { border-color: var(--marine); background: var(--marine-soft); }
+  footer button:hover:not(:disabled) { background: transparent; color: var(--brass); }
+  footer button:disabled { opacity: 0.5; cursor: progress; }
+  footer button.secondary {
+    background: transparent; color: var(--hull-muted); border-color: var(--header-line);
+    font-weight: 400; letter-spacing: 0.1em;
+  }
+  footer button.secondary:hover:not(:disabled) { border-color: var(--hull-muted); color: var(--hull-ink); background: transparent; }
   footer label {
-    font-size: 0.7rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.2rem;
-    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6rem; color: var(--hull-muted); display: flex; flex-direction: column; gap: 0.3rem;
+    text-transform: uppercase; letter-spacing: 0.16em; font-weight: 400;
   }
 
-  /* Douglas sea scale ruler -- see orca/agents.py's WAVE_HARD_DENY_M
-     comment. Real WMO/Douglas band boundaries, not invented; the marker
-     sits on the latest real wave_height_m evidence and the double bar at
-     2.5 m is ORCA's actual hard-deny threshold, so "change the wave
-     height, watch the marker cross the bar" needs no narration. */
-  #douglas-ruler {
-    border: 1px solid var(--line); padding: 0.9rem 1rem 0.75rem;
-    background: var(--panel);
+  /* ---------- Narrow screens ----------------------------------
+     The rail stacks above the map. The verdict field keeps its scale:
+     on a phone at 4am it is the only thing that has to be readable. */
+  @media (max-width: 880px) {
+    main { flex-direction: column; }
+    aside { order: 1; flex: 1 1 auto; border-right: 0; }
+    #map-wrap { order: 2; flex: 0 0 42vh; border-top: 1px solid var(--line); }
+    #answer-card { min-height: 38vh; padding: 1.25rem 1.15rem 1.6rem; }
+    #override-banner, #douglas-ruler, #evidence-panel, #reasoning3d-panel { padding: 1rem 1.15rem; }
+    header { padding: 0.6rem 1rem; flex-wrap: wrap; }
+    .palette-switch { margin-left: 1rem; padding-left: 0.8rem; }
+    footer { padding: 0.7rem 1rem; }
   }
-  #douglas-ruler h3 {
-    margin: 0 0 0.15rem 0; font-size: 0.85rem;
-    font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.05em;
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
   }
-  #douglas-ruler .no-data { color: var(--muted); font-style: italic; font-size: 0.85rem; }
-  .ruler-track { position: relative; height: 22px; display: flex; border-radius: 4px; overflow: visible; }
-  .ruler-band { height: 100%; position: relative; }
-  .ruler-band:first-child { border-radius: 4px 0 0 4px; }
-  .ruler-band:last-child { border-radius: 0 4px 4px 0; }
-  .ruler-deny-line {
-    position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--danger);
+
+  /* ---------- Live sea -----------------------------------------
+     The bottom of the verdict field is real water: amplitude,
+     steepness and swell period come from this answer's actual
+     wave_height_m observation, read back out of the Douglas ruler
+     rather than from a duplicated constant (see the sea-state script
+     at the foot of this file). It is a second, wordless channel for
+     a reading that is already on screen in numbers -- which is the
+     point, for a reader who may not read the numbers.
+
+     Two rules keep it honest. With no wave observation in evidence
+     the water is drawn dead flat, never at a plausible-looking
+     guessed amplitude: an absent reading must look absent. And the
+     crests only break into whitecaps at or above ORCA's real hard-
+     deny threshold, so the sea visibly comes apart at exactly the
+     height the policy engine refuses at.
+
+     Painted in translucent black and white over whatever the flood
+     colour is, so it needs no colour of its own in any of the four
+     actions or three palettes. */
+  #sea-canvas {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
   }
-  .ruler-marker {
-    position: absolute; top: -14px; width: 0; height: 0;
-    border-left: 6px solid transparent; border-right: 6px solid transparent;
-    border-top: 8px solid var(--ink); transform: translateX(-6px);
-  }
-  .ruler-scale { display: flex; justify-content: space-between; margin-top: 0.3rem; font-size: 0.65rem; color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; }
-  .ruler-reading {
-    margin-top: 0.6rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.95rem; color: var(--ink);
-  }
-  .ruler-reading .band-name { font-weight: 700; text-transform: uppercase; }
-  .ruler-reading .stop-note { color: var(--danger); font-weight: 700; }
+  /* No verdict, no sea -- same rule as the horizon above. */
+  #answer-card:not(:has(#answer-action:not(:empty))) #sea-canvas { display: none; }
+  /* The canvas is absolutely positioned, so without this the static
+     in-flow text would paint underneath it. */
+  #answer-action, #answer-text, #agentic-badge, #severity-indicator,
+  #blind-agents, #coverage-note { position: relative; z-index: 1; }
 </style>
 </head>
 <body>
@@ -679,6 +1065,87 @@
          rendered by web/three-viz.js. Populated lazily on first "3D Ocean"
          click -- see web/three-viz-app.js. -->
     <div id="ocean3d-container" class="awaiting" data-testid="ocean3d-container"></div>
+
+    <!-- Camera controls for the 3D scene. Top-right, clear of the view
+         toggle (top-left) and the sandbox (bottom-right). -->
+    <div id="cam-bar" data-testid="cam-bar">
+      <div class="cam-row">
+        <button id="cam-orbit" class="cam-btn active" data-testid="cam-orbit">Orbit</button>
+        <button id="cam-free" class="cam-btn" data-testid="cam-free">Free cam</button>
+        <button id="cam-reset" class="cam-btn cam-icon" data-testid="cam-reset" title="Reset view">&#8634;</button>
+      </div>
+      <p id="cam-help" class="hidden" data-testid="cam-help">
+        <b>Drag</b> look · <b>W A S D</b> move · <b>Q E</b> altitude<br />
+        <b>Shift</b> boost · <b>Scroll</b> speed
+      </p>
+    </div>
+
+    <!-- Key for the 3D scene. Every swatch below is the same colour the
+         scene actually draws: the risk ramp mirrors riskColor() in
+         web/three-viz.js, and the deny red is orca/agents.py's 2.5 m
+         Douglas boundary. Shown only while the 3D view is open. -->
+    <div id="ocean3d-legend" data-testid="ocean3d-legend">
+      <button id="legend-toggle" data-testid="legend-toggle" aria-expanded="true">
+        <span>Map key</span><span id="legend-chevron">&#9662;</span>
+      </button>
+      <div id="legend-body">
+        <div class="legend-row">
+          <span class="legend-swatch risk-ramp"></span>
+          <span class="legend-text"><b>Zone risk</b>Beam height and colour — the worst
+            of the five agents at that zone.</span>
+        </div>
+        <div class="legend-scale"><span>Low</span><span>Elevated</span><span>High</span></div>
+
+        <div class="legend-row">
+          <span class="legend-swatch beacon"></span>
+          <span class="legend-text"><b>Hard denial</b>Pulsing beacon — waves over the
+            2.5&nbsp;m limit. ORCA refuses outright.</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-swatch deny-plane"></span>
+          <span class="legend-text"><b>2.5 m limit</b>The Douglas 4/5 boundary, drawn in
+            the world. The sea rises through it.</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-swatch depth-ramp"></span>
+          <span class="legend-text"><b>Seafloor</b>Real ETOPO 2022 relief. Shallow shelf
+            to abyssal plain, seen through the water.</span>
+        </div>
+        <p class="legend-hint">Click any beam to ask ORCA about that zone.</p>
+      </div>
+    </div>
+
+    <!-- Environment sandbox. Shown only while the 3D view is open. The
+         slider seeds itself from the wave_height_m in the current /ask
+         response and, the moment it leaves that value, the whole panel
+         and the sea itself switch to the hypothesis treatment (PRD P8):
+         a fabricated number must never be screenshot-able as a measured
+         one. Wave height only -- see SimulationR.md section 3 for why
+         wind is not wired to it. Wired in web/three-viz-app.js. -->
+    <div id="sandbox-panel" data-testid="sandbox-panel">
+      <div id="sandbox-head">
+        <h4>Environment sandbox</h4>
+        <span id="sandbox-flag" class="observed" data-testid="sandbox-flag">OBSERVED</span>
+      </div>
+      <div id="sandbox-readout" data-testid="sandbox-readout">
+        <span id="sandbox-value" data-testid="sandbox-value">—</span><span id="sandbox-unit">m</span>
+        <span id="sandbox-band" data-testid="sandbox-band"></span>
+      </div>
+      <input type="range" id="sandbox-wave" data-testid="sandbox-wave"
+             min="0" max="6" step="0.1" value="0.8"
+             aria-label="Hypothetical significant wave height in metres" />
+      <div id="sandbox-scale">
+        <span>0 m</span><span class="deny-tick">2.5 m limit</span><span>6 m</span>
+      </div>
+      <p id="sandbox-note" data-testid="sandbox-note"></p>
+      <button id="sandbox-reset" class="hidden" data-testid="sandbox-reset">Return to the measured sea state</button>
+      <p id="sandbox-foot">
+        Wave period and bearing are drawn at true scale. Wave height,
+        wavelength and land relief each carry their own exaggeration
+        &mdash; one scene unit spans ~22 km, so a true-scale 2.5 m sea
+        would be sub-pixel. Heights here are legible, not measurable.
+      </p>
+    </div>
   </div>
 
   <aside>
@@ -1221,6 +1688,226 @@
      in <head>), which can't live inside the classic IIFE above. Talks to
      it only through the small window.__ORCA_* bridge defined there. -->
 <script type="module" src="three-viz-app.js"></script>
+
+<script>
+/* Sea state -- the live water at the foot of the verdict field.
+ *
+ * Deliberately a separate, purely additive script: it touches none of
+ * renderRecommendation()'s state and adds no element to the markup at
+ * author time. It watches the Douglas ruler the main script already
+ * renders and mirrors it in motion. If anything here throws, is
+ * unsupported, or is switched off for reduced motion, the page is
+ * exactly the page it was without it.
+ *
+ * It reads wave height, the hard-deny threshold and the ruler's top of
+ * scale back out of the rendered ruler rather than re-declaring them.
+ * A second copy of WAVE_HARD_DENY_M in this file would be a new drift
+ * hazard of precisely the kind tests/test_frontend_constants.py exists
+ * to catch, and this way there is nothing to drift: the water breaks
+ * wherever the ruler says ORCA stops.
+ *
+ * NOT synthetic data. It renders no number, names no source and adds
+ * no reading. With no wave_height_m in evidence the ruler shows its
+ * "no data" line and the water here is drawn dead flat -- an absent
+ * observation has to look absent, never like a calm sea.
+ */
+(function () {
+  "use strict";
+
+  const card = document.getElementById("answer-card");
+  const rulerBody = document.getElementById("douglas-ruler-body");
+  const action = document.getElementById("answer-action");
+  if (!card || !rulerBody || !action || !window.requestAnimationFrame) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.id = "sea-canvas";
+  canvas.setAttribute("aria-hidden", "true");
+  const ctx = canvas.getContext && canvas.getContext("2d");
+  if (!ctx) return;
+  card.insertBefore(canvas, card.firstChild);
+
+  const stillMedia = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  // --- what the ruler is currently saying ---------------------------
+  // ".ruler-reading" is "3.1 m — Douglas 5 Rough …"; ".ruler-scale" is
+  // "0 | 2.5m deny line | 6m+". Both are absent (a .no-data line is
+  // shown instead) when this answer carried no wave observation.
+  function readSea() {
+    const reading = rulerBody.querySelector(".ruler-reading");
+    const scale = rulerBody.querySelector(".ruler-scale");
+    if (!reading || !scale) return null;
+    const wave = /(-?[\d.]+)\s*m/.exec(reading.textContent);
+    const deny = /([\d.]+)\s*m\s*deny/i.exec(scale.textContent);
+    const max = /([\d.]+)\s*m\s*\+/.exec(scale.textContent);
+    if (!wave || !deny || !max) return null;
+    const waveM = parseFloat(wave[1]);
+    const denyM = parseFloat(deny[1]);
+    const maxM = parseFloat(max[1]);
+    if (!isFinite(waveM) || !isFinite(denyM) || !isFinite(maxM) || maxM <= 0) return null;
+    return { waveM: Math.max(0, waveM), denyM: denyM, maxM: maxM };
+  }
+
+  // Sea state -> motion. The curve is deliberately not linear: the
+  // difference between 0.4 m and 1.2 m matters far more to a small
+  // boat than the difference between 4 m and 5 m, and the eye should
+  // read that the same way.
+  let sea = { amp: 0, k: 0.02, speed: 0, level: 0, breaking: 0 };
+
+  function syncSea() {
+    const r = readSea();
+    if (!r) {
+      // No observation. Flat, still, low -- never a plausible calm sea.
+      sea = { amp: 0, k: 0.02, speed: 0, level: 0.16, breaking: 0 };
+      return;
+    }
+    const ratio = Math.min(1, r.waveM / r.maxM);
+    const shaped = Math.pow(ratio, 0.72);
+    sea = {
+      amp: 1.5 + 26 * shaped,               // crest height, px
+      k: (Math.PI * 2) / (340 - 190 * shaped), // shorter swell as it builds
+      speed: 0.00020 + 0.00075 * shaped,
+      level: 0.19 + 0.19 * shaped,          // the water itself rises
+      // Whitecaps begin exactly at ORCA's hard-deny height and are
+      // fully formed a metre past it. Read from the ruler, so this
+      // can never disagree with the line drawn above it.
+      breaking: Math.max(0, Math.min(1, (r.waveM - r.denyM) / 1.0)),
+    };
+  }
+
+  // --- canvas plumbing ----------------------------------------------
+  let w = 0, h = 0, dpr = 1;
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    const rect = card.getBoundingClientRect();
+    w = Math.max(1, Math.round(rect.width));
+    h = Math.max(1, Math.round(rect.height));
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function surfaceY(x, t, base, amp) {
+    return base
+      + amp * 0.62 * Math.sin(sea.k * x + t * sea.speed)
+      + amp * 0.26 * Math.sin(sea.k * 1.9 * x - t * sea.speed * 1.45 + 1.7)
+      + amp * 0.12 * Math.sin(sea.k * 3.7 * x + t * sea.speed * 2.2 + 4.1);
+  }
+
+  // The rise: on a new verdict the water floods up from nothing. One
+  // orchestrated moment per answer, not an ambient loop.
+  let riseFrom = 0, riseAt = 0;
+  const RISE_MS = 900;
+  function easeOutCubic(p) { return 1 - Math.pow(1 - p, 3); }
+
+  function render(t) {
+    ctx.clearRect(0, 0, w, h);
+    if (h <= 0) return;
+
+    const rising = stillMedia && stillMedia.matches
+      ? 1
+      : easeOutCubic(Math.min(1, (t - riseAt) / RISE_MS));
+    const level = (riseFrom + (sea.level - riseFrom) * rising) * h;
+    if (level <= 0.5) return;
+
+    const amp = sea.amp * rising;
+    const base = h - level;
+    const step = 3;
+
+    // A back swell first, slightly higher and slower, so the water
+    // has depth rather than reading as one printed wave.
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    for (let x = 0; x <= w; x += step) {
+      ctx.lineTo(x, surfaceY(x * 0.8 + 140, t * 0.55, base - amp * 0.5, amp * 0.7));
+    }
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.10)";
+    ctx.fill();
+
+    // The measured surface.
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    let firstY = 0;
+    for (let x = 0; x <= w; x += step) {
+      const y = surfaceY(x, t, base, amp);
+      if (x === 0) { firstY = y; ctx.lineTo(0, y); } else { ctx.lineTo(x, y); }
+    }
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(0, firstY);
+    for (let x = step; x <= w; x += step) ctx.lineTo(x, surfaceY(x, t, base, amp));
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.34)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Whitecaps -- only past the hard-deny height. Drawn on the crests
+    // themselves, so they appear where the sea is actually steepest.
+    if (sea.breaking > 0 && rising > 0.35) {
+      ctx.strokeStyle = "rgba(255, 255, 255, " + (0.35 + 0.5 * sea.breaking).toFixed(3) + ")";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      const crestLine = base - amp * 0.45;
+      let prev = surfaceY(0, t, base, amp);
+      for (let x = step; x <= w; x += step) {
+        const y = surfaceY(x, t, base, amp);
+        if (y < crestLine && y > prev) {          // just past a crest
+          const len = 6 + 14 * sea.breaking;
+          ctx.beginPath();
+          ctx.moveTo(x - len, y - 1);
+          ctx.lineTo(x + len * 0.35, y + 1.5);
+          ctx.stroke();
+        }
+        prev = y;
+      }
+    }
+  }
+
+  let raf = 0;
+  function loop(t) {
+    raf = 0;
+    render(t);
+    if (!(stillMedia && stillMedia.matches) && !document.hidden) {
+      raf = window.requestAnimationFrame(loop);
+    }
+  }
+  function start() {
+    if (!raf) raf = window.requestAnimationFrame(loop);
+  }
+
+  function onAnswer() {
+    const before = sea.level;
+    syncSea();
+    resize();
+    // Only re-flood when the water actually has somewhere to go --
+    // a repeated identical verdict should not replay the animation.
+    if (Math.abs(before - sea.level) > 0.001 || before === 0) {
+      riseFrom = 0;
+      riseAt = (window.performance && performance.now()) || 0;
+    }
+    start();
+  }
+
+  const observer = new MutationObserver(onAnswer);
+  observer.observe(rulerBody, { childList: true, subtree: true, characterData: true });
+  observer.observe(action, { attributes: true, attributeFilter: ["class"], childList: true });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { resize(); start(); }).observe(card);
+  } else {
+    window.addEventListener("resize", function () { resize(); start(); });
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) start(); });
+
+  syncSea();
+  resize();
+  start();
+})();
+</script>
 
 </body>
 </html>

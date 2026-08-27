@@ -9,6 +9,10 @@
 // maplibre-gl is (a fixed version, not "latest").
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 // Reuses the app's existing palette (see index.html's :root custom
 // properties) so the 3D views read as part of the same product, not a
@@ -95,6 +99,505 @@ function buildElevationGrid(points) {
   return { lats, lons, grid };
 }
 
+// ---------------------------------------------------------------------
+// Gerstner ocean surface (the 3D environment sandbox's water)
+// ---------------------------------------------------------------------
+// A sum of four trochoidal (Gerstner) waves evaluated in the vertex
+// shader. Chosen over a Tessendorf/FFT ocean deliberately: FFT needs a
+// per-frame inverse transform (WebGPU compute or a fragment-shader FFT)
+// for a scene that is ten points and a seabed, and Firefox still ships
+// WebGPU disabled by default. Gerstner is closed-form, runs on plain
+// WebGL2, and needs no assets -- which also keeps the view offline-clean
+// (CLAUDE.md rule 8) rather than adding a texture fetch.
+//
+// WHAT IS REAL AND WHAT IS EXAGGERATED -- this matters, because ORCA's
+// whole claim is that its numbers are traceable:
+//
+//   * TIME is real. uOmega is 2*PI / wave_period_s straight off the
+//     cached observation, so the surface heaves at the actual period
+//     Open-Meteo reports. Longer swell visibly rolls slower.
+//   * DIRECTION is real. Taken from wave_direction_deg.
+//   * RELATIVE height is real. Amplitude is linear in wave_height_m, so
+//     doubling the reading doubles the crest.
+//   * ABSOLUTE height and wavelength are EXAGGERATED, and have to be:
+//     one scene unit spans ~22 km of coast, so a true-to-scale 2.5 m sea
+//     is 0.0001 units tall -- literally sub-pixel. The exaggeration
+//     factor is stated in the UI rather than hidden here.
+//
+// Nothing in this file decides anything. It draws wave_height_m; the
+// verdict still comes from orca/policy.py.
+
+// Scene units per metre of significant wave height. Tuned so the 2.5 m
+// Douglas 4/5 hard-deny boundary (orca/agents.py WAVE_HARD_DENY_M) lands
+// at a legible ~0.34 units against a 10 x 15 unit seascape.
+const WAVE_UNITS_PER_M = 0.075;
+
+// Mirrors orca/agents.py WAVE_HARD_DENY_M and index.html's Douglas ruler.
+// Drawing it is all this file does with it -- hazard_agent still owns the
+// denial (CLAUDE.md rule 4).
+const WAVE_HARD_DENY_M = 2.5;
+
+// Deep-water wavelength L0 = g*Tp^2 / 2*PI is 25 m at Tp=4 s and 190 m at
+// Tp=11 s. Both are invisible at true scale, so L0 is mapped monotonically
+// into a legible band: the ORDERING is honest (longer period always draws
+// longer crests), the magnitude is not.
+// Height and wavelength are exaggerated by DIFFERENT factors, which is
+// the one liberty this view takes that needs stating plainly: matching
+// them would preserve true steepness (~0.02) and render the sea flat, so
+// the wavelengths are stretched far less than the heights. Even so the
+// ratio has to stay in a plausible band -- at a visual steepness much
+// past ~0.1 the surface stops reading as water and starts reading as
+// corrugated iron.
+const WAVE_LAMBDA_MIN_UNITS = 2.0;
+const WAVE_LAMBDA_MAX_UNITS = 4.4;
+const L0_MIN_M = 20.0;
+const L0_MAX_M = 200.0;
+
+// The water plane runs well past the bathymetry block so the sea reaches
+// the horizon instead of stopping at a visible rectangular edge. Outside
+// the ETOPO bbox there is no relief data, so those vertices are simply
+// told they are in deep water -- no seabed is invented out there, it is
+// drawn as the open ocean it is.
+// Land relief: saturating, so 50 m of coastal plain is visible and
+// 2,000 m of Ghats does not dominate the frame. See _elevToY().
+// The characteristic height is deliberately low: almost all of ORCA's
+// coast is plain under ~150 m, and if that band does not visibly rise
+// there is no land in the picture -- just a colour change on a flat
+// sheet, which is what made the water above it read as a glitch.
+const LAND_MAX_UNITS = 2.6;
+const LAND_CHARACTERISTIC_M = 170;
+
+const WATER_OVERSCAN = 3.0;
+const WATER_SEGMENTS_X = 220;
+const WATER_SEGMENTS_Z = 280;
+
+function deepWaterWavelengthM(periodS) {
+  return (9.81 * periodS * periodS) / (2 * Math.PI);
+}
+
+// Low sun. Ocean renders live or die on grazing light: it is what makes
+// a specular track across the water and what lets light scatter through
+// a wave crest from behind.
+const SUN_DIRECTION = new THREE.Vector3(-0.62, 0.19, -0.76).normalize();
+
+// One analytic sky, compiled into BOTH the sky dome and the water's
+// reflection term. Sharing the function is the whole trick: the sea
+// reflects exactly the sky that is actually drawn behind it, including
+// the sun disc, so the specular track falls where the sun really is
+// without a single texture, cubemap or PMREM pass.
+const SKY_GLSL = /* glsl */ `
+  vec3 orcaSky(vec3 dir, vec3 sunDir) {
+    float y = dir.y;
+
+    vec3 zenith  = vec3(0.026, 0.105, 0.300);
+    vec3 horizon = vec3(0.300, 0.470, 0.640);
+    vec3 nadir   = vec3(0.010, 0.026, 0.046);
+
+    vec3 col = mix(horizon, zenith, pow(clamp(y, 0.0, 1.0), 0.36));
+    col = mix(nadir, col, smoothstep(-0.26, 0.015, y));
+
+    float mu = max(dot(dir, sunDir), 0.0);
+    // A tight disc and two Mie-ish glow lobes. The exponents are high
+    // and the multipliers low on purpose: a broad, bright sun turns the
+    // whole dome white, and because the sea reflects this exact
+    // function, a white sky makes the water grey too.
+    col += vec3(1.00, 0.94, 0.82) * pow(mu, 4000.0) * 8.0;
+    col += vec3(1.00, 0.68, 0.38) * pow(mu, 110.0) * 0.26;
+    col += vec3(0.95, 0.50, 0.26) * pow(mu, 14.0) * 0.09;
+
+    // Warm haze along the horizon -- but only around the sun's own
+    // bearing, so the opposite horizon stays cool and the sky keeps a
+    // direction instead of glowing uniformly.
+    float band = pow(1.0 - clamp(abs(y) * 4.5, 0.0, 1.0), 4.0);
+    col += vec3(0.34, 0.17, 0.08) * band * pow(clamp(mu, 0.0, 1.0), 1.5) * 0.55;
+    return col;
+  }
+`;
+
+const SKY_VERTEX_SHADER = /* glsl */ `
+  varying vec3 vDir;
+  void main() {
+    vDir = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const SKY_FRAGMENT_SHADER = /* glsl */ `
+  uniform vec3 uSunDir;
+  varying vec3 vDir;
+  ${SKY_GLSL}
+  void main() {
+    gl_FragColor = vec4(orcaSky(normalize(vDir), uSunDir), 1.0);
+  }
+`;
+
+const WATER_VERTEX_SHADER = /* glsl */ `
+  uniform float uTime;
+  uniform float uAmp;      // scene units, mean-to-crest of the dominant wave
+  uniform float uLambda;   // scene units, dominant wavelength
+  uniform float uOmega;    // rad/s -- the REAL 2*PI / wave_period_s
+  uniform float uChop;     // 0..1 Gerstner horizontal pinch
+  uniform vec2  uDir;      // unit vector, from the real wave_direction_deg
+
+  attribute float aDepth;  // SIGNED metres of water: negative over land
+
+  varying float vDepth;
+  varying float vFoam;
+  varying vec3  vWorld;
+  varying vec3  vNrm;
+  varying float vElev;   // displacement above mean sea level, scene units
+
+  // One trochoid. Accumulates displacement, the analytic normal, and a
+  // crest-sharpness term the fragment shader thresholds into foam.
+  void trochoid(
+    vec2 d, float amp, float lam, float om, float chop, vec2 p, float t,
+    inout vec3 disp, inout vec3 nrm, inout float steep
+  ) {
+    float w = 6.2831853 / lam;
+    float q = chop / (w * amp * 4.0);
+    float phase = w * dot(d, p) - om * t;
+    float c = cos(phase);
+    float s = sin(phase);
+    float wa = w * amp;
+
+    disp.x += q * amp * d.x * c;
+    disp.z += q * amp * d.y * c;
+    disp.y += amp * s;
+
+    nrm.x += -d.x * wa * c;
+    nrm.z += -d.y * wa * c;
+    nrm.y += -q * wa * s;
+
+    steep += wa * max(s, 0.0);
+  }
+
+  void main() {
+    vec2 p = vec2(position.x, position.z);
+    vec3 disp = vec3(0.0);
+    vec3 nrm = vec3(0.0, 1.0, 0.0);
+    float steep = 0.0;
+
+    // Four components. Wavelength ratios spread the spectrum; the
+    // angular offsets give short-crestedness instead of a corrugated
+    // roof. Each component's frequency follows the deep-water dispersion
+    // relation om ~ sqrt(g*k), i.e. om_i = om_0 * sqrt(lam_0 / lam_i),
+    // so the shorter components genuinely run faster.
+    // Directional spread: +38, -58 and +14 degrees off the observed
+    // bearing. Narrower than this and the sum reads as corrugated iron
+    // rather than as a short-crested sea.
+    vec2 d0 = uDir;
+    vec2 d1 = vec2(uDir.x * 0.7880 - uDir.y * 0.6157, uDir.x * 0.6157 + uDir.y * 0.7880);
+    vec2 d2 = vec2(uDir.x * 0.5299 + uDir.y * 0.8480, -uDir.x * 0.8480 + uDir.y * 0.5299);
+    vec2 d3 = vec2(uDir.x * 0.9703 - uDir.y * 0.2419, uDir.x * 0.2419 + uDir.y * 0.9703);
+
+    // Amplitude falls off faster than wavelength does, so the short
+    // components ripple the surface instead of chopping it up.
+    trochoid(d0, uAmp * 1.00, uLambda * 1.00, uOmega * 1.0000, uChop, p, uTime, disp, nrm, steep);
+    trochoid(d1, uAmp * 0.38, uLambda * 0.62, uOmega * 1.2700, uChop, p, uTime, disp, nrm, steep);
+    trochoid(d2, uAmp * 0.16, uLambda * 0.34, uOmega * 1.7150, uChop, p, uTime, disp, nrm, steep);
+    trochoid(d3, uAmp * 0.44, uLambda * 1.52, uOmega * 0.8111, uChop, p, uTime, disp, nrm, steep);
+
+    // Waves flatten as they run out of water, and stop entirely at the
+    // waterline. This one IS physical in shape if not in scale: no
+    // seabed, no shoaling limit.
+    float shelf = smoothstep(0.0, 14.0, max(aDepth, 0.0));
+    disp *= mix(0.0, 1.0, smoothstep(-0.2, 1.5, aDepth)) * mix(0.35, 1.0, shelf);
+
+    vec3 pos = position + disp;
+    vec4 world = modelMatrix * vec4(pos, 1.0);
+
+    vDepth = aDepth;
+    vFoam = steep;
+    vWorld = world.xyz;
+    vNrm = normalize(nrm);
+    vElev = disp.y;
+
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+const WATER_FRAGMENT_SHADER = /* glsl */ `
+  uniform vec3  uShallow;
+  uniform vec3  uDeep;
+  uniform vec3  uFoam;
+  uniform vec3  uSunDir;
+  uniform float uTime;
+  uniform float uAmp;
+  uniform float uFoamGain;     // 0..1 whitecap coverage, from real wave height
+  uniform float uDenyMix;      // 0..1 -- how far into hard-deny territory
+  uniform float uHypothetical; // 1.0 when the height is a user hypothesis
+
+  varying float vDepth;
+  varying float vFoam;
+  varying vec3  vWorld;
+  varying vec3  vNrm;
+  varying float vElev;
+
+  ${SKY_GLSL}
+
+  // Cheap value noise. Only ever breaks up foam edges -- foam is the one
+  // place a hard analytic threshold reads unmistakably as computer
+  // graphics rather than as water.
+  float hash12(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+
+  float valueNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x),
+      mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x),
+      u.y
+    );
+  }
+
+  void main() {
+    // --- 0. The coastline ---
+    // vDepth is signed, so land is negative and there is simply no water
+    // to draw there. The narrow ramp either side of zero is the wet sand
+    // the swash runs over; without it the coast aliases into a stair.
+    float wet = smoothstep(-0.35, 1.1, vDepth);
+    if (wet < 0.012) discard;
+
+    vec3 N = normalize(vNrm);
+    vec3 V = normalize(cameraPosition - vWorld);
+    vec3 L = normalize(uSunDir);
+
+    // --- 1. Body colour: Beer-Lambert absorption through real depth ---
+    // Red is absorbed an order of magnitude faster than blue, which is
+    // the entire reason deep water is blue. One exp() buys more
+    // perceived realism than any texture would. Depth is clamped so the
+    // continental shelf still reads as a gradient instead of saturating
+    // to black a few hundred metres out.
+    float d = clamp(vDepth, 0.0, 90.0);
+    vec3 transmit = exp(-vec3(0.085, 0.028, 0.016) * d);
+    vec3 body = mix(uDeep, uShallow, transmit);
+
+    // --- 2. Reflection: the actual sky that is drawn behind the sea ---
+    vec3 R = reflect(-V, N);
+    R.y = max(R.y, 0.008); // never sample below the horizon
+    vec3 reflection = orcaSky(normalize(R), L);
+
+    // Schlick, F0 = 0.02 for a water/air interface. This is why a calm
+    // sea near the horizon reads as pure sky and the water under your
+    // feet reads as water.
+    float fresnel = 0.02 + 0.98 * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.0);
+
+    // --- 3. Subsurface scattering through the crests ---
+    // Light entering the back of a wave and leaving the front is what
+    // makes real swell glow green at the top. Scaled by how high this
+    // vertex sits, so only crests light up -- and it therefore
+    // intensifies with wave height, which is the point of the sandbox.
+    float lift = clamp(vElev / max(uAmp, 0.001), 0.0, 1.4);
+    float back = pow(clamp(dot(V, -L) * 0.5 + 0.5, 0.0, 1.0), 3.5);
+    vec3 sss = vec3(0.10, 0.62, 0.48) * back * lift * 0.75;
+
+    // --- 4. Sun glitter ---
+    // The reflected sky already carries the sun disc, so the specular
+    // track comes for free and lands in the physically right place; this
+    // is just a tighter highlight on top of it.
+    vec3 H = normalize(L + V);
+    float spec = pow(max(dot(N, H), 0.0), 220.0) * 2.4;
+
+    // --- 5. Foam ---
+    // Gated by uFoamGain, which the CPU derives from the real wave
+    // height. Whitecaps are a sea-state signal, not decoration: a 0.8 m
+    // slight sea has essentially none and a 5 m sea is covered in them,
+    // so the slider changes the CHARACTER of the water and not just its
+    // amplitude. Painting whitecaps on a calm sea would be the visual
+    // equivalent of inventing a reading.
+    vec2 fp = vWorld.xz * 5.5;
+    float n = valueNoise(fp + uTime * 0.16) * 0.6 + valueNoise(fp * 2.7 - uTime * 0.09) * 0.4;
+    float crest = smoothstep(0.66, 1.15, vFoam * (0.5 + n * 0.9)) * uFoamGain;
+    // Surf, not a white shelf: a band that hugs the waterline itself,
+    // fading out both seaward and onto the sand, and only where there is
+    // wave energy to break.
+    float shore = (1.0 - smoothstep(0.2, 2.2, vDepth))
+                * smoothstep(-0.1, 0.6, vDepth)
+                * smoothstep(0.42, 0.88, n)
+                * (0.25 + uFoamGain * 0.5);
+    float foam = clamp(max(crest, shore), 0.0, 1.0);
+
+    vec3 col = mix(body + sss, reflection, fresnel);
+    col += spec;
+    col = mix(col, uFoam, foam);
+
+    // Past the 2.5 m limit the sea itself carries the warning, so a
+    // screenshot of the surface alone still says "this is refused". Kept
+    // low: it should read as a flush under the water, not as red paint.
+    col = mix(col, vec3(0.52, 0.13, 0.09), uDenyMix * 0.14);
+    // A hypothetical sea is marked off-hue on purpose -- a fabricated
+    // number must never be screenshot-able as a measured one (PRD P8) --
+    // but the loud half of that job belongs to the panel and the badge.
+    // Here it is a slight violet cast; any stronger and the water stops
+    // looking like water, which is its own kind of dishonesty.
+    col = mix(col, col * vec3(1.05, 0.95, 1.14), uHypothetical * 0.7);
+
+    // --- 6. Aerial perspective ---
+    // Distant water fades into the sky in the direction you are looking,
+    // which is what gives the diorama a horizon instead of an edge.
+    float dist = length(cameraPosition - vWorld);
+    float haze = 1.0 - exp(-dist * 0.026);
+    col = mix(col, orcaSky(-V, L), haze * 0.5);
+
+    // Kept well under 1.0 even in deep water: the ETOPO relief beneath is
+    // half the point of the view, and an opaque sea hides it. Multiplied
+    // by the wet mask so the sheet thins to nothing as it reaches the
+    // beach instead of ending on a hard line.
+    float alpha = mix(0.42, 0.86, smoothstep(0.0, 30.0, max(vDepth, 0.0)));
+    gl_FragColor = vec4(col, max(alpha, foam * 0.92) * wet);
+  }
+`;
+
+// ---------------------------------------------------------------------
+// Free-fly camera
+// ---------------------------------------------------------------------
+// Drag to look, WASD to move, Q/E for altitude. Written here rather than
+// pulled from three/addons because FlyControls rolls the camera on drag
+// (there is no dragToLook without roll) and FirstPersonControls steers
+// from raw pointer position, which means the view drifts whenever the
+// mouse is merely resting over the canvas. Neither is what you want for
+// flying over a coastline in front of an audience.
+//
+// Yaw/pitch are held as scalars and written to the camera each frame, so
+// the horizon can never tilt -- the one property that matters most for a
+// scene whose subject is a sea surface.
+class FreeFlyController {
+  constructor(camera, domElement) {
+    this.camera = camera;
+    this.dom = domElement;
+    this.enabled = false;
+
+    this.speed = 6.0;         // scene units/second at normal throttle
+    this.lookSensitivity = 0.0028;
+    this.damping = 12.0;
+
+    this._yaw = 0;
+    this._pitch = 0;
+    this._velocity = new THREE.Vector3();
+    this._keys = new Set();
+    this._dragging = false;
+    this._last = { x: 0, y: 0 };
+
+    this._onKeyDown = (e) => {
+      if (!this.enabled) return;
+      // The listener is on window, so without this the flight keys would
+      // swallow every W, A, S and D the user types into the ask bar --
+      // and preventDefault() would stop the characters appearing at all.
+      const el = e.target;
+      const tag = el && el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (el && el.isContentEditable)) return;
+
+      const k = e.key.toLowerCase();
+      if (FreeFlyController.KEYS.has(k)) {
+        this._keys.add(k);
+        e.preventDefault();
+      }
+    };
+    this._onKeyUp = (e) => this._keys.delete(e.key.toLowerCase());
+    this._onBlur = () => this._keys.clear();
+
+    this._onPointerDown = (e) => {
+      if (!this.enabled || e.button !== 0) return;
+      this._dragging = true;
+      this._last = { x: e.clientX, y: e.clientY };
+      this.dom.setPointerCapture?.(e.pointerId);
+      this.dom.style.cursor = "grabbing";
+    };
+    this._onPointerMove = (e) => {
+      if (!this.enabled || !this._dragging) return;
+      this._yaw -= (e.clientX - this._last.x) * this.lookSensitivity;
+      this._pitch -= (e.clientY - this._last.y) * this.lookSensitivity;
+      // Just short of straight up/down: at exactly +/-90 degrees the
+      // yaw axis degenerates and the view snaps.
+      this._pitch = Math.max(-1.553, Math.min(1.553, this._pitch));
+      this._last = { x: e.clientX, y: e.clientY };
+    };
+    this._onPointerUp = (e) => {
+      this._dragging = false;
+      this.dom.releasePointerCapture?.(e.pointerId);
+      this.dom.style.cursor = this.enabled ? "grab" : "";
+    };
+    this._onWheel = (e) => {
+      if (!this.enabled) return;
+      e.preventDefault();
+      // Throttle, not dolly: scrolling changes how fast you fly, which
+      // is what you actually want when crossing a 30-unit seascape.
+      this.speed = Math.max(1.0, Math.min(40, this.speed * (e.deltaY > 0 ? 0.88 : 1.14)));
+    };
+  }
+
+  static KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
+
+  enable() {
+    if (this.enabled) return;
+    this.enabled = true;
+    // Adopt whatever the orbit camera was looking at, so switching modes
+    // never jumps the view.
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    this._yaw = Math.atan2(-dir.x, -dir.z);
+    this._pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)));
+    this._velocity.set(0, 0, 0);
+
+    window.addEventListener("keydown", this._onKeyDown);
+    window.addEventListener("keyup", this._onKeyUp);
+    window.addEventListener("blur", this._onBlur);
+    this.dom.addEventListener("pointerdown", this._onPointerDown);
+    this.dom.addEventListener("pointermove", this._onPointerMove);
+    this.dom.addEventListener("pointerup", this._onPointerUp);
+    this.dom.addEventListener("wheel", this._onWheel, { passive: false });
+    this.dom.style.cursor = "grab";
+  }
+
+  disable() {
+    if (!this.enabled) return;
+    this.enabled = false;
+    this._keys.clear();
+    this._dragging = false;
+    window.removeEventListener("keydown", this._onKeyDown);
+    window.removeEventListener("keyup", this._onKeyUp);
+    window.removeEventListener("blur", this._onBlur);
+    this.dom.removeEventListener("pointerdown", this._onPointerDown);
+    this.dom.removeEventListener("pointermove", this._onPointerMove);
+    this.dom.removeEventListener("pointerup", this._onPointerUp);
+    this.dom.removeEventListener("wheel", this._onWheel);
+    this.dom.style.cursor = "";
+  }
+
+  update(dt) {
+    if (!this.enabled) return;
+    const step = Math.min(dt, 0.1); // a backgrounded tab must not teleport
+
+    this.camera.quaternion.setFromEuler(
+      new THREE.Euler(this._pitch, this._yaw, 0, "YXZ")
+    );
+
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+
+    const wish = new THREE.Vector3();
+    if (this._keys.has("w")) wish.add(forward);
+    if (this._keys.has("s")) wish.sub(forward);
+    if (this._keys.has("d")) wish.add(right);
+    if (this._keys.has("a")) wish.sub(right);
+    if (this._keys.has("e") || this._keys.has(" ")) wish.y += 1;
+    if (this._keys.has("q")) wish.y -= 1;
+
+    if (wish.lengthSq() > 0) {
+      wish.normalize().multiplyScalar(this.speed * (this._keys.has("shift") ? 3.0 : 1.0));
+    }
+    // Exponential approach rather than a hard set, so starts and stops
+    // glide instead of snapping.
+    this._velocity.lerp(wish, 1 - Math.exp(-this.damping * step));
+    this.camera.position.addScaledVector(this._velocity, step);
+  }
+}
+
 // Hover tooltip + click-to-select-zone, shared by both visualizations.
 function attachInteraction(viz) {
   const tooltip = document.createElement("div");
@@ -135,7 +638,20 @@ function attachInteraction(viz) {
   viz.renderer.domElement.addEventListener("pointerleave", () => {
     tooltip.style.display = "none";
   });
+  // A camera drag ends in a "click" too, so without this guard orbiting
+  // or free-looking across a zone marker fires a whole new /ask. Only a
+  // pointer that barely moved counts as a deliberate pick.
+  let pressAt = null;
+  viz.renderer.domElement.addEventListener("pointerdown", (event) => {
+    pressAt = { x: event.clientX, y: event.clientY };
+  });
   viz.renderer.domElement.addEventListener("click", (event) => {
+    const moved = pressAt
+      ? Math.hypot(event.clientX - pressAt.x, event.clientY - pressAt.y)
+      : 0;
+    pressAt = null;
+    if (moved > 5) return;
+
     const hits = hitTest(event);
     const zone = hits.length && hits[0].object.userData.zone;
     if (zone && typeof window.__ORCA_SELECT_ZONE__ === "function") {
@@ -168,6 +684,11 @@ class ThreeVizBase {
     this._raycastTargets = [];
     this._active = false;
     this._clock = new THREE.Clock();
+    // Elapsed time is accumulated by hand instead of using
+    // Clock.getElapsedTime(), because that method calls getDelta()
+    // internally -- calling both in one frame double-advances the clock
+    // and makes the waves run at twice speed.
+    this._elapsed = 0;
     this._tick = this._tick.bind(this);
 
     this._resizeObserver = new ResizeObserver(() => this._onResize());
@@ -182,6 +703,9 @@ class ThreeVizBase {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+    // Subclasses may opt into postprocessing by setting this._composer;
+    // when they do it owns the final draw and has to track the canvas.
+    if (this._composer) this._composer.setSize(w, h);
   }
 
   start() {
@@ -198,18 +722,27 @@ class ThreeVizBase {
 
   dispose() {
     this.stop();
+    this._freeFly?.disable(); // its listeners live on window, not the canvas
     this._resizeObserver.disconnect();
+    this._composer?.dispose?.();
     this.renderer.dispose();
   }
 
   _tick() {
     if (!this._active) return;
-    const t = this._clock.getElapsedTime();
+    const dt = this._clock.getDelta();
+    this._elapsed += dt;
+    const t = this._elapsed;
     const pulse = 1 + Math.sin(t * 2.2) * 0.08;
     this._pulseTargets.forEach((obj) => obj.scale.setScalar(pulse));
-    if (this._onTick) this._onTick(t);
-    this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    if (this._onTick) this._onTick(t, dt);
+    // OrbitControls writes the camera transform every update(), so the
+    // two controllers must never both run: whichever is disabled stays
+    // silent rather than fighting for the camera each frame.
+    if (this._freeFly?.enabled) this._freeFly.update(dt);
+    else this.controls.update();
+    if (this._composer) this._composer.render();
+    else this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this._tick);
   }
 }
@@ -361,16 +894,58 @@ export class ReasoningGraph extends ThreeVizBase {
 // elevation are not.
 export class OceanDiorama extends ThreeVizBase {
   constructor(container) {
-    super(container, { cameraPosition: [0, 9, 13], autoRotateSpeed: 0.35 });
-    this.controls.maxPolarAngle = Math.PI * 0.49; // stay above the "seabed"
-    this.controls.minDistance = 5;
-    this.controls.maxDistance = 30;
+    super(container, { cameraPosition: [-8.5, 7.0, 15.5], autoRotateSpeed: 0.22 });
+    // A little under the horizon, so the camera can drop almost to sea
+    // level for the dramatic angle without ever going below the seabed.
+    this.controls.maxPolarAngle = Math.PI * 0.495;
+    this.controls.minDistance = 4;
+    this.controls.maxDistance = 40;
+    this.controls.target.set(0, 0.1, 0);
 
-    this.scene.background = new THREE.Color(0x0d2233);
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    const sun = new THREE.DirectionalLight(0xfff2d9, 1.0);
-    sun.position.set(8, 12, 4);
+    // Filmic response. The water shader writes genuine HDR values (the
+    // sun disc peaks around 26.0), so without tone mapping every
+    // specular highlight clips to a flat white blob.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+
+    this._sunDir = SUN_DIRECTION.clone();
+
+    // Sky dome, drawn from the same orcaSky() the water reflects.
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(90, 32, 20),
+      new THREE.ShaderMaterial({
+        vertexShader: SKY_VERTEX_SHADER,
+        fragmentShader: SKY_FRAGMENT_SHADER,
+        uniforms: { uSunDir: { value: this._sunDir } },
+        side: THREE.BackSide,
+        depthWrite: false,
+      })
+    );
+    sky.renderOrder = -1;
+    this.scene.add(sky);
+
+    // Sky-above / seabed-below bounce, which is what stops the terrain
+    // reading as a grey lump under a blue sky.
+    this.scene.add(new THREE.HemisphereLight(0x7fa8cc, 0x141f1c, 0.85));
+    const sun = new THREE.DirectionalLight(0xffd9a8, 1.6);
+    sun.position.copy(this._sunDir).multiplyScalar(40);
     this.scene.add(sun);
+    // Cool fill from the opposite side so the shadowed coast keeps shape
+    // instead of going black.
+    const fill = new THREE.DirectionalLight(0x7fb0d8, 0.5);
+    fill.position.set(10, 6, 9);
+    this.scene.add(fill);
+
+    // Bloom, kept tight: it exists to make the sun's specular track and
+    // the hard-deny beacons glow, not to smear the whole frame.
+    this._composer = new EffectComposer(this.renderer);
+    this._composer.addPass(new RenderPass(this.scene, this.camera));
+    // (resolution, strength, radius, threshold). The threshold sits well
+    // above 1.0 on purpose: the pass runs on linear HDR before OutputPass
+    // tone-maps, so anything lower would bloom ordinary lit terrain.
+    this._bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.30, 0.50, 1.60);
+    this._composer.addPass(this._bloom);
+    this._composer.addPass(new OutputPass());
 
     this._width = 10;
     this._depth = 15;
@@ -384,6 +959,76 @@ export class OceanDiorama extends ThreeVizBase {
     this._terrain = new THREE.Group();
     this._columns = new THREE.Group();
     this.scene.add(this._terrain, this._columns);
+
+    // --- environment sandbox state -------------------------------
+    // `_baselineWave` is whatever the last /ask response actually
+    // observed; `_wave` is what is currently being drawn. They differ
+    // only while the user is holding a hypothesis, and `hypothetical`
+    // is derived from that difference rather than tracked separately,
+    // so the flag cannot drift out of sync with the geometry.
+    this._freeFly = new FreeFlyController(this.camera, this.renderer.domElement);
+
+    this._baselineWave = null;
+    this._wave = { heightM: 0.8, periodS: 7.0, directionDeg: 150 };
+    this._water = null;
+    this._denyPlane = null;
+    this._onWaveChange = null;
+  }
+
+  // "orbit"  -- OrbitControls circling the diorama, the default.
+  // "free"   -- fly anywhere: drag to look, WASD to move, Q/E altitude.
+  // Switching adopts the current view either way, so the camera never
+  // jumps; the free controller reads the orbit camera's heading on
+  // enable, and orbit re-aims its target down the free camera's own
+  // sightline on return.
+  setCameraMode(mode) {
+    const free = mode === "free";
+    if (free === this._freeFly.enabled) return;
+
+    if (free) {
+      this.controls.enabled = false;
+      this.controls.autoRotate = false;
+      this._freeFly.enable();
+    } else {
+      this._freeFly.disable();
+      const dir = new THREE.Vector3();
+      this.camera.getWorldDirection(dir);
+      // Put the orbit pivot a sensible distance ahead of wherever the
+      // free camera ended up, rather than snapping back to the origin.
+      this.controls.target.copy(this.camera.position).addScaledVector(dir, 12);
+      this.controls.enabled = true;
+      this.controls.update();
+    }
+    return free;
+  }
+
+  get cameraMode() {
+    return this._freeFly.enabled ? "free" : "orbit";
+  }
+
+  setAutoRotate(on) {
+    if (!this._freeFly.enabled) this.controls.autoRotate = !!on;
+  }
+
+  resetCamera() {
+    this._freeFly.disable();
+    this.camera.position.set(-8.5, 7.0, 15.5);
+    this.controls.target.set(0, 0.1, 0);
+    this.controls.enabled = true;
+    this.controls.update();
+  }
+
+  get waveState() {
+    return {
+      ...this._wave,
+      baseline: this._baselineWave ? { ...this._baselineWave } : null,
+      hypothetical: this.isHypothetical,
+    };
+  }
+
+  get isHypothetical() {
+    if (!this._baselineWave) return false;
+    return Math.abs(this._wave.heightM - this._baselineWave.heightM) > 1e-6;
   }
 
   _lonToX(lon) {
@@ -394,8 +1039,17 @@ export class OceanDiorama extends ThreeVizBase {
     return ((this._bbox.max_lat - lat) / (this._bbox.max_lat - this._bbox.min_lat)) * this._depth - this._depth / 2;
   }
 
+  // Land and seabed get DIFFERENT vertical treatments, because they have
+  // different jobs here. Below water the scale stays linear -- depth is
+  // what the Beer-Lambert tint reads and what makes the shelf legible.
+  // Above water a plain 1/1200 turns the whole Coromandel coast into a
+  // 0.1-unit smear against a 2 km shelf drop, so land runs through a
+  // saturating curve instead: the coastal plain every zone actually sits
+  // on gets real relief, and the Western Ghats still cap out inside the
+  // frame rather than spearing through the sky.
   _elevToY(elev) {
-    return elev * this._elevationScale;
+    if (elev <= 0) return elev * this._elevationScale;
+    return LAND_MAX_UNITS * (1 - Math.exp(-elev / LAND_CHARACTERISTIC_M));
   }
 
   _heightAt(lat, lon) {
@@ -422,10 +1076,19 @@ export class OceanDiorama extends ThreeVizBase {
     const cols = lons.length;
     const positions = new Float32Array(rows * cols * 3);
     const colors = new Float32Array(rows * cols * 3);
-    const deep = new THREE.Color(0x08243b);
-    const shallow = new THREE.Color(0x1f6f8c);
-    const lowland = new THREE.Color(0x4c7a4a);
-    const highland = new THREE.Color(0x8a7752);
+    // Warmer, higher-contrast relief than the old flat blues: most of
+    // this mesh is seen THROUGH absorbing water, which desaturates and
+    // darkens everything, so the source colours have to start brighter
+    // to survive the trip.
+    const deep = new THREE.Color(0x0a2036);
+    const shallow = new THREE.Color(0x3f9c9a);
+    // A real hypsometric ramp rather than one lerp: beach, then the
+    // cultivated coastal plain, then dry upland, then bare rock. Four
+    // stops is what makes the coastline read as a coastline.
+    const beach = new THREE.Color(0xdcc79b);
+    const plain = new THREE.Color(0x5f8b46);
+    const upland = new THREE.Color(0x93844a);
+    const rock = new THREE.Color(0xa39c92);
 
     let p = 0;
     let c = 0;
@@ -436,10 +1099,21 @@ export class OceanDiorama extends ThreeVizBase {
         positions[p++] = this._elevToY(elev);
         positions[p++] = this._latToZ(lats[i]);
 
-        const col =
-          elev < 0
-            ? shallow.clone().lerp(deep, Math.min(-elev / 3500, 1))
-            : lowland.clone().lerp(highland, Math.min(elev / 500, 1));
+        // sqrt on the submarine ramp so the shelf -- where every zone
+        // actually sits -- gets most of the colour range, instead of it
+        // all being spent on the abyssal plain.
+        let col;
+        if (elev < 0) {
+          col = shallow.clone().lerp(deep, Math.min(Math.sqrt(-elev / 3500), 1));
+        } else if (elev < 12) {
+          col = beach.clone();
+        } else if (elev < 140) {
+          col = beach.clone().lerp(plain, (elev - 12) / 128);
+        } else if (elev < 700) {
+          col = plain.clone().lerp(upland, (elev - 140) / 560);
+        } else {
+          col = upland.clone().lerp(rock, Math.min((elev - 700) / 900, 1));
+        }
         colors[c++] = col.r;
         colors[c++] = col.g;
         colors[c++] = col.b;
@@ -465,20 +1139,284 @@ export class OceanDiorama extends ThreeVizBase {
 
     const mesh = new THREE.Mesh(
       geometry,
-      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.05 })
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0.0 })
     );
     mesh.userData.tooltip = null;
     this._terrain.add(mesh);
 
-    const seaGeom = new THREE.PlaneGeometry(this._width, this._depth, 1, 1);
-    seaGeom.rotateX(-Math.PI / 2);
-    const sea = new THREE.Mesh(
-      seaGeom,
-      new THREE.MeshStandardMaterial({ color: 0x1a5f82, transparent: true, opacity: 0.35, roughness: 0.1, metalness: 0.2 })
+    this._buildSkirt(lats, lons, grid);
+    this._buildWaterMesh();
+  }
+
+  // Walls dropped from the four edges of the relief down to a flat base,
+  // plus a floor. Without them the bathymetry is an infinitely thin sheet
+  // and the whole view reads as a rectangle floating in the sky; with
+  // them it reads as a block of seafloor lifted out of the coast, which
+  // is what it actually is.
+  _buildSkirt(lats, lons, grid) {
+    const rows = lats.length;
+    const cols = lons.length;
+    let minElev = Infinity;
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) minElev = Math.min(minElev, grid[i][j]);
+    }
+    const baseY = this._elevToY(minElev) - 0.35;
+
+    const positions = [];
+    const colors = [];
+    const top = new THREE.Color(0x243b4d);
+    const bottom = new THREE.Color(0x0a141d);
+
+    const push = (x, y, z, t) => {
+      positions.push(x, y, z);
+      const c = bottom.clone().lerp(top, t);
+      colors.push(c.r, c.g, c.b);
+    };
+
+    // Walk each border, emitting a quad per segment.
+    const wall = (aLat, aLon, bLat, bLon) => {
+      const ax = this._lonToX(aLon), az = this._latToZ(aLat), ay = this._elevToY(this._heightAt(aLat, aLon));
+      const bx = this._lonToX(bLon), bz = this._latToZ(bLat), by = this._elevToY(this._heightAt(bLat, bLon));
+      push(ax, ay, az, 1); push(bx, by, bz, 1); push(bx, baseY, bz, 0);
+      push(ax, ay, az, 1); push(bx, baseY, bz, 0); push(ax, baseY, az, 0);
+    };
+
+    for (let j = 0; j < cols - 1; j++) {
+      wall(lats[0], lons[j], lats[0], lons[j + 1]);
+      wall(lats[rows - 1], lons[j + 1], lats[rows - 1], lons[j]);
+    }
+    for (let i = 0; i < rows - 1; i++) {
+      wall(lats[i + 1], lons[0], lats[i], lons[0]);
+      wall(lats[i], lons[cols - 1], lats[i + 1], lons[cols - 1]);
+    }
+
+    // Floor.
+    const x0 = this._lonToX(lons[0]), x1 = this._lonToX(lons[cols - 1]);
+    const z0 = this._latToZ(lats[0]), z1 = this._latToZ(lats[rows - 1]);
+    push(x0, baseY, z0, 0); push(x1, baseY, z1, 0); push(x1, baseY, z0, 0);
+    push(x0, baseY, z0, 0); push(x0, baseY, z1, 0); push(x1, baseY, z1, 0);
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geom.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geom.computeVertexNormals();
+    this._terrain.add(
+      new THREE.Mesh(
+        geom,
+        new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 1.0,
+          metalness: 0.0,
+          side: THREE.DoubleSide,
+        })
+      )
     );
-    sea.position.y = 0.02;
-    this._terrain.add(sea);
-    this._seaMesh = sea;
+  }
+
+  // The sandbox surface. Rebuilt only when the bathymetry changes --
+  // moving the wave slider just writes uniforms, so dragging it is a
+  // uniform update per frame, not a geometry rebuild.
+  _buildWaterMesh() {
+    const seaW = this._width * WATER_OVERSCAN;
+    const seaD = this._depth * WATER_OVERSCAN;
+    const geometry = new THREE.PlaneGeometry(seaW, seaD, WATER_SEGMENTS_X, WATER_SEGMENTS_Z);
+    geometry.rotateX(-Math.PI / 2);
+
+    // Bake the real seabed depth under every water vertex, so the
+    // fragment shader's Beer-Lambert tint and the shoaling falloff are
+    // driven by ERDDAP's actual ETOPO relief rather than a painted
+    // gradient. Same _heightAt() the risk columns stand on.
+    const pos = geometry.getAttribute("position");
+    const depths = new Float32Array(pos.count);
+    const { min_lat, max_lat, min_lon, max_lon } = this._bbox;
+    // SIGNED, not clamped: negative over land. A clamped 0 reads to the
+    // shader as "zero metres of water", which is not the same statement
+    // as "no water here" -- it got the shallow tint and the surf line and
+    // laid a white sheet over the whole coastal plain. The sign is what
+    // lets the surface end at the real coastline.
+    const OPEN_OCEAN_M = 120; // past the surveyed block: deep, and drawn as such
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const insideX = Math.abs(x) <= this._width / 2;
+      const insideZ = Math.abs(z) <= this._depth / 2;
+      if (insideX && insideZ) {
+        const lon = min_lon + ((x + this._width / 2) / this._width) * (max_lon - min_lon);
+        const lat = max_lat - ((z + this._depth / 2) / this._depth) * (max_lat - min_lat);
+        depths[i] = -this._heightAt(lat, lon);
+      } else {
+        // Ease outwards over one block-width so the surveyed area does
+        // not end in a visible ring.
+        const outX = Math.max(0, Math.abs(x) - this._width / 2) / (this._width / 2);
+        const outZ = Math.max(0, Math.abs(z) - this._depth / 2) / (this._depth / 2);
+        const t = Math.min(1, Math.hypot(outX, outZ));
+        const edgeLon = Math.min(Math.max(min_lon + ((x + this._width / 2) / this._width) * (max_lon - min_lon), min_lon), max_lon);
+        const edgeLat = Math.min(Math.max(max_lat - ((z + this._depth / 2) / this._depth) * (max_lat - min_lat), min_lat), max_lat);
+        const edgeDepth = -this._heightAt(edgeLat, edgeLon);
+        depths[i] = edgeDepth + (OPEN_OCEAN_M - edgeDepth) * t;
+      }
+    }
+    geometry.setAttribute("aDepth", new THREE.BufferAttribute(depths, 1));
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader: WATER_VERTEX_SHADER,
+      fragmentShader: WATER_FRAGMENT_SHADER,
+      transparent: true,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uTime: { value: 0 },
+        uAmp: { value: 0.05 },
+        uLambda: { value: 1.4 },
+        uOmega: { value: 0.9 },
+        uChop: { value: 0.75 },
+        uDir: { value: new THREE.Vector2(0, 1) },
+        uSunDir: { value: this._sunDir },
+        uShallow: { value: new THREE.Color(0x36c6b4) },
+        uDeep: { value: new THREE.Color(0x04192e) },
+        uFoam: { value: new THREE.Color(0xf2fafd) },
+        uFoamGain: { value: 0 },
+        uDenyMix: { value: 0 },
+        uHypothetical: { value: 0 },
+      },
+    });
+
+    const water = new THREE.Mesh(geometry, material);
+    water.position.y = 0.02;
+    water.renderOrder = 2;
+    this._terrain.add(water);
+    this._water = water;
+
+    // The 2.5 m line, drawn in the world rather than only on the Douglas
+    // ruler: a plane the sea visibly rises through. Same constant as
+    // orca/agents.py WAVE_HARD_DENY_M -- see that file's comment for why
+    // 2.5 m is the real Douglas 4/5 boundary and not an invented cutoff.
+    const denyY = 0.02 + WAVE_HARD_DENY_M * WAVE_UNITS_PER_M;
+    const denyGeom = new THREE.PlaneGeometry(this._width, this._depth, 1, 1);
+    denyGeom.rotateX(-Math.PI / 2);
+    const deny = new THREE.Mesh(
+      denyGeom,
+      new THREE.MeshBasicMaterial({
+        color: 0xa4321d,
+        transparent: true,
+        opacity: 0.1,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    deny.position.y = denyY;
+    deny.renderOrder = 3;
+    this._terrain.add(deny);
+
+    const denyLabel = makeTextSprite("2.5 m — ORCA stops here", {
+      fontSize: 26,
+      color: "#ffffff",
+      bg: "rgba(164,50,29,0.9)",
+    });
+    denyLabel.scale.multiplyScalar(0.7);
+    denyLabel.position.set(-this._width / 2 + 1.2, denyY + 0.12, this._depth / 2 - 0.7);
+    this._terrain.add(denyLabel);
+    this._denyPlane = deny;
+
+    this._applyWaveUniforms();
+  }
+
+  // Push `this._wave` into the shader. Pure presentation: no rounding,
+  // no clamping of the underlying value, and no decision made here.
+  _applyWaveUniforms() {
+    if (!this._water) return;
+    const u = this._water.material.uniforms;
+    const { heightM, periodS, directionDeg } = this._wave;
+
+    // Gerstner amplitude is mean-to-crest, so half the significant
+    // height, which is by definition crest-to-trough.
+    u.uAmp.value = Math.max(0.004, (heightM * WAVE_UNITS_PER_M) / 2);
+
+    const l0 = deepWaterWavelengthM(Math.max(periodS, 0.5));
+    const t = Math.min(Math.max((l0 - L0_MIN_M) / (L0_MAX_M - L0_MIN_M), 0), 1);
+    u.uLambda.value = WAVE_LAMBDA_MIN_UNITS + t * (WAVE_LAMBDA_MAX_UNITS - WAVE_LAMBDA_MIN_UNITS);
+
+    // The one quantity drawn at true scale.
+    u.uOmega.value = (2 * Math.PI) / Math.max(periodS, 0.5);
+
+    // Steeper seas pinch their crests; flat swell barely does. Deep-water
+    // steepness Hs/L0 runs ~0.005-0.04 in ORCA's cache, so this maps that
+    // real range onto the visual chop rather than picking a constant.
+    const steepness = heightM / Math.max(l0, 1);
+    u.uChop.value = Math.min(0.35 + steepness * 14, 0.95);
+
+    // Meteorological convention: direction waves come FROM, degrees
+    // clockwise from north.
+    const rad = (directionDeg * Math.PI) / 180;
+    u.uDir.value.set(Math.sin(rad), Math.cos(rad));
+
+    // Whitecap coverage. Douglas 3 "Slight" (up to 1.25 m) is scattered
+    // whitecaps at most; by Douglas 5 "Rough" the sea is covered. Ramping
+    // between them keeps the surface an honest read of the number.
+    u.uFoamGain.value = Math.min(Math.max((heightM - 1.1) / 3.0, 0), 1);
+
+    u.uDenyMix.value = Math.min(Math.max((heightM - WAVE_HARD_DENY_M) / 1.5, 0), 1);
+    const hyp = this.isHypothetical;
+    u.uHypothetical.value = hyp ? 1 : 0;
+    // The whitecaps carry the marker too. Foam is the brightest thing on
+    // the water, so tinting it is the cheapest way to make a hypothetical
+    // sea unmistakable at a glance without muddying the water colour.
+    u.uFoam.value.set(hyp ? 0xf0e2ff : 0xf2fafd);
+
+    if (this._denyPlane) {
+      this._denyPlane.material.opacity = heightM > WAVE_HARD_DENY_M ? 0.22 : 0.1;
+    }
+  }
+
+  // Seed the sandbox from a real /ask response. This is the "ingest"
+  // half: the slider always starts on the measured sea state, so a
+  // hypothesis is explicitly a departure from evidence, never a value
+  // conjured from nothing.
+  setWaveFromEvidence(evidence) {
+    const pick = (variable) => {
+      const hit = (evidence || []).find((o) => o && o.variable === variable);
+      return hit && Number.isFinite(hit.value) ? hit.value : null;
+    };
+    const heightM = pick("wave_height_m");
+    if (heightM === null) return false; // absent, never invented (CLAUDE.md rule 1)
+
+    this._baselineWave = {
+      heightM,
+      periodS: pick("wave_period_s") ?? 7.0,
+      directionDeg: pick("wave_direction_deg") ?? 150,
+    };
+    this._wave = { ...this._baselineWave };
+    this._applyWaveUniforms();
+    this._emitWaveChange();
+    return true;
+  }
+
+  // The "apply it in the sandbox" half. Height only: it is the hard-deny
+  // variable and is causally downstream of everything else, so "suppose
+  // the sea were 3 m, however it got there" is a complete hypothesis that
+  // makes no claim about the world. Wind is deliberately NOT wired to
+  // waves -- see SimulationR.md section 3 for why that coupling cannot be
+  // made honest with the data ORCA holds.
+  setHypotheticalWaveHeight(heightM) {
+    if (!Number.isFinite(heightM)) return;
+    this._wave = { ...this._wave, heightM };
+    this._applyWaveUniforms();
+    this._emitWaveChange();
+  }
+
+  resetWave() {
+    if (!this._baselineWave) return;
+    this._wave = { ...this._baselineWave };
+    this._applyWaveUniforms();
+    this._emitWaveChange();
+  }
+
+  onWaveChange(callback) {
+    this._onWaveChange = callback;
+    this._emitWaveChange();
+  }
+
+  _emitWaveChange() {
+    if (this._onWaveChange) this._onWaveChange(this.waveState);
   }
 
   setZoneSummaries(zoneSummaries) {
@@ -500,36 +1438,69 @@ export class OceanDiorama extends ThreeVizBase {
       const color = riskColor(zone.risk_level);
 
       const col = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18, 0.24, height, 16),
+        new THREE.CylinderGeometry(0.075, 0.14, height, 20),
         new THREE.MeshStandardMaterial({
           color,
           emissive: color,
-          emissiveIntensity: zone.hard_deny ? 0.55 : 0.2,
+          // Bloom picks these up, so the risk ranking reads at a glance
+          // from any camera angle -- the taller and hotter the beam, the
+          // worse the zone.
+          emissiveIntensity: zone.hard_deny ? 2.6 : 0.55 + zone.risk_level * 1.5,
+          roughness: 0.35,
+          metalness: 0.1,
           transparent: true,
-          opacity: 0.92,
+          opacity: 0.95,
         })
       );
       col.position.set(x, baseY + height / 2, z);
+
+      // Soft halo around the base: reads as a footprint on the water and
+      // keeps a low-risk (short) beam from disappearing entirely.
+      const halo = new THREE.Mesh(
+        new THREE.RingGeometry(0.16, 0.34, 28),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.22 + zone.risk_level * 0.3,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        })
+      );
+      halo.rotation.x = -Math.PI / 2;
+      halo.position.set(x, baseY + 0.012, z);
+      this._columns.add(halo);
       col.userData.zone = zone;
       col.userData.tooltip = `${zone.name}\n${zone.action} — risk ${zone.risk_level.toFixed(2)}${zone.hard_deny ? " (hard deny)" : ""}`;
       this._columns.add(col);
       this._raycastTargets.push(col);
 
       if (zone.hard_deny) {
-        const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 16), new THREE.MeshBasicMaterial({ color: 0xa4321d }));
+        const beacon = new THREE.Mesh(
+          new THREE.SphereGeometry(0.1, 20, 20),
+          // Deliberately over 1.0: this is the one thing in the scene
+          // that should bloom hard.
+          new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff5a34).multiplyScalar(2.4) })
+        );
         beacon.position.set(x, baseY + height + 0.25, z);
         beacon.userData.beacon = true;
         this._columns.add(beacon);
         this._pulseTargets.push(beacon);
       }
 
-      const label = makeTextSprite(zone.name, { fontSize: 28 });
-      label.position.set(x, baseY + height + 0.45, z);
+      // Dark chrome here, not the default light sprite: against a bright
+      // sky with bloom on, a white label bleeds into a glowing smear.
+      const label = makeTextSprite(zone.name, {
+        fontSize: 26,
+        color: "#eaf5fa",
+        bg: "rgba(4,16,26,0.72)",
+      });
+      label.scale.multiplyScalar(0.62); // ten of these crowd the frame fast
+      label.position.set(x, baseY + height + 0.3, z);
       this._columns.add(label);
     });
   }
 
   _onTick(t) {
-    if (this._seaMesh) this._seaMesh.position.y = 0.02 + Math.sin(t * 1.2) * 0.03;
+    if (this._water) this._water.material.uniforms.uTime.value = t;
   }
 }
