@@ -278,6 +278,52 @@
     margin-left: 0.5rem;
   }
   #agentic-badge.hidden { display: none; }
+  /* R-38 severity. `action` alone cannot carry the strength of a verdict:
+     a hard deny that got rerouted renders as SAFER ALTERNATIVE, today
+     indistinguishable from a mild wind override. This is deliberately
+     NOT a second verdict badge -- no fill, mono rather than the badge's
+     Archivo condensed, and a "severity" prefix -- so it reads as a
+     qualifier of the badge beside it, never as another GO/DO NOT GO.
+     Colours are the existing semantic tokens, all three palettes:
+     advisory takes chart magenta (the SAFER ALTERNATIVE colour), a hard
+     denial takes port red, and "none"/"unknown" take --unknown -- never
+     green, which is starboard and means GO. Only the badge says GO. */
+  #severity-indicator {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--unknown);
+    margin-left: 0.5rem;
+    white-space: nowrap;
+  }
+  #severity-indicator .severity-label {
+    color: var(--muted); text-transform: uppercase;
+    font-size: 0.85em; letter-spacing: 0.06em; margin-right: 0.35rem;
+  }
+  #severity-indicator.severity-advisory { border-color: var(--amber-border); color: var(--amber-border); }
+  #severity-indicator.severity-hard_deny { border-color: var(--danger); color: var(--danger); }
+  #severity-indicator.hidden { display: none; }
+  /* R-40 blind agents: the decision-bearing agents that had no
+     observations at all at the answered zone. Muted and informational,
+     the same register as the coverage note below -- lack of evidence is
+     an honesty/degradation signal, not a hazard verdict, so it is
+     deliberately not one of the red/magenta hazard bands. */
+  #blind-agents {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--muted);
+    margin-top: 0.5rem;
+  }
+  #blind-agents .blind-agents-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.9em; }
+  #blind-agents .blind-agents-names {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    word-break: break-word;
+  }
+  #blind-agents.hidden { display: none; }
   /* Honest caveat strip: shown only when ORCA is answering about a zone
      the user did not actually name, or from data that isn't for the day
      they asked about. Muted rather than alarming -- it's a clarification,
@@ -477,8 +523,12 @@
 
   <aside>
     <div id="answer-card" data-testid="answer-card">
-      <div id="answer-action" data-testid="answer-action"></div><span id="agentic-badge" class="hidden" data-testid="agentic-badge">AI-enhanced</span>
+      <div id="answer-action" data-testid="answer-action"></div><span id="agentic-badge" class="hidden" data-testid="agentic-badge">AI-enhanced</span><span id="severity-indicator" class="hidden" data-testid="severity-indicator"></span>
       <p id="answer-text" data-testid="answer-text"><span id="answer-placeholder">Ask a question below to get a recommendation.</span></p>
+      <!-- Both hidden here rather than injected at runtime, same reason as
+           the mock banner: a response that doesn't carry the field must
+           look exactly like it did before the field existed. -->
+      <div id="blind-agents" class="hidden" data-testid="blind-agents"></div>
       <div id="coverage-note" class="hidden" data-testid="coverage-note"></div>
     </div>
 
@@ -554,6 +604,8 @@
   const answerAction = document.getElementById("answer-action");
   const answerText = document.getElementById("answer-text");
   const agenticBadge = document.getElementById("agentic-badge");
+  const severityIndicator = document.getElementById("severity-indicator");
+  const blindAgentsEl = document.getElementById("blind-agents");
   const coverageNote = document.getElementById("coverage-note");
   const overrideBanner = document.getElementById("override-banner");
   const mockBanner = document.getElementById("mock-mode-banner");
@@ -710,6 +762,63 @@
     });
   }
 
+  // R-38. The four values orca/planner.py actually emits. Used only to
+  // pick a style class from a fixed list -- the value shown is always the
+  // backend's own string, never a label composed here.
+  const SEVERITY_VALUES = ["none", "advisory", "hard_deny", "unknown"];
+
+  // R-38 and R-40 both qualify the verdict already on screen, and both are
+  // strictly additive: an ABSENT field renders nothing at all. Not
+  // "unknown", not "none available", not an empty container -- a response
+  // without the field must look exactly like it did before the field
+  // existed. Both are also unconditional resets, so a value from an
+  // earlier answer can never survive into a later one that lacks it.
+  function renderSeverity(severity) {
+    severityIndicator.textContent = "";
+    severityIndicator.className = "hidden";
+    if (typeof severity !== "string" || severity === "") return;
+
+    // Taken exactly as returned, never recomputed from action or
+    // agent_findings -- recovering the strength of a verdict without
+    // parsing prose is the entire point of R-38, and a browser-side guess
+    // would just reintroduce the ambiguity it exists to remove. An
+    // unrecognised value still shows, verbatim and neutrally styled, the
+    // same way actionClass() handles an action it doesn't know: dropping
+    // it would silently hide something the backend deliberately said.
+    const label = document.createElement("span");
+    label.className = "severity-label";
+    label.textContent = "severity";
+    const value = document.createElement("span");
+    value.className = "severity-value";
+    value.textContent = severity;
+    severityIndicator.appendChild(label);
+    severityIndicator.appendChild(value);
+    severityIndicator.className =
+      SEVERITY_VALUES.indexOf(severity) !== -1 ? "severity-" + severity : "severity-unrecognised";
+  }
+
+  function renderBlindAgents(blindAgents) {
+    blindAgentsEl.textContent = "";
+    blindAgentsEl.className = "hidden";
+    // Never derived from agent_findings: only the backend knows which
+    // agents are decision-bearing, and R-40 names absence rather than
+    // inferring it. A missing field, a non-array, or an empty array
+    // (every agent had something to look at) all render nothing.
+    if (!Array.isArray(blindAgents)) return;
+    const names = blindAgents.filter((n) => typeof n === "string" && n !== "");
+    if (names.length === 0) return;
+
+    const label = document.createElement("span");
+    label.className = "blind-agents-label";
+    label.textContent = "No evidence from: ";
+    const value = document.createElement("span");
+    value.className = "blind-agents-names";
+    value.textContent = names.join(", ");
+    blindAgentsEl.appendChild(label);
+    blindAgentsEl.appendChild(value);
+    blindAgentsEl.className = "";
+  }
+
   // Bridge into web/three-viz-app.js (a separate <script type="module">,
   // loaded after this one): buffered as a plain property (not just an
   // event) so a 3D view constructed after this render still picks up the
@@ -736,6 +845,11 @@
     answerText.setAttribute("lang", data.detected_language === "ta" ? "ta" : "en");
     agenticBadge.classList.toggle("hidden", !data.agentic_used);
 
+    // Run before the off_topic return below, so every path through this
+    // function has already cleared whatever the previous answer showed.
+    renderSeverity(data.severity);
+    renderBlindAgents(data.blind_agents);
+
     // Honest caveat, straight from the backend -- never composed here.
     if (data.coverage_note) {
       coverageNote.textContent = data.coverage_note;
@@ -751,6 +865,9 @@
     if (data.answer_kind === "off_topic") {
       answerAction.textContent = "";
       answerAction.className = "hidden";
+      // Both qualify a verdict, and there is no verdict here.
+      renderSeverity(null);
+      renderBlindAgents(null);
       overrideBanner.classList.add("hidden");
       renderEvidence([]);
       renderDouglasRuler([]);
@@ -840,6 +957,10 @@
       answerAction.textContent = "ERROR";
       answerAction.className = "action-do-not-go";
       answerText.textContent = "Could not reach ORCA: " + err.message;
+      // This path reuses the answer area, so the previous answer's
+      // qualifiers must not be left standing beside an error.
+      renderSeverity(null);
+      renderBlindAgents(null);
       console.error(err);
     } finally {
       askButton.disabled = false;
