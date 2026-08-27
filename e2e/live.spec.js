@@ -26,7 +26,7 @@ test.describe('frontend against the real live API', () => {
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/);
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/);
 
     const items = page.getByTestId('evidence-item');
     await expect(items.first()).toBeVisible({ timeout: 10000 });
@@ -63,7 +63,7 @@ test.describe('frontend against the real live API', () => {
     await page.getByTestId('lon-input').fill('77.5385');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 15000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 15000 });
     await expect(page.getByTestId('agentic-badge')).not.toHaveClass(/hidden/);
     // Real backend, real Groq call: proves the LLM actually resolved
     // "southernmost tip of India" to the real Kanyakumari zone, something
@@ -83,10 +83,18 @@ test.describe('frontend against the real live API', () => {
     await page.getByTestId('lon-input').fill('79.8319');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toBeVisible({ timeout: 10000 });
+    // The four-verdict domain assertion is also the wait: #answer-action is
+    // padded, so an *empty* badge already satisfies toBeVisible() and the
+    // read below would race the answer and come back "". Retrying until the
+    // text is one of ORCA's four real verdicts -- CANNOT ASSESS included --
+    // is what makes the branch below assert about a rendered answer.
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 10000 });
     const action = await page.getByTestId('answer-action').textContent();
     const banner = page.getByTestId('override-banner');
 
+    // The equality stays exact: only SAFER ALTERNATIVE carries an override,
+    // and a CANNOT ASSESS zone has no evidence to override, so it belongs in
+    // the banner-hidden branch rather than widening the condition.
     if (action && action.trim() === 'SAFER ALTERNATIVE') {
       await expect(banner).toBeVisible();
     } else {
@@ -116,7 +124,7 @@ test.describe('frontend against the real live API', () => {
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 10000 });
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
   });
 
@@ -170,7 +178,11 @@ test.describe('frontend against the real live API', () => {
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toBeVisible({ timeout: 10000 });
+    // Same four-verdict wait as the override-banner test above -- without it
+    // the read races the answer and returns "", making the GO branch a no-op
+    // that never runs. The equality itself stays exact: only a clean GO makes
+    // the "no banner" claim.
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 10000 });
     const action = (await page.getByTestId('answer-action').textContent() || '').trim();
     if (action === 'GO') {
       await expect(page.getByTestId('override-banner')).toBeHidden();
@@ -217,7 +229,7 @@ test.describe('3D visualizations against the real live API', () => {
     await page.getByTestId('lat-input').fill('10.7672');
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 10000 });
 
     await page.getByTestId('reasoning3d-toggle').click();
     const canvas = page.locator('#reasoning3d-container canvas');
@@ -230,7 +242,7 @@ test.describe('3D visualizations against the real live API', () => {
   test('the 3D-to-query bridge round-trips through the real backend', async ({ page }) => {
     await page.evaluate(() => window.__ORCA_SELECT_ZONE__('Thoothukudi', 8.4730, 78.1215));
     await expect(page.getByTestId('query-input')).toHaveValue('Thoothukudi');
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 10000 });
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
   });
 });
@@ -268,7 +280,7 @@ test.describe('chatbot layer over the real API', () => {
     });
     expect(resp.ok()).toBeTruthy();
     const data = await resp.json();
-    expect(['GO', 'DO NOT GO', 'SAFER ALTERNATIVE']).toContain(data.action);
+    expect(['GO', 'DO NOT GO', 'SAFER ALTERNATIVE', 'CANNOT ASSESS']).toContain(data.action);
     // A zone named in the current query always beats a remembered one.
     expect(data.zone_match).toBe('exact');
     expect(data.chosen_zone.name).toBe('Nagapattinam');
@@ -287,7 +299,7 @@ test.describe('chatbot layer over the real API', () => {
       });
       expect(resp.ok()).toBeTruthy();
       const data = await resp.json();
-      expect(['GO', 'DO NOT GO', 'SAFER ALTERNATIVE']).toContain(data.action);
+      expect(['GO', 'DO NOT GO', 'SAFER ALTERNATIVE', 'CANNOT ASSESS']).toContain(data.action);
     }
   });
 
@@ -328,7 +340,7 @@ test.describe('chatbot layer over the real API', () => {
     await page.getByTestId('lat-input').fill('10.7672');
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 15000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 15000 });
 
     await page.getByTestId('query-input').fill('what about tomorrow?');
     await page.getByTestId('ask-button').click();
@@ -457,7 +469,7 @@ test.describe('page behaviour with all external network blocked (wifi-off simula
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 10000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 10000 });
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
   });
 });

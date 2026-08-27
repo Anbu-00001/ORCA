@@ -61,7 +61,7 @@ test.describe('agentic layer against a real, live, invalid GROQ_API_KEY', () => 
     await page.getByTestId('lon-input').fill('77.5385');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 15000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 15000 });
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
     // Honest badge: it did NOT get agentic help this time -- a real 401
     // must never be silently presented as if the enhancement worked.
@@ -78,7 +78,7 @@ test.describe('agentic layer against a real, live, invalid GROQ_API_KEY', () => 
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toHaveText(/GO|DO NOT GO|SAFER ALTERNATIVE/, { timeout: 15000 });
+    await expect(page.getByTestId('answer-action')).toHaveText(/^(GO|DO NOT GO|SAFER ALTERNATIVE|CANNOT ASSESS)$/, { timeout: 15000 });
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
     expect(errors).toEqual([]);
   });
