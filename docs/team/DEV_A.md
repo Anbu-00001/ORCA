@@ -12,6 +12,39 @@ Nobody else touches these, and you touch nothing else. If a fix would take you i
 
 ---
 
+## Start here
+
+```bash
+cd ~/cloon/or/ORCA
+git fetch origin
+git checkout -b web origin/main        # AFTER Dev D pushes the frozen contract
+
+python3 -m venv .venv                  # once, if you don't have one
+.venv/bin/pip install -r requirements.txt
+npm install                            # once, for Playwright
+```
+
+## Run it and see your change
+
+Two servers, two terminals, both left running:
+
+```bash
+# terminal 1 — backend
+.venv/bin/uvicorn orca.api:app --reload --port 8000
+
+# terminal 2 — the page
+python3 -m http.server 8080 --directory web
+```
+
+Open **http://localhost:8080**. `index.html:479` defaults `API_BASE` to
+`http://localhost:8000`, so they connect with no config (`?api=` overrides it).
+
+- `http://localhost:8080/?mock=1` — the mock render you're marking in task 2
+- `http://localhost:8000/health` — where the offline badge gets its data
+- `http://localhost:8000/docs` — Swagger, to see a real `/ask` response shape
+
+---
+
 ## Task 1 is the highest-leverage 20 minutes on the board
 
 The backend is about to gain a fourth `action` value, `CANNOT ASSESS`, for a zone where
@@ -39,19 +72,39 @@ it back to ship alongside tasks 2–4.
 
 ### 1. [P0 — gates the backend] Make the unknown verdict non-permissive
 
-`web/index.html:587`.
+**Three edits, all in `web/index.html`.**
 
-- Add a `CANNOT ASSESS` branch.
-- Change the fallback so **any** unrecognised value is non-permissive, not just the one
-  you know about today. The next enum widening should not be able to do this again.
+**a. The function at `:587`.** Note the last line: green stops being the fallback and
+becomes an explicit case, so anything unrecognised lands on the non-permissive branch.
 
-Style it with the **`--unknown`** token, which the page already defines at `:73` for
-exactly this meaning — the comment above it reads *"a missing observation is never shown
-as a guessed colour."* You are implementing the design system's own stated intent, not
-inventing a colour. It's defined in all three palettes (Day `#6b7a82`, Dusk `#5c6a72`,
-Night) so it works in every mode without extra work.
+```js
+function actionClass(action) {
+  if (action === "DO NOT GO")         return "action-do-not-go";
+  if (action === "SAFER ALTERNATIVE") return "action-safer-alternative";
+  if (action === "GO")                return "action-go";
+  return "action-unknown";   // CANNOT ASSESS — and anything we don't know yet
+}
+```
 
-Add the matching badge rule beside the two at `:224–225`.
+**b. The badge rule**, beside the two existing ones at `:224–225`:
+
+```css
+#answer-action.action-unknown { background: var(--unknown-bg); color: var(--unknown); }
+```
+
+**c. Add the `--unknown-bg` token to all three palettes.** `--unknown` already exists
+(`:73` Day, `:89` Dusk, `:107` Night) and the comment above it states the intent you're
+implementing — *"a missing observation is never shown as a guessed colour."* But there
+is **no `--unknown-bg`**; you have to add it next to each `--unknown`:
+
+```css
+:root, :root[data-palette="day"] { --unknown-bg: #eceff0; }   /* near :73  */
+:root[data-palette="dusk"]       { --unknown-bg: #232e33; }   /* near :89  */
+:root[data-palette="night"]      { --unknown-bg: #1a0f0e; }   /* near :107 */
+```
+
+Those values are suggestions that match each palette's existing `*-bg` pairs — check
+them against the real backgrounds and adjust if the contrast is off.
 
 ### 2. [P1] R-55 — mark the mock render
 
@@ -145,3 +198,24 @@ Plus four checks by eye, because these are visual guarantees a test can't fully 
   working from `/health` — **confirm that with them before they merge.**
 - Your three palettes are Day / Dusk / Night, driven by `data-palette`. Anything you add
   needs a token in all three, not a hardcoded colour in one.
+
+---
+
+## Ship it
+
+Push task 1 **on its own, immediately** — Dev D is gated on it. Don't batch it with
+tasks 2–4.
+
+```bash
+git add web/index.html                 # check `git status` first
+git commit -m "fix: unrecognised action values render non-permissive (R-25)"
+git push -u origin web
+```
+
+Then message Dev D that `web` is pushed and R-39 is unblocked. Tasks 2–4 go in later
+commits on the same branch.
+
+`git add .` is fine here — `.gitignore` covers `.venv/` and the caches. Just run
+`git status` first, because two things in your task list must **not** be committed: the
+screenshots you take to verify R-55, and the hand-edited `mock_response.json` you use to
+fake a `CANNOT ASSESS` payload before the backend lands.

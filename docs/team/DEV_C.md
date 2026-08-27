@@ -10,6 +10,27 @@ You also **run** (do not edit) `data/fetch.py` at T+6:00, and you write results 
 
 ---
 
+## Start here
+
+```bash
+cd ~/cloon/or/ORCA
+git fetch origin
+git checkout -b mcp origin/main        # AFTER Dev D pushes the frozen contract
+
+python3 -m venv .venv                  # once, if you don't have one
+.venv/bin/pip install -r requirements.txt
+```
+
+Sanity check before you change anything — this is the baseline every other number in
+this doc is compared against:
+
+```bash
+.venv/bin/python -m pytest -q --ignore=tests/test_mcp_server.py
+# 226 passed, 1 skipped
+```
+
+---
+
 ## Task 1 unblocks everyone's test run — do it first
 
 ### [P1] G-1 — root cause found
@@ -156,3 +177,33 @@ Baseline for comparison, before your pin: **226 passed, 1 skipped** with
 skips without a real key — it is not a failure.
 
 `TEAM_STATUS.md` carries real pasted output for G-1, G-4, G-7 and G-8.
+
+---
+
+## Ship it
+
+Push the pin **as soon as it's green** — three other people are running `pytest` with a
+workaround flag until it lands.
+
+```bash
+git add requirements.txt
+git commit -m "fix: pin mcp<2 so the suite collects (G-1)"
+git push -u origin mcp
+```
+
+Then tell everyone they can drop `--ignore=tests/test_mcp_server.py`.
+
+Gate results are **not** a code commit — paste the real terminal output into
+`TEAM_STATUS.md` and push that separately, or hand it to Dev D if the file is contested.
+
+**A warning specific to your G-4 run.** `git add .` is fine in this repo generally —
+`.gitignore` covers `.venv/` and the caches. But it stages *modifications to tracked
+files*, not just new ones, and for sixty seconds during G-4 one of those modifications is
+the deletion of the project's headline safety rule.
+
+So in that window only: name your files explicitly, and `git checkout orca/policy.py` the
+moment the test has failed. Then confirm you're clean before committing anything:
+
+```bash
+git status --short          # orca/policy.py must NOT appear
+```

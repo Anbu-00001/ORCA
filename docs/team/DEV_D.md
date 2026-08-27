@@ -12,6 +12,36 @@ decided, not up for revisiting. Everything below is planner-side.
 
 ---
 
+## Start here
+
+You work on `main` directly — you're the only one who merges to it.
+
+```bash
+cd ~/cloon/or/ORCA
+git pull
+python3 -m venv .venv                  # already done
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest -q --ignore=tests/test_mcp_server.py
+# 226 passed, 1 skipped   ← your baseline
+```
+
+## Merging a branch
+
+One at a time, tests between each. Never merge two branches then test once — you lose
+which one broke it.
+
+```bash
+git fetch origin
+git merge --no-ff origin/web           # or origin/agentic, origin/mcp
+.venv/bin/python -m pytest -q
+git push origin main
+```
+
+**Order matters for `web`.** Dev A's enum fix must be merged *before* you commit R-39.
+Everything else can merge in any order — the file boundaries mean they don't collide.
+
+---
+
 ## Why this sprint exists
 
 Two fail-opens. Both make the system say *go* when it should not.
@@ -215,3 +245,34 @@ the PRD; don't quietly mark it Met.
 **The 2.5 m hard-deny has never fired on live data.** Max wave in the cache is 1.62 m.
 The flip test in `tests/test_planner.py` is what proves it works end to end — rehearse
 showing that, not a live query hoping for weather.
+
+---
+
+## Kicking it off
+
+Two messages, in this order.
+
+**1. Before you start** — to all three:
+
+> Don't cut a branch yet. I'm freezing `API_CONTRACT.md` and `PRD.md` first; I'll ping
+> when it's pushed. Branch from `origin/main` after that, not before.
+
+**2. After you push the contract** — to all three:
+
+> Contract is on `main`. Branch now:
+> `git fetch origin && git checkout -b <web|agentic|mcp> origin/main`
+> Your doc is `docs/team/DEV_<A|B|C>.md`. Push when green, tell me, don't merge yourself.
+
+Also worth saying to Dev A directly: **push task 1 alone, don't batch it.** Your R-39 is
+gated on their enum fix, and if they hold it to ship with R-55 and R-33 you're blocked
+until T+4:30.
+
+## Housekeeping
+
+There's a stale **`Dev-c`** branch on the remote, still pointing at the old pre-force-push
+commit. It has no unique work. Delete it before anyone starts, or it will produce an
+"unrelated histories" merge failure at the worst moment:
+
+```bash
+git push origin --delete Dev-c
+```

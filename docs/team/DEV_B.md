@@ -17,6 +17,34 @@ is not** — Dev A and Dev D are both blocked on it, so do it first or early.
 
 ---
 
+## Start here
+
+```bash
+cd ~/cloon/or/ORCA
+git fetch origin
+git checkout -b agentic origin/main    # AFTER Dev D pushes the frozen contract
+
+python3 -m venv .venv                  # once, if you don't have one
+.venv/bin/pip install -r requirements.txt
+```
+
+## Run it
+
+```bash
+.venv/bin/uvicorn orca.api:app --reload --port 8000
+```
+
+Then send a real request and watch the log — this is how you verify task 1:
+
+```bash
+curl -s localhost:8000/ask -H 'Content-Type: application/json' \
+  -d '{"query":"can I fish at Nagapattinam","lat":10.7672,"lon":79.8449}' | head -c 400
+```
+
+`http://localhost:8000/docs` gives you the same thing through Swagger.
+
+---
+
 ## Tasks
 
 ### 1. [P1 — one line] R-45 — the one silent fallback
@@ -34,14 +62,24 @@ comment explains exactly why:
 > *Falling back is correct; falling back QUIETLY is what let a server run all day with
 > the agentic layer off while looking exactly like one that had it on.*
 
-This is the one place the module doesn't follow the lesson its own comment states. Copy
-the pattern up: log a warning naming the reason, keep the deterministic default.
+This is the one place the module doesn't follow the lesson its own comment states.
+`logger` is already defined at `:56` as `logging.getLogger("orca.agentic")`, so the whole
+change is:
+
+```python
+except AgenticUnavailable as exc:
+    # Falling back is correct; falling back QUIETLY is not (see :772).
+    logger.warning(
+        "Agentic extraction unavailable, using deterministic defaults: %s", exc
+    )
+```
 
 **This closes N-4** — the last `except…pass` in the repo, and one of the three
 non-functional requirements currently sitting at Partial.
 
-Keep the existing behaviour identical. The fallback must still be silent in *effect* —
-every field keeps its deterministic default — it just stops being silent in the log.
+Behaviour must be identical. The fallback stays silent in *effect* — every field keeps
+its deterministic default — it just stops being silent in the log. If any test in
+`tests/test_agentic.py` changes result, you've changed more than the logging.
 
 ### 2. [P2] R-49 — one wall-clock budget for the whole layer
 
@@ -140,3 +178,20 @@ The one skip is the live-Groq test, which correctly skips without a real key.
   **only** the extraction step, never composition. R-42: the composer receives no
   history at all and has no schema field for `action`, `risk_level` or `hard_deny`.
   Both are load-bearing claims — keep them true.
+
+---
+
+## Ship it
+
+The consumer sweep (task 4) is a message, not a commit — post the table as soon as it's
+done, don't hold it for the branch.
+
+```bash
+git add orca/agentic.py tests/test_agentic.py
+git commit -m "fix: log the extraction fallback reason (R-45, closes N-4)"
+git push -u origin agentic
+```
+
+Then tell Dev D the branch is ready. If you aren't green by **T+3:30**, push what is
+green and say what isn't — a branch that misses its kill time gets abandoned, not
+rescued.
