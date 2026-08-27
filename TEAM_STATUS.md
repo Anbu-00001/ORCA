@@ -30,9 +30,10 @@ longer substring-matching theater: `orca/agentic.py` adds a real,
 fail-closed agentic layer (Groq, free tier) that resolves free-text
 queries onto real zones and phrases answers in the query's own language
 (including real Tamil) — see "Agentic chatbot layer" below. Backend suite
-is **207 pytest tests, all green** (excluding `orca/mcp_server.py`, still
-broken — see below, unchanged; +1 more, `test_answer_question_live_end_to_end`,
-when `GROQ_API_KEY` is set); e2e is **39 Playwright tests, all green**,
+is **245 passed, 1 skipped**, including the repaired MCP server and Dev D's
+R-39/R-59 safety regressions; the skip is
+`test_answer_question_live_end_to_end` when no `GROQ_API_KEY` is set. E2e is
+**38 passed, 1 skipped** without that key,
 including a dedicated exceptional-cases sweep (`e2e/live.spec.js`'s
 "exceptional / error paths" block + `e2e/agentic-exceptions.spec.js`) —
 404/422 on the real endpoints, a real dead-port backend, a real 503, an
@@ -55,16 +56,81 @@ new paid dependency and it's the first thing that would put a live
 network call in `orca/api.py`'s request path, which every test in this
 repo currently assumes never happens.
 
-**⚠️ `orca/mcp_server.py` still does not import** (unrelated to the 3D
-work below): a parallel edit broke it against the installed `mcp` package,
-and that one `ModuleNotFoundError` aborts collection for the *entire*
-`pytest -q` run unless you `--ignore=tests/test_mcp_server.py`. See
-"Code-intelligence tooling" below for the exact error and the fix. Nothing
-else is known to be broken — this is one bad import in one file, and every
-count in this document already excludes it.
+**`orca/mcp_server.py` is repaired on `Dev-c` at `fd907ad`.** It uses the
+PRD-pinned `mcp==2.1.1`, collects in the normal full-suite run, and has real
+protocol-level coverage. See "Code-intelligence tooling" and the Dev C
+verification record below.
 
 **What you actually need to do before the real demo:** see
 [`MANUAL_TASKS.md`](MANUAL_TASKS.md). It's short. Read it.
+
+## Dev C verification — 2026-08-28 00:24 IST
+
+Branch `Dev-c`, commit `fd907adc458c2285c1a2e5fdd97ef5359e98ac15`.
+The PRD's source-of-truth repair was used: `mcp==2.1.1` remains pinned and
+`orca/mcp_server.py` now uses `MCPServer`. The MCP protocol adapters are async
+because MCPServer 2.x sends synchronous tools through an AnyIO worker thread;
+direct `call_tool()` hung in this environment until that dependency was removed.
+
+**G-1 — PASS.** Full suite, no ignored files:
+
+```text
+235 passed, 1 skipped in 11.62s
+```
+
+The skip is the real-Groq test with no `GROQ_API_KEY`. The focused MCP suite is
+`9 passed in 0.42s`, including real tool dispatch, malformed arguments, unknown
+tools, unknown evidence ids, and `CANNOT ASSESS` pass-through.
+
+**G-4 — PASS.** In a disposable clone only, policy rule 2 was removed and the
+load-bearing mutation test failed for the intended reason:
+
+```text
+E AssertionError: resolve() returned GO for a finding set containing both an
+E opportunity and a risk_level>=0.6 danger. Rule 2 ... is missing or broken.
+1 failed in 0.02s
+```
+
+The real branch's `orca/policy.py` and `orca/schema.py` were not modified.
+
+**G-7 — PASS.** A fresh GitHub clone of `origin/Dev-c` resolved to the exact
+commit above, had no `.env`, installed `requirements.txt`, and produced:
+
+```text
+235 passed, 1 skipped in 9.65s
+38 passed, 1 skipped in 21.4s   # Playwright; real-Groq case skipped
+```
+
+`npm ci` reported 0 vulnerabilities. A keyless server from that clone returned
+HTTP 200 from `/health`, `/ask`, and `/evidence/{id}`; the advisory carried six
+real evidence observations. `pip check` reported no broken requirements.
+
+**G-8 — AUTOMATED PASS, PHYSICAL GATE STILL OPEN.** Playwright's localhost-only
+wifi-off simulation passed. Physical wifi has not been switched off on the
+presentation machine in this session, so the PRD's stronger gate is not claimed.
+
+**G-13 / G-14 — PASS after merging Dev D commit `22fe230`.** The focused
+planner/API/MCP run passed 65 tests. The explicit live-cache sweep produced:
+
+```text
+G-13: action='CANNOT ASSESS' evidence=0 chosen_zone=None
+G-14 violations: []
+Kanyakumari: SAFER ALTERNATIVE (risk 0.67)
+Colachel: SAFER ALTERNATIVE (risk 0.63)
+```
+
+**T+6 cache refresh — PASS, 2026-08-28.** All configured sources completed:
+Open-Meteo Marine 60 observations, Open-Meteo Forecast 40, NOAA VIIRS
+chlorophyll 4, ETOPO bathymetry 4,760 grid points, IMBL 29 points, and 100
+tomorrow-forecast observations. Six zones had no cloud-free chlorophyll pixel
+and were skipped rather than fabricated. All 250 observations loaded by the
+planner carried source, timestamps, confidence, and provenance. The refreshed
+zone sweep had zero unsafe `GO` results; the current opportunity-override zones
+are Point Calimere, Mandapam, Rameswaram, and Thoothukudi.
+
+`demo/scenarios.json` was regenerated through the running API with all ten real
+zones. Post-merge full verification is `245 passed, 1 skipped` for pytest and
+`38 passed, 1 skipped` for Playwright; both skips require a real Groq key.
 
 ---
 
@@ -83,7 +149,7 @@ is no outstanding code work.
 | 5 | API + evidence | ✅ `orca/api.py` |
 | 6 | Web page (map/answer/evidence) | ✅ `web/index.html` |
 | 7 | Offline toggle, proven | ✅ tested incl. full network-block simulation |
-| 8 (stretch) | MCP server wrapper | ⚠️ built + tested, **currently broken by a regression** — see below |
+| 8 (stretch) | MCP server wrapper | ✅ repaired for `mcp==2.1.1`, 9 focused tests |
 | 9 (stretch) | Slide 2 diagram redraw | ❌ deck/PowerPoint work, human-only |
 
 §7's DO NOT BUILD list (Flutter app, NavIC/LoRa hardware, live Tamil ASR,
@@ -108,7 +174,7 @@ file, `README.md`, and `MANUAL_TASKS.md`.
 | Planner (query -> agents -> policy -> answer) | `orca/planner.py` | ✅ 16 tests |
 | FastAPI (`/ask`, `/evidence/{id}`, `/health`) | `orca/api.py` | ✅ 10 tests |
 | Frontend (map, answer, evidence panel, offline badge) | `web/index.html` | ✅ 12 Playwright e2e tests (incl. wifi-off simulation) |
-| MCP server wrapper (stretch, S6.2) | `orca/mcp_server.py` | ⚠️ 5 tests, real protocol-level — **currently broken, see below** |
+| MCP server wrapper (stretch, S6.2) | `orca/mcp_server.py` | ✅ 9 tests, real protocol-level |
 | Demo scenario transcript | `demo/scenarios.json` | ✅ generated from live output |
 | Real bathymetry fetcher + `GET /bathymetry` | `data/fetch.py`, `orca/api.py` | ✅ 7 + 2 tests, live-integration-tested |
 | Reasoning graph + ocean diorama (three.js) | `web/three-viz.js`, `web/three-viz-app.js` | ✅ 8 Playwright tests (mock + live) |
@@ -117,11 +183,9 @@ Run everything yourself:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q --ignore=tests/test_mcp_server.py   # 114 tests, green
-                              # (fix orca/mcp_server.py's import -- see "Code-intelligence
-                              #  tooling" below -- to also get its 5 tests running)
+pytest -q                    # 245 passed, 1 skipped without GROQ_API_KEY
 npm install && npx playwright install chromium
-npx playwright test          # 20 tests, boots real servers itself -- unaffected by the pytest issue
+npx playwright test          # 38 passed, 1 skipped without GROQ_API_KEY
 ```
 
 Run the actual app:
@@ -721,8 +785,8 @@ here is load-bearing for the app itself.
   `graphify <path> --update` to re-extract just what changed rather than
   rebuilding from scratch.
 
-**⚠️ `orca/mcp_server.py` is currently broken — known regression, not yet
-fixed.** It was originally written against `mcp.server.mcpserver.MCPServer`
+**`orca/mcp_server.py` was repaired on `Dev-c` at `fd907ad`.** It was
+originally written against `mcp.server.mcpserver.MCPServer`
 after checking the *actually installed* `mcp==2.1.1` (the package renamed
 `FastMCP` → `MCPServer` mid-major-version and moved the module — genuinely
 not guessable from memory/training data, has to be checked against
@@ -735,13 +799,11 @@ ModuleNotFoundError: No module named 'mcp.server.fastmcp'. This is mcp 2.x,
 where FastMCP was renamed to MCPServer (from mcp.server.mcpserver import
 MCPServer) ...
 ```
-Confirmed broken as of this commit — `import orca.mcp_server` fails outright,
-so `tests/test_mcp_server.py` and `python -m orca.mcp_server` are both
-currently red. Fix: change the import back to
-`from mcp.server.mcpserver import MCPServer` (and `MCPServer("orca")`
-instead of `FastMCP("orca")`) — see git history around commit `4cdcb13` for
-the last known-working version, and re-run `pytest tests/test_mcp_server.py`
-to confirm before trusting it again. This is exactly the class of bug
+The repair restores `from mcp.server.mcpserver import MCPServer` and uses
+small async protocol adapters because MCPServer 2.x routes synchronous tools
+through AnyIO's worker-thread pool. The focused suite now covers import,
+registration, dispatch, validation, error paths, and response conversion.
+This is exactly the class of bug
 CodeGraph/Serena/graphify exist to catch fast — don't re-guess the API,
 check the installed version.
 
@@ -760,7 +822,4 @@ plus the mutation check described in `tests/test_policy.py`'s docstrings.
 Full history: `git log --oneline`. Every commit here is small and was
 green before the next one started — if something breaks, `git bisect` or
 just read the commit messages, they say what was verified and how.
-
-
-
 
