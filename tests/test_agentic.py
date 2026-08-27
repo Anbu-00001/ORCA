@@ -1048,3 +1048,108 @@ def test_extraction_fallback_is_audible(monkeypatch, caplog):
     assert any("boom" in m for m in messages)
     # Behaviour unchanged: every field keeps its deterministic default.
     assert rec.agentic_used is False
+
+
+# ---------------------------------------------------------------------------
+# R-39's fourth verdict, seen from the shell.
+#
+# The composer branched on "DO NOT GO" and sent everything else down a
+# branch reading "Then tell them plainly what to do." That was safe only
+# by luck: GO and SAFER ALTERNATIVE both mean "you can go somewhere". A
+# CANNOT ASSESS -- ORCA has no readings and does not know -- would have
+# taken the same branch and been phrased as confident advice, which is
+# the §1.3 confident gap arriving inside the answer text. Found by the
+# R-25 consumer sweep; these tests keep it closed before the planner can
+# even emit the value.
+# ---------------------------------------------------------------------------
+
+def _capture_prompt(monkeypatch):
+    captured = {}
+
+    def _post(url, headers=None, json=None, timeout=None):
+        captured["system"] = json["messages"][0]["content"]
+        return _groq_response({"answer_text": "ok", "cited_evidence_ids": []})
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
+    monkeypatch.setattr("orca.agentic.requests.post", _post)
+    return captured
+
+
+def _unassessable(findings_blind=("hazard_agent", "weather_agent")):
+    rec = _recommendation_dict([])
+    rec["action"] = "CANNOT ASSESS"
+    rec["reason"] = "No evidence for this zone"
+    rec["chosen_zone"] = None
+    rec["agent_findings"] = [
+        {"agent": name, "observation_ids": [] if name in findings_blind else ["obs_x"]}
+        for name in ("eo_satellite_agent", "ocean_state_agent", "weather_agent",
+                     "hazard_agent", "geofence_agent")
+    ]
+    return rec
+
+
+def test_cannot_assess_is_never_turned_into_advice(monkeypatch):
+    captured = _capture_prompt(monkeypatch)
+
+    compose_grounded_answer("is it safe there?", _unassessable(), "en")
+
+    system = captured["system"]
+    assert "does not know whether it is safe" in system
+    assert "Do NOT tell them to go" in system
+    # The branch that would have caught it before must not also fire.
+    assert "Then tell them plainly what to do" not in system
+
+
+def test_cannot_assess_names_the_readings_it_lacked(monkeypatch):
+    """The half of the answer that makes it useful rather than merely
+    honest -- and R-40's disclosure, delivered where a fisherman reads it."""
+    captured = _capture_prompt(monkeypatch)
+
+    compose_grounded_answer(
+        "is it safe there?", _unassessable(("hazard_agent", "weather_agent")), "en"
+    )
+
+    system = captured["system"]
+    assert "wave height" in system
+    assert "wind and rain" in system
+    # Agents that DID have observations are not named as missing.
+    assert "sea temperature" not in system
+
+
+def test_blind_readings_come_from_the_findings_not_a_hardcoded_list():
+    """If an agent cited observations it was not blind, whatever else is
+    true. Re-deriving 'which variables ought to exist' here would let this
+    name a reading the planner never actually found missing."""
+    from orca.agentic import _blind_agent_readings
+
+    assert _blind_agent_readings(_unassessable(())) == []
+    assert _blind_agent_readings(_unassessable(("hazard_agent",))) == ["wave height"]
+
+
+def test_cannot_assess_is_not_also_told_it_has_readings(monkeypatch):
+    """The standing 'never claim ORCA lacks data' instruction is true only
+    when there ARE readings. Left unguarded it contradicts this verdict
+    outright and lets the model choose which instruction to follow."""
+    captured = _capture_prompt(monkeypatch)
+
+    compose_grounded_answer("is it safe there?", _unassessable(), "en")
+
+    assert "Never claim ORCA lacks data" not in captured["system"]
+
+
+@pytest.mark.parametrize("action,expected", [
+    ("DO NOT GO", "CRITICAL: the verdict is DO NOT GO"),
+    ("GO", "Then tell them plainly what to do"),
+    ("SAFER ALTERNATIVE", "Then tell them plainly what to do"),
+])
+def test_the_three_existing_verdicts_are_unchanged(monkeypatch, action, expected):
+    """Regression guard: adding the fourth branch must not move any of the
+    three that already worked."""
+    captured = _capture_prompt(monkeypatch)
+    rec = _recommendation_dict(["obs_a"])
+    rec["action"] = action
+
+    compose_grounded_answer("is it safe?", rec, "en")
+
+    assert expected in captured["system"]
+    assert "does not know whether it is safe" not in captured["system"]

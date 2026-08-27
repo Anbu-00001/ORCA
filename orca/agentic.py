@@ -316,6 +316,43 @@ def extract_query_intent(
     }
 
 
+# The fourth action Dev D is adding (R-39). Named here so this module's
+# composer branch is correct the moment the planner can produce it, rather
+# than discovering afterwards that an unassessable zone took the "tell them
+# plainly what to do" branch -- which is the §1.3 confident gap, and was a
+# real fail-open found by the R-25 consumer sweep.
+CANNOT_ASSESS = "CANNOT ASSESS"
+
+# Agent -> the reading it needs, in the words a fisherman would use.
+# Presentation only, which is squarely the shell's job; WHICH agents were
+# blind is read off the findings the planner already computed, never
+# re-derived here.
+_AGENT_READING_NAMES = {
+    "eo_satellite_agent": "the satellite fish-finding pass (chlorophyll)",
+    "ocean_state_agent": "sea temperature",
+    "weather_agent": "wind and rain",
+    "hazard_agent": "wave height",
+    "geofence_agent": "the position check",
+}
+
+
+def _blind_agent_readings(recommendation: dict) -> list[str]:
+    """Which readings ORCA did not have, from the findings themselves.
+
+    An agent that cited no observation ids had nothing to look at. Reading
+    it off `observation_ids` rather than re-deriving which variables ought
+    to exist keeps the list honest even when the agents change: this cannot
+    name a reading the planner did not actually find missing.
+    """
+    names: list[str] = []
+    for finding in recommendation.get("agent_findings") or []:
+        if not finding.get("observation_ids"):
+            label = _AGENT_READING_NAMES.get(finding.get("agent"))
+            if label and label not in names:
+                names.append(label)
+    return names
+
+
 def _composition_context(recommendation: dict) -> dict:
     """The minimal slice of a decision the composer actually needs to
     phrase an answer.
@@ -440,7 +477,32 @@ def compose_grounded_answer(
         # The safety floor: a narrower question must never be allowed to
         # bury a hard denial. Stated as an explicit instruction rather
         # than hoped for.
-        if recommendation.get("action") == "DO NOT GO":
+        action = recommendation.get("action")
+        if action == CANNOT_ASSESS:
+            # "I do not know" is a defensible answer; "here is what to do"
+            # from zero readings is not. Advising either way here would be
+            # the confident gap the verdict exists to close.
+            missing = _blind_agent_readings(recommendation)
+            said = (
+                "CRITICAL: ORCA has NO readings for this place, so it does "
+                "not know whether it is safe. Say that plainly and first. "
+                "Do NOT tell them to go, and do NOT tell them not to go -- "
+                "you have no basis for either, and there is no number here "
+                "to reason from. Never soften this into a recommendation."
+            )
+            if missing:
+                said += (
+                    " Name what is missing, in these words: "
+                    + "; ".join(missing)
+                    + "."
+                )
+            said += (
+                " If a zone is named below as somewhere ORCA CAN speak for, "
+                "offer it as an alternative -- not knowing about one place "
+                "is not the same as being unable to help."
+            )
+            parts.append(said)
+        elif action == "DO NOT GO":
             parts.append(
                 "CRITICAL: the verdict is DO NOT GO. Whatever else they "
                 "asked, you MUST also tell them clearly not to go out, and "
@@ -495,12 +557,17 @@ def compose_grounded_answer(
             "claiming a reading is unavailable when it was merely not "
             "shown to you is as wrong as inventing one."
         )
-        parts.append(
-            "The readings below are already for the day the user asked "
-            "about (`readings_are_for`). Never claim ORCA lacks data for "
-            "that day, and never hedge about what it has -- if a reading "
-            "is present, it is real and current for that day."
-        )
+        if action != CANNOT_ASSESS:
+            # Only true when there ARE readings. Telling the composer never
+            # to claim ORCA lacks data, on the one verdict that means
+            # exactly that, would put the two instructions in direct
+            # conflict and let the model pick.
+            parts.append(
+                "The readings below are already for the day the user asked "
+                "about (`readings_are_for`). Never claim ORCA lacks data for "
+                "that day, and never hedge about what it has -- if a reading "
+                "is present, it is real and current for that day."
+            )
         parts.append(
             f"Reply in language code '{language}'. 1-3 short sentences, "
             "spoken plainly. cited_evidence_ids must be a subset of: "
