@@ -30,7 +30,8 @@ longer substring-matching theater: `orca/agentic.py` adds a real,
 fail-closed agentic layer (Groq, free tier) that resolves free-text
 queries onto real zones and phrases answers in the query's own language
 (including real Tamil) — see "Agentic chatbot layer" below. Backend suite
-is **235 passed, 1 skipped**, including the repaired MCP server; the skip is
+is **245 passed, 1 skipped**, including the repaired MCP server and Dev D's
+R-39/R-59 safety regressions; the skip is
 `test_answer_question_live_end_to_end` when no `GROQ_API_KEY` is set. E2e is
 **38 passed, 1 skipped** without that key,
 including a dedicated exceptional-cases sweep (`e2e/live.spec.js`'s
@@ -108,18 +109,28 @@ real evidence observations. `pip check` reported no broken requirements.
 wifi-off simulation passed. Physical wifi has not been switched off on the
 presentation machine in this session, so the PRD's stronger gate is not claimed.
 
-**G-13 / G-14 — BLOCKED ON UNMERGED DEV D WORK, with failures reproduced.** No
-Dev D branch or mainline implementation existed on the remote at verification
-time. Current source-of-truth behavior is unsafe and must not be relabelled green:
+**G-13 / G-14 — PASS after merging Dev D commit `22fe230`.** The focused
+planner/API/MCP run passed 65 tests. The explicit live-cache sweep produced:
 
 ```text
-G-13 current: action='GO' evidence=0 reason='No hazards found; conditions acceptable'
-G-14 current violations: Kanyakumari (risk 0.67), Colachel (risk 0.63)
+G-13: action='CANNOT ASSESS' evidence=0 chosen_zone=None
+G-14 violations: []
+Kanyakumari: SAFER ALTERNATIVE (risk 0.67)
+Colachel: SAFER ALTERNATIVE (risk 0.63)
 ```
 
-The T+6 cache refresh and scenario regeneration are deliberately deferred until
-R-39/R-59 and their G-13/G-14 regressions land; regenerating the demo transcript
-while those two fail-opens are live would preserve unsafe `GO` examples.
+**T+6 cache refresh — PASS, 2026-08-28.** All configured sources completed:
+Open-Meteo Marine 60 observations, Open-Meteo Forecast 40, NOAA VIIRS
+chlorophyll 4, ETOPO bathymetry 4,760 grid points, IMBL 29 points, and 100
+tomorrow-forecast observations. Six zones had no cloud-free chlorophyll pixel
+and were skipped rather than fabricated. All 250 observations loaded by the
+planner carried source, timestamps, confidence, and provenance. The refreshed
+zone sweep had zero unsafe `GO` results; the current opportunity-override zones
+are Point Calimere, Mandapam, Rameswaram, and Thoothukudi.
+
+`demo/scenarios.json` was regenerated through the running API with all ten real
+zones. Post-merge full verification is `245 passed, 1 skipped` for pytest and
+`38 passed, 1 skipped` for Playwright; both skips require a real Groq key.
 
 ---
 
@@ -172,7 +183,7 @@ Run everything yourself:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                    # 235 passed, 1 skipped without GROQ_API_KEY
+pytest -q                    # 245 passed, 1 skipped without GROQ_API_KEY
 npm install && npx playwright install chromium
 npx playwright test          # 38 passed, 1 skipped without GROQ_API_KEY
 ```
@@ -811,5 +822,4 @@ plus the mutation check described in `tests/test_policy.py`'s docstrings.
 Full history: `git log --oneline`. Every commit here is small and was
 green before the next one started — if something breaks, `git bisect` or
 just read the commit messages, they say what was verified and how.
-
 
