@@ -1,7 +1,7 @@
 # ORCA — Team Status
 
 **For:** other ICARUS teammates and their agents/assistants working on this repo.
-**Last updated:** 2026-08-26, ~15:00 UTC (20:30 IST), after commit `4cdcb13`.
+**Last updated:** 2026-08-27, after commit `e2818ff`.
 **Read this before touching the repo.** It tells you what's real, what's
 verified, what's still a manual/human job, and where not to step.
 
@@ -9,14 +9,50 @@ verified, what's still a manual/human job, and where not to step.
 
 ## TL;DR
 
-Everything in the war plan's "BUILD" list (S7) is done, real, and tested —
-including the MCP stretch goal. 103 pytest tests + 12 Playwright e2e tests,
-all green, all run against real data (no mocks feeding the app itself). A
-fresh `git clone` + `pip install -r requirements.txt` + `pytest` was
-verified to work standalone.
+Everything in the war plan's "BUILD" list (S7) is code-complete, including
+the MCP stretch goal, and was 103 pytest + 12 Playwright tests green as of
+commit `4cdcb13`, all run against real data (no mocks feeding the app
+itself). A fresh `git clone` + `pip install -r requirements.txt` + `pytest`
+was verified to work standalone at that point.
+
+**⚠️ Right now the suite does NOT run**: a parallel edit to
+`orca/mcp_server.py` broke its import against the installed `mcp` package,
+and that one `ModuleNotFoundError` aborts collection for the *entire*
+pytest run (all 103 tests report as errored, not just the 5 MCP ones). See
+"Code-intelligence tooling" below for the exact error and the fix. Nothing
+else is known to be broken — this is one bad import in one file.
 
 **What you actually need to do before the real demo:** see
 [`MANUAL_TASKS.md`](MANUAL_TASKS.md). It's short. Read it.
+
+---
+
+## War plan §7 completion status
+
+Every code-shaped item in the plan is done. Everything left is human-only
+(logistics, a recording, PowerPoint) and lives in `MANUAL_TASKS.md` — there
+is no outstanding code work.
+
+| # | §7 item | Status |
+|---|---|---|
+| 1 | Backend pulling real marine data | ✅ `data/fetch.py` — 3 real sources |
+| 2 | Normaliser → MarineObservation | ✅ `orca/schema.py` |
+| 3 | Five agents | ✅ `orca/agents.py` |
+| 4 | Safety policy | ✅ `orca/policy.py`, mutation-tested |
+| 5 | API + evidence | ✅ `orca/api.py` |
+| 6 | Web page (map/answer/evidence) | ✅ `web/index.html` |
+| 7 | Offline toggle, proven | ✅ tested incl. full network-block simulation |
+| 8 (stretch) | MCP server wrapper | ⚠️ built + tested, **currently broken by a regression** — see below |
+| 9 (stretch) | Slide 2 diagram redraw | ❌ deck/PowerPoint work, human-only |
+
+§7's DO NOT BUILD list (Flutter app, NavIC/LoRa hardware, live Tamil ASR,
+Jac/Mojo rewrite, login/db, training anything) — correctly left alone; see
+"What's NOT built" below for the reasoning on each.
+
+The rest of the war plan document (§1–6, 9–15) is pitch script, Q&A prep,
+deck instructions, and hour-by-hour logistics — not buildable by an agent.
+The pieces of it that matter to code have already been folded into this
+file, `README.md`, and `MANUAL_TASKS.md`.
 
 ---
 
@@ -31,16 +67,17 @@ verified to work standalone.
 | Planner (query -> agents -> policy -> answer) | `orca/planner.py` | ✅ 16 tests |
 | FastAPI (`/ask`, `/evidence/{id}`, `/health`) | `orca/api.py` | ✅ 10 tests |
 | Frontend (map, answer, evidence panel, offline badge) | `web/index.html` | ✅ 12 Playwright e2e tests (incl. wifi-off simulation) |
-| MCP server wrapper (stretch, S6.2) | `orca/mcp_server.py` | ✅ 5 tests, real protocol-level |
+| MCP server wrapper (stretch, S6.2) | `orca/mcp_server.py` | ⚠️ 5 tests, real protocol-level — **currently broken, see below** |
 | Demo scenario transcript | `demo/scenarios.json` | ✅ generated from live output |
 
 Run everything yourself:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                                    # 103 tests
+pytest -q                    # currently errors on collection -- fix orca/mcp_server.py's
+                              # import first (see "Code-intelligence tooling" below), then 103 tests
 npm install && npx playwright install chromium
-npx playwright test                          # 12 tests, boots real servers itself
+npx playwright test          # 12 tests, boots real servers itself -- unaffected by the pytest issue
 ```
 
 Run the actual app:
@@ -126,6 +163,84 @@ live integration (registration pending — see MANUAL_TASKS.md), real
 `return by <time>` forecasting (would need multi-hour forecast series per
 observation, not just the nearest hour — worth a LATER item, not scoped
 now, and deliberately not fabricated as a number with no data behind it).
+
+---
+
+## Code-intelligence tooling for this repo (CodeGraph / Serena / graphify)
+
+Three code-intelligence tools are initialized in this repo. If your agent
+has access to them, use them instead of grepping/reading files cold —
+they're faster and more accurate for this codebase. If your agent doesn't
+have them wired up, everything still works with plain grep/Read; nothing
+here is load-bearing for the app itself.
+
+- **CodeGraph** (MCP, `.codegraph/`) — a queryable index of every symbol,
+  call edge, and file (currently 263 nodes / 628 edges / 21 files). Ask it
+  things like *"how does build_recommendation decide GO vs SAFER
+  ALTERNATIVE"* and it returns the verbatim source plus a blast-radius
+  summary (who calls this, what breaks if you change it) in one shot,
+  instead of a grep-then-Read loop. Per-project index — already initialized
+  here, but if it ever looks stale after a big set of external edits, run
+  `codegraph sync` (or `codegraph init` again) from the repo root. One
+  known quirk: its "no covering tests found" flag on `Recommendation`
+  is a false negative — that class *is* tested, just indirectly through
+  `build_recommendation()`'s return value, and the static heuristic
+  doesn't trace that. Don't trust that specific flag without checking.
+
+- **Serena** (MCP, LSP-backed, `.serena/`) — symbol-level navigation and
+  editing (find a function by name across the repo, find every place that
+  calls it, jump straight to a symbol's body) without reading whole files.
+  Live via the Python language server, so it's never stale the way an
+  index can be. Project onboarding is already done — 5 memory files exist
+  under Serena's project memory covering: `core` (source map + invariants),
+  `tech_stack` (versions, and the `mcp` package's API-shape trap that bit
+  this build once already — see below), `suggested_commands`,
+  `conventions` (patterns to replicate, e.g. the missing-evidence pattern
+  every agent/fetcher follows), and `task_completion` (what "done" means
+  here). Any Serena-backed agent starting fresh on this repo should read
+  those before making changes — they exist specifically so you don't have
+  to rediscover this the hard way.
+
+- **graphify** (`graphify-out/`) — a knowledge graph over the *whole*
+  repo, code and docs together (362 nodes, 43 labeled communities,
+  including the markdown docs and the deck screenshot in
+  `docs/screenshots/`). Useful for architecture-level questions a symbol
+  index can't answer well, e.g. *"why does MarineObservation connect the
+  fetchers, agents, planner, API, and MCP server communities"* — it traced
+  that MarineObservation is the single most-connected node in the whole
+  codebase (47 edges), which is a nice structural confirmation that the
+  "one type carries every number" design actually holds, not just in the
+  docs. Query it with `graphify query "<question>"`,
+  `graphify path "<A>" "<B>"` for a relationship between two concepts, or
+  `graphify explain "<concept>"` for one node. Full report at
+  `graphify-out/GRAPH_REPORT.md`; open `graphify-out/graph.html` directly
+  in a browser for the interactive view. If you add files, re-run
+  `graphify <path> --update` to re-extract just what changed rather than
+  rebuilding from scratch.
+
+**⚠️ `orca/mcp_server.py` is currently broken — known regression, not yet
+fixed.** It was originally written against `mcp.server.mcpserver.MCPServer`
+after checking the *actually installed* `mcp==2.1.1` (the package renamed
+`FastMCP` → `MCPServer` mid-major-version and moved the module — genuinely
+not guessable from memory/training data, has to be checked against
+`pip show mcp` each time). Someone editing in parallel reverted it to the
+older `mcp.server.fastmcp.FastMCP` import, which does not exist in
+`mcp==2.1.1`:
+```
+$ python3 -c "import orca.mcp_server"
+ModuleNotFoundError: No module named 'mcp.server.fastmcp'. This is mcp 2.x,
+where FastMCP was renamed to MCPServer (from mcp.server.mcpserver import
+MCPServer) ...
+```
+Confirmed broken as of this commit — `import orca.mcp_server` fails outright,
+so `tests/test_mcp_server.py` and `python -m orca.mcp_server` are both
+currently red. Fix: change the import back to
+`from mcp.server.mcpserver import MCPServer` (and `MCPServer("orca")`
+instead of `FastMCP("orca")`) — see git history around commit `4cdcb13` for
+the last known-working version, and re-run `pytest tests/test_mcp_server.py`
+to confirm before trusting it again. This is exactly the class of bug
+CodeGraph/Serena/graphify exist to catch fast — don't re-guess the API,
+check the installed version.
 
 ---
 
