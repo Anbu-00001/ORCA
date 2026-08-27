@@ -56,21 +56,42 @@
      used here for SAFER ALTERNATIVE and geofence warnings).
      --unknown is deliberately its own token: a missing observation is
      never shown as a guessed colour. */
+  /* The four safety colours -- --accent (GO), --danger (DO NOT GO),
+     --amber-border (SAFER ALTERNATIVE / caution) and --unknown (CANNOT
+     ASSESS) -- are unchanged from the chart-convention values above and
+     must stay that way; the surrounding chrome is what got brighter.
+     --marine is the new *non-semantic* brand colour (header, links,
+     primary buttons, view toggles). It exists precisely so that chrome
+     stops borrowing starboard green: in this app green means GO and
+     nothing else. */
   :root, :root[data-palette="day"] {
-    --ink: #101418;
-    --paper: #fbfcfb;      /* chart white -- deep water */
+    --ink: #0d2733;
+    --paper: #eef7fb;      /* chart white -- deep water, in coastal daylight */
     --panel: #ffffff;
-    --card-bg: #f7f9f8;
-    --line: #c7d2d6;
-    --muted: #4a555c;
+    --card-bg: #f4fafd;    /* sea mist */
+    --line: #d3e4ec;
+    --muted: #4d6773;
     --accent: #007f3f;     /* starboard */
     --accent-bg: #e1f3e8;
     --danger: #c4161c;     /* port */
     --danger-bg: #fbe2e1;
     --amber-border: #c6006e; /* chart magenta */
     --amber-bg: #f9dcec;
-    --map-placeholder: #c9e4ec; /* shoal blue */
+    --map-placeholder: #cfe8f2; /* shoal blue */
     --unknown: #6b7a82;
+    --marine: #0a5d76;
+    --marine-soft: #e6f3f8;
+    --on-marine: #ffffff;
+    --header-bg: linear-gradient(120deg, #06455a 0%, #0a5d76 55%, #11798f 100%);
+    --header-ink: #ffffff;
+    --header-muted: #b7dbe8;
+    --header-line: rgba(255, 255, 255, 0.24);
+    --header-chip: rgba(255, 255, 255, 0.13);
+    --header-active-bg: #ffffff;
+    --header-active-ink: #06455a;
+    --aside-bg: linear-gradient(180deg, #f8fcfe 0%, #eaf5fa 100%);
+    --shadow-card: 0 1px 2px rgba(9, 52, 68, 0.05), 0 6px 16px rgba(9, 52, 68, 0.07);
+    --shadow-bar: 0 -2px 14px rgba(9, 52, 68, 0.07);
   }
   :root[data-palette="dusk"] {
     --ink: #c6d2d8;
@@ -87,10 +108,26 @@
     --amber-bg: #362533;
     --map-placeholder: #263a42;
     --unknown: #5c6a72;
+    --marine: #58a9c2;
+    --marine-soft: #223640;
+    --on-marine: #10202a;
+    --header-bg: linear-gradient(120deg, #17242b 0%, #1f313a 100%);
+    --header-ink: #d3dfe5;
+    --header-muted: #8c9ba3;
+    --header-line: #3c4a52;
+    --header-chip: #26343d;
+    --header-active-bg: #d3dfe5;
+    --header-active-ink: #17242b;
+    --aside-bg: var(--panel);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-bar: 0 -2px 10px rgba(0, 0, 0, 0.3);
   }
   :root[data-palette="night"] {
     /* S-52 logic: low-saturation red on black, so the eye keeps its dark
-       adaptation -- not a generic "dark mode" inversion. */
+       adaptation -- not a generic "dark mode" inversion. The brightening
+       pass deliberately stops at this palette's edge: --marine here is
+       another muted red, never a teal, and the gradients/shadows above
+       flatten to nothing. */
     --ink: #a8534b;
     --paper: #000000;
     --panel: #120a0a;
@@ -105,6 +142,19 @@
     --amber-bg: #200d18;
     --map-placeholder: #150a0a;
     --unknown: #4a3330;
+    --marine: #94493f;
+    --marine-soft: #1c0f0e;
+    --on-marine: #1a0c0a;
+    --header-bg: #0a0505;
+    --header-ink: #a8534b;
+    --header-muted: #6e3833;
+    --header-line: #2a1614;
+    --header-chip: #170d0d;
+    --header-active-bg: #3a1c19;
+    --header-active-ink: #a8534b;
+    --aside-bg: var(--panel);
+    --shadow-card: none;
+    --shadow-bar: none;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
@@ -149,38 +199,66 @@
   /* Hidden by default: on the live path the element takes no space at all. */
   #mock-mode-banner.hidden { display: none; }
 
+  /* Keyboard focus is visible everywhere -- a demo laptop gets driven by
+     tab as often as by mouse. Overridden inside the (dark) header, where
+     the marine outline would disappear into the gradient. */
+  :focus-visible { outline: 2px solid var(--marine); outline-offset: 2px; border-radius: 4px; }
+  header :focus-visible { outline-color: var(--header-ink); }
+
   header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1.25rem;
-    border-bottom: 1px solid var(--line);
-    background: var(--panel);
+    gap: 1rem;
+    padding: 0.8rem 1.35rem;
+    border-bottom: 1px solid var(--header-line);
+    background: var(--header-bg);
+    color: var(--header-ink);
   }
+  .brand { display: flex; align-items: center; min-width: 0; }
+  /* Sun over two swells, drawn in currentColor so it inherits whichever
+     palette's header ink is active -- no second asset, no second colour
+     table to keep in step. */
+  .brand-mark { flex: 0 0 auto; width: 30px; height: 30px; margin-right: 0.65rem; }
   header h1 {
     font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
-    font-size: 1.3rem; margin: 0; letter-spacing: 0.02em; text-transform: uppercase;
+    font-size: 1.32rem; margin: 0; letter-spacing: 0.03em; text-transform: uppercase;
+    color: var(--header-ink); white-space: nowrap;
   }
-  header h1 span { color: var(--accent); text-transform: none; font-weight: 500; }
-  .palette-switch { display: flex; gap: 0.25rem; margin-left: 1rem; }
+  header h1 span { color: var(--header-muted); text-transform: none; font-weight: 400; letter-spacing: 0.01em; }
+  .palette-switch {
+    display: flex; gap: 0.15rem; margin-left: 1.1rem;
+    padding: 0.2rem; background: var(--header-chip); border-radius: 999px;
+  }
   .palette-btn {
     font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 600;
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
-    padding: 0.3rem 0.55rem; border-radius: 5px; border: 1px solid var(--line);
-    background: var(--panel); color: var(--muted); cursor: pointer;
+    padding: 0.3rem 0.65rem; border-radius: 999px; border: 1px solid transparent;
+    background: transparent; color: var(--header-muted); cursor: pointer;
+    transition: background-color 0.18s ease, color 0.18s ease;
   }
-  .palette-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .palette-btn:hover { color: var(--header-ink); }
+  .palette-btn.active { background: var(--header-active-bg); color: var(--header-active-ink); }
   #offline-badge {
-    font-size: 0.8rem;
+    flex: 0 0 auto;
+    font-size: 0.78rem;
     font-weight: 600;
-    padding: 0.3rem 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 0.35rem 0.8rem;
     border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--card-bg);
-    color: var(--muted);
+    border: 1px solid var(--header-line);
+    background: var(--header-chip);
+    color: var(--header-ink);
   }
-  #offline-badge.online { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
-  #offline-badge.offline { background: var(--amber-bg); color: var(--amber-border); border-color: var(--amber-border); }
+  /* Purely decorative status lamp -- currentColor, so it is always the
+     same colour as the word next to it and can never disagree with it. */
+  #offline-badge::before {
+    content: ""; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: currentColor;
+    margin-right: 0.45rem; vertical-align: middle;
+  }
+  #offline-badge.online { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-bg); }
+  #offline-badge.offline { background: var(--amber-bg); color: var(--amber-border); border-color: var(--amber-bg); }
 
   main {
     flex: 1;
@@ -194,20 +272,32 @@
   #map-fallback {
     position: absolute; inset: 0; display: none;
     align-items: center; justify-content: center;
-    background: linear-gradient(180deg, #bcd9ea 0%, #9fc9dd 45%, #2f6b53 46%, #1c4d3a 100%);
+    background: linear-gradient(180deg, #d2ebf7 0%, #a9d6ea 45%, #2f7d63 46%, #1d5a45 100%);
   }
   #map-fallback.visible { display: flex; }
   #map-fallback svg { width: 90%; height: 90%; }
   .zone-dot { fill: #ffffff; stroke: var(--ink); stroke-width: 1.5; }
   .zone-label { font-size: 9px; fill: var(--ink); font-weight: 600; }
 
-  .view-toggle-bar { position: absolute; top: 10px; left: 10px; z-index: 10; display: flex; gap: 0.4rem; }
-  .view-toggle-btn {
-    padding: 0.35rem 0.7rem; border-radius: 7px; border: 1px solid var(--line);
-    background: rgba(255,255,255,0.92); color: var(--ink); font-size: 0.78rem;
-    font-weight: 600; cursor: pointer;
+  /* The toggle bar floats over live basemap tiles, which are bright in
+     every palette, so it keeps its own light chrome rather than the
+     palette's panel colour. */
+  .view-toggle-bar {
+    position: absolute; top: 12px; left: 12px; z-index: 10;
+    display: flex; gap: 0.2rem; padding: 0.25rem;
+    background: rgba(255, 255, 255, 0.86);
+    border-radius: 999px;
+    box-shadow: 0 2px 10px rgba(9, 52, 68, 0.18);
+    backdrop-filter: blur(6px);
   }
-  .view-toggle-btn.active { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+  .view-toggle-btn {
+    padding: 0.38rem 0.85rem; border-radius: 999px; border: 1px solid transparent;
+    background: transparent; color: #14343f; font-size: 0.78rem;
+    font-weight: 600; cursor: pointer;
+    transition: background-color 0.18s ease, color 0.18s ease;
+  }
+  .view-toggle-btn:hover { background: rgba(10, 93, 118, 0.1); }
+  .view-toggle-btn.active { background: var(--marine); color: var(--on-marine); border-color: var(--marine); }
   #ocean3d-container { position: absolute; inset: 0; display: none; background: #0d2233; }
   #ocean3d-container.visible { display: block; }
   #ocean3d-container.awaiting::after {
@@ -222,18 +312,38 @@
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--line);
-    background: var(--panel);
+    background: var(--aside-bg);
     overflow-y: auto;
-    padding: 1rem 1.1rem;
-    gap: 0.85rem;
+    padding: 1.1rem 1.15rem 1.4rem;
+    gap: 1rem;
+  }
+  aside::-webkit-scrollbar { width: 10px; }
+  aside::-webkit-scrollbar-track { background: transparent; }
+  aside::-webkit-scrollbar-thumb {
+    background: var(--line); border-radius: 999px;
+    border: 3px solid transparent; background-clip: content-box;
+  }
+
+  /* Shared card shell for the four panels in the rail. */
+  #answer-card, #override-banner, #douglas-ruler, #evidence-panel {
+    border-radius: 14px;
+    box-shadow: var(--shadow-card);
   }
 
   #answer-card {
     border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 1rem;
-    background: var(--card-bg);
+    border-left: 5px solid var(--unknown);
+    padding: 1.05rem 1.15rem;
+    background: var(--panel);
   }
+  /* Verdict rail: the card edge repeats the badge's colour so the answer
+     reads at a glance from across a room, using the same four safety
+     colours and no others. Progressive enhancement -- where :has() is
+     unsupported the rail simply stays neutral. */
+  #answer-card:has(#answer-action.action-go) { border-left-color: var(--accent); }
+  #answer-card:has(#answer-action.action-do-not-go) { border-left-color: var(--danger); }
+  #answer-card:has(#answer-action.action-safer-alternative) { border-left-color: var(--amber-border); }
+  #answer-card:has(#answer-action.action-unknown) { border-left-color: var(--unknown); }
   /* The verdict badge -- Archivo condensed, the same face used for the
      Douglas ruler's band labels, since both are "instrument readout"
      text, not prose. */
@@ -244,16 +354,20 @@
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    padding: 0.3rem 0.7rem;
-    border-radius: 6px;
+    padding: 0.32rem 0.8rem;
+    border-radius: 999px;
     background: var(--accent-bg);
     color: var(--accent);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.55rem;
   }
+  /* Before the first answer -- and on an off-topic reply, where
+     renderRecommendation() deliberately blanks the verdict -- there is no
+     verdict to show, so no empty coloured pill is drawn either. */
+  #answer-action:empty { display: none; }
   #answer-action.action-do-not-go { background: var(--danger-bg); color: var(--danger); }
   #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
   #answer-action.action-unknown { background: transparent; color: var(--unknown); border: 1px solid var(--unknown); }
-  #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
+  #answer-text { font-size: 1.05rem; line-height: 1.5; margin: 0; }
   #answer-placeholder { color: var(--muted); font-style: italic; }
   /* Shown only when the backend actually used orca/agentic.py this
      request (GROQ_API_KEY set + a live call succeeded) -- honest, not
@@ -267,8 +381,11 @@
     letter-spacing: 0.03em;
     padding: 0.15rem 0.5rem;
     border-radius: 999px;
-    border: 1px solid var(--accent);
-    color: var(--accent);
+    /* Marine, not starboard green: this badge says how the sentence was
+       phrased, never whether it is safe to sail. */
+    border: 1px solid var(--marine);
+    background: var(--marine-soft);
+    color: var(--marine);
     margin-left: 0.5rem;
   }
   #agentic-badge.hidden { display: none; }
@@ -278,11 +395,13 @@
      not a hazard warning (those are the amber/red bands above). */
   #coverage-note {
     font-size: 0.85rem;
-    line-height: 1.45;
+    line-height: 1.5;
     color: var(--muted);
-    border-left: 3px solid var(--line);
-    padding: 0.4rem 0 0.4rem 0.6rem;
-    margin-top: 0.6rem;
+    background: var(--marine-soft);
+    border-left: 3px solid var(--marine);
+    border-radius: 0 8px 8px 0;
+    padding: 0.55rem 0.7rem;
+    margin-top: 0.75rem;
   }
   #coverage-note.hidden { display: none; }
 
@@ -290,37 +409,53 @@
     border: 1px solid var(--amber-border);
     background: var(--amber-bg);
     color: var(--amber-border);
-    border-radius: 8px;
-    padding: 0.75rem 0.9rem;
+    padding: 0.8rem 1rem;
     font-size: 0.9rem;
-    line-height: 1.4;
+    line-height: 1.45;
   }
   #override-banner.hidden { display: none; }
-  #override-banner strong { display: block; margin-bottom: 0.25rem; }
+  #override-banner strong {
+    display: block; margin-bottom: 0.3rem;
+    font-family: "Archivo", sans-serif; font-stretch: condensed;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
 
   #reasoning3d-toggle {
-    width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--panel); color: var(--accent); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+    width: 100%; padding: 0.6rem; border-radius: 12px;
+    border: 1px dashed var(--line);
+    background: var(--panel); color: var(--marine); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
   }
+  #reasoning3d-toggle:hover { border-color: var(--marine); background: var(--marine-soft); }
   #reasoning3d-container {
     position: relative; height: 280px; margin-top: 0.6rem;
-    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card-bg);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card-bg);
   }
   #reasoning3d-container.collapsed { display: none; }
 
+  #evidence-panel {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    padding: 0.95rem 1rem 1rem;
+  }
   #evidence-panel h3 {
-    margin: 0 0 0.4rem 0; font-size: 0.85rem;
+    margin: 0 0 0.15rem 0; font-size: 0.85rem;
     font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.05em;
   }
-  #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  /* One-line hint under a section head. Used to make a real interaction
+     discoverable (evidence rows expand), not for decoration. */
+  .panel-sub { display: block; font-size: 0.76rem; color: var(--muted); margin-bottom: 0.6rem; line-height: 1.4; }
+  #evidence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
   .evidence-item {
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 0.55rem 0.7rem;
+    border-radius: 10px;
+    padding: 0.6rem 0.75rem;
     cursor: pointer;
-    background: var(--panel);
+    background: var(--card-bg);
+    transition: border-color 0.18s ease, background-color 0.18s ease;
   }
+  .evidence-item:hover { border-color: var(--marine); background: var(--marine-soft); }
   /* Values and provenance are transmissible-safety-message data, per the
      mono-means-data rule -- same face as the Douglas ruler and any
      coordinate pair in the app. */
@@ -335,35 +470,54 @@
   .evidence-detail.expanded { display: block; }
   .evidence-detail dt { font-weight: 600; color: var(--ink); display: inline; }
   .evidence-detail dd { display: inline; margin: 0 0.8rem 0 0.3rem; }
-  .evidence-detail a { color: var(--accent); word-break: break-all; }
+  .evidence-detail a { color: var(--marine); word-break: break-all; }
 
   footer {
     border-top: 1px solid var(--line);
     background: var(--panel);
-    padding: 0.75rem 1.25rem;
+    padding: 0.85rem 1.25rem;
     display: flex;
-    gap: 0.5rem;
-    align-items: center;
+    gap: 0.6rem;
+    align-items: flex-end;
     flex-wrap: wrap;
+    box-shadow: var(--shadow-bar);
   }
-  footer input[type="text"] { flex: 1 1 260px; padding: 0.55rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; font-size: 0.95rem; background: var(--panel); color: var(--ink); }
+  footer input[type="text"] { flex: 1 1 260px; padding: 0.6rem 0.8rem; border: 1px solid var(--line); border-radius: 10px; font-size: 0.95rem; background: var(--card-bg); color: var(--ink); }
+  /* width, not flex-basis. A coord input is also input[type="text"], so it
+     matches the rule above; its parent is the column-flex <label>, where a
+     flex-basis is a HEIGHT. Left to inherit `flex: 1 1 260px` these boxes
+     grow 260px tall and swallow the map -- hence the explicit reset. */
   footer input.coord {
-    flex: 0 0 90px; padding: 0.55rem 0.5rem; border: 1px solid var(--line); border-radius: 8px;
-    font-size: 0.85rem; background: var(--panel); color: var(--ink);
+    flex: 0 0 auto; width: 92px;
+    padding: 0.6rem 0.55rem; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 0.85rem; background: var(--card-bg); color: var(--ink);
     font-family: "IBM Plex Mono", ui-monospace, monospace; /* a coordinate pair is data, not prose */
   }
+  footer input[type="text"]:focus, footer input.coord:focus {
+    outline: none; border-color: var(--marine); background: var(--panel);
+    box-shadow: 0 0 0 3px var(--marine-soft);
+  }
   footer button {
-    padding: 0.55rem 1rem;
-    border-radius: 8px;
-    border: 1px solid var(--accent);
-    background: var(--accent);
-    color: var(--paper);
+    padding: 0.6rem 1.15rem;
+    border-radius: 10px;
+    /* Marine, not starboard green -- a button the user presses must not
+       look like the verdict they are pressing it to find out. */
+    border: 1px solid var(--marine);
+    background: var(--marine);
+    color: var(--on-marine);
     font-weight: 600;
     cursor: pointer;
     font-size: 0.9rem;
+    transition: box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
   }
-  footer button.secondary { background: var(--panel); color: var(--accent); }
-  footer label { font-size: 0.72rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.15rem; }
+  footer button:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(9, 52, 68, 0.18); transform: translateY(-1px); }
+  footer button:disabled { opacity: 0.55; cursor: progress; transform: none; }
+  footer button.secondary { background: var(--panel); color: var(--marine); border-color: var(--line); }
+  footer button.secondary:hover:not(:disabled) { border-color: var(--marine); background: var(--marine-soft); }
+  footer label {
+    font-size: 0.7rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.2rem;
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+  }
 
   /* Douglas sea scale ruler -- see orca/agents.py's WAVE_HARD_DENY_M
      comment. Real WMO/Douglas band boundaries, not invented; the marker
@@ -371,11 +525,11 @@
      2.5 m is ORCA's actual hard-deny threshold, so "change the wave
      height, watch the marker cross the bar" needs no narration. */
   #douglas-ruler {
-    border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 0.8rem 0.5rem;
-    background: var(--card-bg);
+    border: 1px solid var(--line); padding: 0.9rem 1rem 0.75rem;
+    background: var(--panel);
   }
   #douglas-ruler h3 {
-    margin: 0 0 0.5rem 0; font-size: 0.85rem;
+    margin: 0 0 0.15rem 0; font-size: 0.85rem;
     font-family: "Archivo", sans-serif; font-stretch: condensed; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.05em;
   }
@@ -411,8 +565,14 @@
 </div>
 
 <header>
-  <div style="display:flex; align-items:center;">
-    <h1>ORCA <span>— marine advisory</span></h1>
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 34 34" fill="none" aria-hidden="true" focusable="false">
+      <circle cx="17" cy="17" r="15.25" stroke="currentColor" stroke-width="1.3" opacity="0.4" />
+      <path d="M11.5 14.5a5.5 5.5 0 0 1 11 0" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+      <path d="M6 19.5q2.75-3 5.5 0t5.5 0 5.5 0 5.5 0" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+      <path d="M6 24.5q2.75-3 5.5 0t5.5 0 5.5 0 5.5 0" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" opacity="0.6" />
+    </svg>
+    <h1>ORCA <span>— coastal fishing advisory</span></h1>
     <!-- Visible, not hidden in a settings menu -- the palette switch is
          part of the pitch: certified marine chart displays are required
          (IHO S-52) to carry Day/Dusk/Night tables, and ORCA does too. -->
@@ -472,7 +632,7 @@
   <aside>
     <div id="answer-card" data-testid="answer-card">
       <div id="answer-action" data-testid="answer-action"></div><span id="agentic-badge" class="hidden" data-testid="agentic-badge">AI-enhanced</span>
-      <p id="answer-text" data-testid="answer-text"><span id="answer-placeholder">Ask a question below to get a recommendation.</span></p>
+      <p id="answer-text" data-testid="answer-text"><span id="answer-placeholder">Ask about a stretch of coast below — ORCA checks today's sea conditions and says whether it is safe to go.</span></p>
       <div id="coverage-note" class="hidden" data-testid="coverage-note"></div>
     </div>
 
@@ -485,16 +645,18 @@
          2.5m is the real Douglas 4/5 boundary, not an arbitrary number. -->
     <div id="douglas-ruler" data-testid="douglas-ruler">
       <h3>Douglas sea scale</h3>
+      <span class="panel-sub">How rough the sea is right now, on the standard WMO scale.</span>
       <div id="douglas-ruler-body"><span class="no-data">No wave height in this answer's evidence yet.</span></div>
     </div>
 
     <div id="evidence-panel" data-testid="evidence-panel">
-      <h3>Evidence</h3>
+      <h3>Evidence behind this answer</h3>
+      <span class="panel-sub">Tap any reading to see its source, timestamp and confidence.</span>
       <ul id="evidence-list"></ul>
     </div>
 
     <div id="reasoning3d-panel">
-      <button id="reasoning3d-toggle" data-testid="reasoning3d-toggle">View reasoning in 3D ▾</button>
+      <button id="reasoning3d-toggle" data-testid="reasoning3d-toggle">See how ORCA decided — 3D view ▾</button>
       <!-- The 5 agents + their evidence + the final decision, as a 3D
            graph -- a picture of the last /ask response's agent_findings,
            not a separate computation. See web/three-viz.js ReasoningGraph. -->
@@ -507,8 +669,8 @@
   <input type="text" id="query-input" data-testid="query-input" placeholder="Should I go fishing near Nagapattinam?" />
   <label>lat <input type="text" class="coord" id="lat-input" data-testid="lat-input" value="10.7672" /></label>
   <label>lon <input type="text" class="coord" id="lon-input" data-testid="lon-input" value="79.8449" /></label>
-  <button id="ask-button" data-testid="ask-button">Ask</button>
-  <button id="tamil-sample-button" class="secondary" data-testid="tamil-sample-button">🔊 Play sample Tamil query</button>
+  <button id="ask-button" data-testid="ask-button">Ask ORCA</button>
+  <button id="tamil-sample-button" class="secondary" data-testid="tamil-sample-button">🔊 Play a Tamil example</button>
   <audio id="tamil-audio" data-testid="tamil-audio" src="assets/tamil_sample.mp3" preload="none"></audio>
 </footer>
 
