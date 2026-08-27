@@ -894,3 +894,157 @@ def test_composer_is_told_not_to_invent_an_absence(monkeypatch):
     )
 
     assert "Never say ORCA lacks" in captured["system"]
+
+
+# ---------------------------------------------------------------------------
+# R-49 — one wall-clock budget for the whole layer.
+#
+# REQUEST_TIMEOUT_S is per call and answer_question() makes two sequential
+# calls, so before this the layer could add ~16 s to a single request:
+# 8 s of extraction, then a fresh 8 s of composition. That worst case is
+# exactly the stage condition -- key present, network unreachable, wifi
+# off, judge watching. Without these tests R-49 is a comment.
+#
+# The clock is faked rather than slept through: what is under test is the
+# arithmetic deciding whether a second call may start, not requests'
+# timeout handling, and a real 10 s sleep would make the suite slow and
+# flaky for no added coverage.
+# ---------------------------------------------------------------------------
+
+class _FakeClock:
+    """Returns each queued tick in turn, then repeats the last one."""
+
+    def __init__(self, *ticks):
+        self._ticks = list(ticks)
+        self._last = 0.0
+
+    def __call__(self):
+        if self._ticks:
+            self._last = self._ticks.pop(0)
+        return self._last
+
+
+def _wire_with_clock(monkeypatch, clock, intent_obj=None):
+    """Run the layer against a controlled clock, capturing every outbound
+    call so we can assert on how many were made and with what timeout."""
+    import types
+
+    import orca.agentic as agentic_module
+
+    calls = []
+
+    def _post(url, headers=None, json=None, timeout=None):
+        calls.append({"schema": "query_intent" if "query_intent" in str(json) else "compose",
+                      "timeout": timeout})
+        if "query_intent" in str(json):
+            return _groq_response(intent_obj or _intent())
+        return _groq_response({"answer_text": "composed", "cited_evidence_ids": []})
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
+    monkeypatch.setattr("orca.agentic.requests.post", _post)
+    # Patch the module's own `time` reference, not the global time module.
+    monkeypatch.setattr(agentic_module, "time", types.SimpleNamespace(monotonic=clock))
+    return calls
+
+
+def test_the_budget_is_smaller_than_two_full_call_timeouts():
+    """The invariant R-49 actually asks for. If someone later raises the
+    budget to 2x the per-call timeout, the bound stops bounding anything
+    and this fails rather than the regression reaching a stage."""
+    from orca.agentic import LAYER_BUDGET_S, MIN_CALL_BUDGET_S, REQUEST_TIMEOUT_S
+
+    assert LAYER_BUDGET_S < 2 * REQUEST_TIMEOUT_S
+    assert 0 < MIN_CALL_BUDGET_S < LAYER_BUDGET_S
+
+
+def test_composition_is_skipped_when_extraction_spent_the_budget(monkeypatch):
+    """A slow extraction must not be followed by a fresh full-length
+    composition wait -- that is the ~16 s worst case, and it is precisely
+    the request a judge would be watching."""
+    from orca.agentic import LAYER_BUDGET_S
+
+    calls = _wire_with_clock(monkeypatch, _FakeClock(0.0, LAYER_BUDGET_S))
+
+    rec = answer_question(
+        "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+        observations=[_obs(ZONE_A)],
+    )
+
+    assert [c["schema"] for c in calls] == ["query_intent"], "composition must not start"
+    # And the deterministic text is kept verbatim -- exactly the fallback
+    # behaviour of every other failure path.
+    assert rec.recommendation != "composed"
+
+
+def test_a_skipped_composition_is_logged_not_silent(monkeypatch, caplog):
+    """R-45's discipline applies to this path too: falling back is correct,
+    falling back quietly is not."""
+    from orca.agentic import LAYER_BUDGET_S
+
+    _wire_with_clock(monkeypatch, _FakeClock(0.0, LAYER_BUDGET_S))
+
+    with caplog.at_level("WARNING", logger="orca.agentic"):
+        answer_question(
+            "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+            observations=[_obs(ZONE_A)],
+        )
+
+    assert any("budget" in r.message.lower() for r in caplog.records)
+
+
+def test_composition_timeout_is_clamped_to_what_is_left_of_the_budget(monkeypatch):
+    """The half that makes the budget a bound rather than a suggestion.
+    Checking the budget without clamping still permits 8 s + 8 s, because
+    extraction can finish just inside the budget and hand composition a
+    full fresh timeout."""
+    from orca.agentic import LAYER_BUDGET_S, REQUEST_TIMEOUT_S
+
+    spent = LAYER_BUDGET_S - 2.5
+    calls = _wire_with_clock(monkeypatch, _FakeClock(0.0, spent))
+
+    answer_question(
+        "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+        observations=[_obs(ZONE_A)],
+    )
+
+    composition = next(c for c in calls if c["schema"] == "compose")
+    assert composition["timeout"] == pytest.approx(2.5)
+    assert composition["timeout"] < REQUEST_TIMEOUT_S
+
+
+def test_a_fast_extraction_still_gets_the_full_per_call_timeout(monkeypatch):
+    """The budget must not quietly degrade the normal path -- when there is
+    plenty left, composition gets its ordinary timeout."""
+    from orca.agentic import REQUEST_TIMEOUT_S
+
+    calls = _wire_with_clock(monkeypatch, _FakeClock(0.0, 0.1))
+
+    answer_question(
+        "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+        observations=[_obs(ZONE_A)],
+    )
+
+    composition = next(c for c in calls if c["schema"] == "compose")
+    assert composition["timeout"] == REQUEST_TIMEOUT_S
+
+
+def test_extraction_fallback_is_audible(monkeypatch, caplog):
+    """Task 1 / R-45, asserted rather than eyeballed in a terminal: the
+    extraction fallback must name its reason like composition's does."""
+    def _post(url, headers=None, json=None, timeout=None):
+        raise __import__("requests").RequestException("boom")
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
+    monkeypatch.setattr("orca.agentic.requests.post", _post)
+
+    with caplog.at_level("WARNING", logger="orca.agentic"):
+        rec = answer_question(
+            "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+            observations=[_obs(ZONE_A)],
+        )
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("extraction unavailable" in m.lower() for m in messages), messages
+    assert any("boom" in m for m in messages)
+    # Behaviour unchanged: every field keeps its deterministic default.
+    assert rec.agentic_used is False

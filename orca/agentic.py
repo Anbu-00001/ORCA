@@ -40,6 +40,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 
 import requests
 
@@ -64,6 +65,26 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 EXTRACTION_MODEL = "openai/gpt-oss-20b"
 COMPOSITION_MODEL = "openai/gpt-oss-120b"
 REQUEST_TIMEOUT_S = 8.0  # fail fast into the deterministic fallback -- never hang a live demo
+
+# One wall-clock budget for the ENTIRE layer (R-49). REQUEST_TIMEOUT_S is
+# per call, and answer_question() makes two sequential calls, so the
+# per-call timeout on its own bounds nothing: 8 s of extraction followed
+# by a fresh 8 s of composition adds ~16 s to a single request. That worst
+# case is precisely the stage condition -- a key present, the network
+# unreachable, wifi off, a judge watching.
+#
+# Enforced two ways, because a check alone is not a bound: composition is
+# SKIPPED when the budget is already spent, and when it does run its
+# timeout is CLAMPED to whatever is left. A check without the clamp still
+# permits 8 s + 8 s, since extraction can only ever finish just inside the
+# budget and would then hand a full fresh timeout to composition.
+#
+# The bound this buys: the agentic layer adds at most LAYER_BUDGET_S of
+# network wait to one /ask, regardless of how many calls it makes.
+LAYER_BUDGET_S = 10.0
+# Below this much remaining, a call cannot realistically complete -- so
+# starting one only spends the rest of the budget in order to fail anyway.
+MIN_CALL_BUDGET_S = 0.5
 
 # The closed sets extraction may return. Defined once and used BOTH in the
 # JSON schema sent to the model and in the re-validation of its reply --
@@ -125,12 +146,16 @@ def is_configured() -> bool:
     return bool(os.environ.get("GROQ_API_KEY"))
 
 
-def _post(payload: dict) -> dict:
+def _post(payload: dict, timeout: float | None = None) -> dict:
     """The only function in this file that makes a network call. Returns
     the parsed JSON object the model produced (already schema-validated
     server-side by Groq's strict mode); raises AgenticUnavailable for
     every failure mode instead of letting any of them propagate as a
-    generic exception the caller might mishandle."""
+    generic exception the caller might mishandle.
+
+    `timeout` defaults to the per-call REQUEST_TIMEOUT_S. answer_question()
+    passes a smaller value when less of the layer's LAYER_BUDGET_S remains,
+    which is what turns the budget into an actual bound (R-49)."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise AgenticUnavailable("GROQ_API_KEY not set")
@@ -139,7 +164,7 @@ def _post(payload: dict) -> dict:
             GROQ_API_URL,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json=payload,
-            timeout=REQUEST_TIMEOUT_S,
+            timeout=REQUEST_TIMEOUT_S if timeout is None else timeout,
         )
         resp.raise_for_status()
     except requests.RequestException as exc:
@@ -339,6 +364,7 @@ def compose_grounded_answer(
     coverage_note: str | None = None,
     off_topic: bool = False,
     ranking: list[dict] | None = None,
+    timeout: float | None = None,
 ) -> dict:
     """Rephrase an already-decided Recommendation for a human, in their
     language. The schema has no field for action/risk/numbers -- only
@@ -494,7 +520,7 @@ def compose_grounded_answer(
         },
         "temperature": 0.3,
     }
-    result = _post(payload)
+    result = _post(payload, timeout=timeout)
     # Same principle as extract_query_intent: verify the citations
     # ourselves rather than trust that strict mode + the prompt were
     # enough. Citation hallucination is a documented failure mode even
@@ -604,6 +630,12 @@ def answer_question(
     into validated enum facts immediately (orca/memory.py) and reaches
     ONLY the extraction step, never composition.
     """
+    # R-49: one clock for the whole layer, stamped before the first call
+    # that could wait on a network. monotonic() because this is a duration,
+    # not a time of day -- a clock adjustment mid-request must not be able
+    # to hand the layer more budget than it was given.
+    started_at = time.monotonic()
+
     zones = zones or ZONES
     forecast_observations = forecast_observations if forecast_observations is not None else []
     turns = memory.sanitize(history, zones)
@@ -639,8 +671,15 @@ def answer_question(
                 resolved_zone = next(z for z in zones if z["name"] == extracted["zone_name"])
                 zone_match = "inferred"
             agentic_used = True
-        except AgenticUnavailable:
-            pass  # every field keeps its deterministic default
+        except AgenticUnavailable as exc:
+            # Falling back is correct; falling back QUIETLY is not -- see
+            # the composition fallback below, whose comment states the
+            # lesson this line was the last place in the module not to
+            # follow. Behaviour is unchanged: every field keeps its
+            # deterministic default. Only the silence is gone.
+            logger.warning(
+                "Agentic extraction unavailable, using deterministic defaults: %s", exc
+            )
 
     # Tier 3: the question named no place at all, but the conversation
     # was already about one ("what about tomorrow?"). Comes from
@@ -756,6 +795,19 @@ def answer_question(
             recommendation.answer_kind = "verdict"
 
     if is_configured():
+        elapsed = time.monotonic() - started_at
+        remaining = LAYER_BUDGET_S - elapsed
+        if remaining < MIN_CALL_BUDGET_S:
+            # Extraction already spent the layer's whole budget. Starting a
+            # second call here is what produced the ~16 s worst case: it
+            # cannot help this request, and the deterministic text below is
+            # already correct. Skipped, and -- per R-45 -- said out loud.
+            logger.warning(
+                "Agentic composition skipped: layer budget of %.1fs spent "
+                "(%.1fs elapsed); using deterministic text",
+                LAYER_BUDGET_S, elapsed,
+            )
+            return recommendation
         try:
             composed = compose_grounded_answer(
                 query,
@@ -765,6 +817,10 @@ def answer_question(
                 coverage_note=coverage_note,
                 off_topic=not on_topic,
                 ranking=ranking,
+                # Clamped, not the full per-call timeout: this is the half
+                # of R-49 that makes LAYER_BUDGET_S a bound rather than a
+                # suggestion.
+                timeout=min(REQUEST_TIMEOUT_S, remaining),
             )
             recommendation.recommendation = composed["answer_text"]
             recommendation.cited_evidence_ids = composed["cited_evidence_ids"]
