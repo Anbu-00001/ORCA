@@ -191,6 +191,103 @@ test.describe('3D visualizations against the real live API', () => {
   });
 });
 
+// Every remaining exceptional/error path that actually exists in the
+// code (grepped for `raise HTTPException`/`catch` before writing this --
+// see the chat log, not guessed). Two kinds:
+// - Real backend responses, hit directly (no interception): 404 on a
+//   genuinely nonexistent evidence id, 422 on a malformed request body.
+// - Real frontend failure handling, exercised with a real dead port or a
+//   `page.route` intercept standing in for a real backend error response
+//   (not fabricated marine data -- this is HTTP-shape test input for UI
+//   resilience, same technique the wifi-off test below already uses).
+// The two exceptional cases that would require deleting/moving the real
+// data/cache/ or bathymetry cache files are deliberately NOT tested here
+// -- they're already covered safely with tmp_path isolation at the pytest
+// level (test_bathymetry_missing_cache_returns_503_not_empty_200,
+// test_build_recommendation_raises_on_zero_observations_everywhere) and
+// headless E2E has no safe way to simulate "cache absent" without
+// touching real project files.
+test.describe('exceptional / error paths', () => {
+  test('GET /evidence/{id} for a real nonexistent id returns 404, not a silent empty 200', async ({ request }) => {
+    const resp = await request.get(`${API}/evidence/obs_this_id_does_not_exist`);
+    expect(resp.status()).toBe(404);
+  });
+
+  test('POST /ask with a malformed body (missing fields) returns 422, not a 500 or a fabricated answer', async ({ request }) => {
+    const resp = await request.post(`${API}/ask`, { data: { query: 'Nagapattinam' } }); // lat/lon missing
+    expect(resp.status()).toBe(422);
+  });
+
+  test('POST /ask with wrong field types returns 422', async ({ request }) => {
+    const resp = await request.post(`${API}/ask`, { data: { query: 'Nagapattinam', lat: 'not-a-number', lon: 79.8449 } });
+    expect(resp.status()).toBe(422);
+  });
+
+  test('frontend shows a clear error, not a hang or a crash, when the backend is completely unreachable', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    // A real dead port on localhost -- a genuine connection-refused, not
+    // a simulated one.
+    const deadApi = 'http://127.0.0.1:8999';
+    await page.goto(`/index.html?api=${encodeURIComponent(deadApi)}`);
+
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
+    await page.getByTestId('ask-button').click();
+
+    await expect(page.getByTestId('answer-action')).toHaveText('ERROR', { timeout: 10000 });
+    await expect(page.getByTestId('answer-text')).toContainText('Could not reach ORCA');
+    // The ask button must re-enable, not stay stuck disabled forever.
+    await expect(page.getByTestId('ask-button')).toBeEnabled();
+    expect(errors).toEqual([]);
+  });
+
+  test('frontend shows a clear error when /ask returns a real 503 (e.g. zero observations for a query)', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.route(`${API}/ask`, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'No observations available to build a recommendation from' }),
+      })
+    );
+    await page.goto(`/index.html?api=${encodeURIComponent(API)}`);
+
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
+    await page.getByTestId('ask-button').click();
+
+    await expect(page.getByTestId('answer-action')).toHaveText('ERROR', { timeout: 10000 });
+    await expect(page.getByTestId('ask-button')).toBeEnabled();
+    expect(errors).toEqual([]);
+  });
+
+  test('an empty query or missing coordinates is a no-op, not a broken request', async ({ page }) => {
+    const requests = [];
+    page.on('request', (req) => { if (req.url().includes('/ask')) requests.push(req); });
+    await page.goto(`/index.html?api=${encodeURIComponent(API)}`);
+
+    // Empty query, valid coordinates.
+    await page.getByTestId('query-input').fill('');
+    await page.getByTestId('lat-input').fill('10.7672');
+    await page.getByTestId('lon-input').fill('79.8449');
+    await page.getByTestId('ask-button').click();
+
+    // Valid query, coordinates cleared (Number.isNaN case).
+    await page.getByTestId('query-input').fill('Nagapattinam');
+    await page.getByTestId('lat-input').fill('');
+    await page.getByTestId('ask-button').click();
+
+    await page.waitForTimeout(500); // give a wrongly-fired request time to land
+    expect(requests.length).toBe(0);
+    // Still showing the untouched placeholder, not an error or a stale answer.
+    await expect(page.locator('#answer-placeholder')).toBeVisible();
+  });
+});
+
 // "Physically turn off the wifi. Don't simulate it." (S8.6) is a human
 // instruction for the real demo -- what we CAN verify from here is the
 // part that's actually risky: on a real laptop with wifi off, localhost

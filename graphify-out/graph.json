@@ -70,8 +70,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "data_fetch",
-      "community": 0,
-      "community_name": "test_fetch.py",
+      "community": 1,
+      "community_name": "planner.py",
       "norm_label": "fetch.py"
     },
     {
@@ -114,8 +114,8 @@
       "source_location": "L120",
       "_origin": "ast",
       "id": "data_fetch_openmeteomarinefetcher_parse_point",
-      "community": 0,
-      "community_name": "test_fetch.py",
+      "community": 8,
+      "community_name": "MarineObservation",
       "norm_label": "._parse_point()"
     },
     {
@@ -125,8 +125,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "datetime",
-      "community": 0,
-      "community_name": "test_fetch.py",
+      "community": 8,
+      "community_name": "MarineObservation",
       "norm_label": "datetime"
     },
     {
@@ -136,8 +136,8 @@
       "source_location": "L154",
       "_origin": "ast",
       "id": "data_fetch_openmeteoforecastfetcher",
-      "community": 0,
-      "community_name": "test_fetch.py",
+      "community": 8,
+      "community_name": "MarineObservation",
       "norm_label": "openmeteoforecastfetcher"
     },
     {
@@ -400,8 +400,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "data_fetch_rationale_1",
-      "community": 0,
-      "community_name": "test_fetch.py",
+      "community": 1,
+      "community_name": "planner.py",
       "norm_label": "real marine data fetchers for the nagapattinam/chennai coast, bay of bengal..."
     },
     {
@@ -422,8 +422,8 @@
       "source_location": "L155",
       "_origin": "ast",
       "id": "data_fetch_rationale_155",
-      "community": 0,
-      "community_name": "test_fetch.py",
+      "community": 8,
+      "community_name": "MarineObservation",
       "norm_label": "wind speed/gusts and precipitation, per point, near-term forecast."
     },
     {
@@ -502,6 +502,39 @@
       "community": 0,
       "community_name": "test_fetch.py",
       "norm_label": "run every fetcher. returns (results_by_source, errors_by_source). a source that..."
+    },
+    {
+      "label": "agentic-exceptions.spec.js",
+      "file_type": "code",
+      "source_file": "e2e/agentic-exceptions.spec.js",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "e2e_agentic_exceptions_spec",
+      "community": 50,
+      "community_name": "agentic-exceptions.spec.js",
+      "norm_label": "agentic-exceptions.spec.js"
+    },
+    {
+      "label": "{ test, expect }",
+      "file_type": "code",
+      "source_file": "e2e/agentic-exceptions.spec.js",
+      "source_location": "L2",
+      "_origin": "ast",
+      "id": "e2e_agentic_exceptions_spec_test_expect",
+      "community": 50,
+      "community_name": "agentic-exceptions.spec.js",
+      "norm_label": "{ test, expect }"
+    },
+    {
+      "label": "{ spawn }",
+      "file_type": "code",
+      "source_file": "e2e/agentic-exceptions.spec.js",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "e2e_agentic_exceptions_spec_spawn",
+      "community": 50,
+      "community_name": "agentic-exceptions.spec.js",
+      "norm_label": "{ spawn }"
     },
     {
       "label": "live.spec.js",
@@ -895,8 +928,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "orca_api",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "api.py"
     },
     {
@@ -906,8 +939,8 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "orca_api_askrequest",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "askrequest"
     },
     {
@@ -917,8 +950,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "basemodel",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "basemodel"
     },
     {
@@ -928,8 +961,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "orca_api_is_reachable",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "_is_reachable()"
     },
     {
@@ -939,8 +972,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "post",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "post"
     },
     {
@@ -950,8 +983,8 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "orca_api_ask",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "ask()"
     },
     {
@@ -961,8 +994,8 @@
       "source_location": "L77",
       "_origin": "ast",
       "id": "orca_api_get_evidence",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "get_evidence()"
     },
     {
@@ -972,8 +1005,8 @@
       "source_location": "L86",
       "_origin": "ast",
       "id": "orca_api_bathymetry",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "bathymetry()"
     },
     {
@@ -983,8 +1016,8 @@
       "source_location": "L96",
       "_origin": "ast",
       "id": "orca_api_health",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "health()"
     },
     {
@@ -994,8 +1027,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "orca_api_rationale_1",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "fastapi surface: post /ask, get /evidence/{id}, get /health. matches..."
     },
     {
@@ -1005,8 +1038,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "orca_api_rationale_52",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "best-effort connectivity probe for the /health \"offline_mode\" badge only. never..."
     },
     {
@@ -1028,7 +1061,7 @@
       "_origin": "ast",
       "id": "orca_mcp_server_ask_marine_advisory",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "ask_marine_advisory()"
     },
     {
@@ -1039,7 +1072,7 @@
       "_origin": "ast",
       "id": "orca_mcp_server_get_evidence",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "get_evidence()"
     },
     {
@@ -1061,7 +1094,7 @@
       "_origin": "ast",
       "id": "orca_mcp_server_rationale_22",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "get a fishing-safety recommendation for a location on the nagapattinam/chennai..."
     },
     {
@@ -1072,7 +1105,7 @@
       "_origin": "ast",
       "id": "orca_mcp_server_rationale_32",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "look up a single marine observation by id, with full provenance."
     },
     {
@@ -1093,8 +1126,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "orca_planner_load_cached_observations",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "load_cached_observations()"
     },
     {
@@ -1104,8 +1137,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "orca_planner_py_path",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "path"
     },
     {
@@ -1115,8 +1148,8 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "orca_planner_observation_id",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "observation_id()"
     },
     {
@@ -1170,8 +1203,8 @@
       "source_location": "L102",
       "_origin": "ast",
       "id": "orca_planner_collect_evidence",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "_collect_evidence()"
     },
     {
@@ -1203,8 +1236,8 @@
       "source_location": "L149",
       "_origin": "ast",
       "id": "orca_planner_recommendation_to_dict",
-      "community": 49,
-      "community_name": "test_agentic.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": ".to_dict()"
     },
     {
@@ -1522,8 +1555,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "scripts_generate_demo_scenarios_get",
-      "community": 1,
-      "community_name": "planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "_get()"
     },
     {
@@ -2545,8 +2578,8 @@
       "source_location": "L110",
       "_origin": "ast",
       "id": "tests_test_fetch_test_forecast_fetcher_parses_real_fixture_into_observations",
-      "community": 0,
-      "community_name": "test_fetch.py",
+      "community": 8,
+      "community_name": "MarineObservation",
       "norm_label": "test_forecast_fetcher_parses_real_fixture_into_observations()"
     },
     {
@@ -2776,8 +2809,8 @@
       "source_location": "L416",
       "_origin": "ast",
       "id": "tests_test_fetch_test_imbl_fetcher_raises_not_fabricates_on_zero_segments",
-      "community": 49,
-      "community_name": "test_agentic.py",
+      "community": 0,
+      "community_name": "test_fetch.py",
       "norm_label": "test_imbl_fetcher_raises_not_fabricates_on_zero_segments()"
     },
     {
@@ -2876,7 +2909,7 @@
       "_origin": "ast",
       "id": "tests_test_mcp_server",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "test_mcp_server.py"
     },
     {
@@ -2887,7 +2920,7 @@
       "_origin": "ast",
       "id": "tests_test_mcp_server_test_ask_marine_advisory_returns_contract_shaped_dict",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "test_ask_marine_advisory_returns_contract_shaped_dict()"
     },
     {
@@ -2898,7 +2931,7 @@
       "_origin": "ast",
       "id": "tests_test_mcp_server_test_get_evidence_resolves_a_real_id_from_ask",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "test_get_evidence_resolves_a_real_id_from_ask()"
     },
     {
@@ -2909,7 +2942,7 @@
       "_origin": "ast",
       "id": "tests_test_mcp_server_test_get_evidence_unknown_id_returns_error_not_exception",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "test_get_evidence_unknown_id_returns_error_not_exception()"
     },
     {
@@ -2920,7 +2953,7 @@
       "_origin": "ast",
       "id": "tests_test_mcp_server_test_tools_are_registered_on_the_mcp_server",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "test_tools_are_registered_on_the_mcp_server()"
     },
     {
@@ -2931,7 +2964,7 @@
       "_origin": "ast",
       "id": "tests_test_mcp_server_test_call_tool_end_to_end_through_the_real_mcp_protocol_layer",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "test_call_tool_end_to_end_through_the_real_mcp_protocol_layer()"
     },
     {
@@ -2942,7 +2975,7 @@
       "_origin": "ast",
       "id": "tests_test_mcp_server_rationale_1",
       "community": 5,
-      "community_name": "test_mcp_server.py",
+      "community_name": "api.py",
       "norm_label": "tests for orca/mcp_server.py (war plan s6.2 stretch goal). two layers: the..."
     },
     {
@@ -2996,8 +3029,8 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "tests_test_planner_test_load_cached_observations_reads_the_real_cache",
-      "community": 3,
-      "community_name": "test_planner.py",
+      "community": 5,
+      "community_name": "api.py",
       "norm_label": "test_load_cached_observations_reads_the_real_cache()"
     },
     {
@@ -4460,7 +4493,7 @@
       "label": "erddapy Library",
       "author": null,
       "captured_at": null,
-      "community": 0,
+      "community": 1,
       "contributor": null,
       "file_type": "concept",
       "norm_label": "erddapy library",
@@ -4468,14 +4501,14 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "test_fetch.py",
+      "community_name": "planner.py",
       "id": "orca_32_hour_war_plan_v3_erddapy"
     },
     {
       "label": "Role: Operator 2 \u2014 Data Layer",
       "author": null,
       "captured_at": null,
-      "community": 0,
+      "community": 1,
       "contributor": null,
       "file_type": "concept",
       "norm_label": "role: operator 2 \u2014 data layer",
@@ -4483,14 +4516,14 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "test_fetch.py",
+      "community_name": "planner.py",
       "id": "orca_32_hour_war_plan_v3_operator2_data"
     },
     {
       "label": "Refresh Data Cache Before Demo",
       "author": null,
       "captured_at": null,
-      "community": 0,
+      "community": 1,
       "contributor": null,
       "file_type": "document",
       "norm_label": "refresh data cache before demo",
@@ -4498,14 +4531,14 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "test_fetch.py",
+      "community_name": "planner.py",
       "id": "manual_tasks_refresh_data_cache"
     },
     {
       "label": "ERDDAP via Raw HTTP, Not erddapy",
       "author": null,
       "captured_at": null,
-      "community": 0,
+      "community": 1,
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "erddap via raw http, not erddapy",
@@ -4513,7 +4546,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "test_fetch.py",
+      "community_name": "planner.py",
       "id": "team_status_erddap_raw_http"
     },
     {
@@ -4715,7 +4748,7 @@
       "label": "GET /evidence/{id} Endpoint",
       "author": null,
       "captured_at": null,
-      "community": 6,
+      "community": 1,
       "contributor": null,
       "file_type": "document",
       "norm_label": "get /evidence/{id} endpoint",
@@ -4723,7 +4756,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "CLAUDE.md Creation Directive (S3.4 / Prompt 0)",
+      "community_name": "planner.py",
       "id": "api_contract_get_evidence"
     },
     {
@@ -4865,7 +4898,7 @@
       "label": "MarineObservation Schema Spec (S8.3)",
       "author": null,
       "captured_at": null,
-      "community": 6,
+      "community": 1,
       "contributor": null,
       "file_type": "document",
       "norm_label": "marineobservation schema spec (s8.3)",
@@ -4873,7 +4906,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "CLAUDE.md Creation Directive (S3.4 / Prompt 0)",
+      "community_name": "planner.py",
       "id": "orca_32_hour_war_plan_v3_schema_spec"
     },
     {
@@ -4895,7 +4928,7 @@
       "label": "Data Traceability & Schema",
       "author": null,
       "captured_at": null,
-      "community": 6,
+      "community": 1,
       "contributor": null,
       "file_type": "document",
       "norm_label": "data traceability & schema",
@@ -4903,7 +4936,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "CLAUDE.md Creation Directive (S3.4 / Prompt 0)",
+      "community_name": "planner.py",
       "id": "readme_data_traceability_schema"
     },
     {
@@ -5045,7 +5078,7 @@
       "label": "MarineObservation Provenance Requirement",
       "author": null,
       "captured_at": null,
-      "community": 6,
+      "community": 1,
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "marineobservation provenance requirement",
@@ -5053,7 +5086,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "CLAUDE.md Creation Directive (S3.4 / Prompt 0)",
+      "community_name": "planner.py",
       "id": "claude_marineobservation_requirement"
     },
     {
@@ -5540,7 +5573,7 @@
       "label": "weather-mcp Server",
       "author": null,
       "captured_at": null,
-      "community": 0,
+      "community": 1,
       "contributor": null,
       "file_type": "concept",
       "norm_label": "weather-mcp server",
@@ -5548,7 +5581,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "test_fetch.py",
+      "community_name": "planner.py",
       "id": "orca_32_hour_war_plan_v3_weather_mcp"
     },
     {
@@ -5570,7 +5603,7 @@
       "label": "Expose ORCA as an MCP Server (S6.2)",
       "author": null,
       "captured_at": null,
-      "community": 0,
+      "community": 1,
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "expose orca as an mcp server (s6.2)",
@@ -5578,7 +5611,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "test_fetch.py",
+      "community_name": "planner.py",
       "id": "orca_32_hour_war_plan_v3_orca_mcp_server_goal"
     },
     {
@@ -5630,7 +5663,7 @@
       "label": "Prompt 2 \u2014 Data (Operator 2)",
       "author": null,
       "captured_at": null,
-      "community": 6,
+      "community": 1,
       "contributor": null,
       "file_type": "document",
       "norm_label": "prompt 2 \u2014 data (operator 2)",
@@ -5638,7 +5671,7 @@
       "source_location": null,
       "source_url": null,
       "_origin": "semantic",
-      "community_name": "CLAUDE.md Creation Directive (S3.4 / Prompt 0)",
+      "community_name": "planner.py",
       "id": "orca_32_hour_war_plan_v3_prompt2_data"
     },
     {
@@ -8258,6 +8291,28 @@
       "_origin": "ast",
       "source": "tests_test_fetch_test_write_imbl_cache_is_not_swept_by_load_cached_observations",
       "target": "data_fetch_write_cache",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "e2e/agentic-exceptions.spec.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "e2e_agentic_exceptions_spec",
+      "target": "e2e_agentic_exceptions_spec_spawn",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "e2e/agentic-exceptions.spec.js",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "e2e_agentic_exceptions_spec",
+      "target": "e2e_agentic_exceptions_spec_test_expect",
       "confidence_score": 1.0
     },
     {
@@ -18689,5 +18744,5 @@
       "source_file": "TEAM_STATUS.md"
     }
   ],
-  "built_at_commit": "7efdb2e0adc54a004efec33bdb79d4f443298f52"
+  "built_at_commit": "a27bb567372f91a049508b51a26dfc5f757ca762"
 }

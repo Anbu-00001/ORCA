@@ -4,7 +4,7 @@
   "2": "test_agents.py",
   "3": "test_planner.py",
   "4": "test_policy.py",
-  "5": "test_mcp_server.py",
+  "5": "api.py",
   "6": "CLAUDE.md Creation Directive (S3.4 / Prompt 0)",
   "7": "Prior Art Table (S12)",
   "8": "MarineObservation",
@@ -48,5 +48,6 @@
   "46": "ORCA — tech stack",
   "47": "conventions.md",
   "48": "task_completion.md",
-  "49": "test_agentic.py"
+  "49": "test_agentic.py",
+  "50": "agentic-exceptions.spec.js"
 }

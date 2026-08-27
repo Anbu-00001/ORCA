@@ -30,8 +30,8 @@
     "semantic_hash": ""
   },
   "e2e/live.spec.js": {
-    "mtime": 1787816504.4931612,
-    "ast_hash": "e44f0c04fdc0dc9690c82c72887a5a24",
+    "mtime": 1787817169.6372168,
+    "ast_hash": "eefd922042d942fed6456e38e6cbcaad",
     "semantic_hash": ""
   },
   "e2e/mock.spec.js": {
@@ -287,6 +287,11 @@
   "tests/test_agentic.py": {
     "mtime": 1787815930.7269738,
     "ast_hash": "115163d474a665722a96c1bf5d0f81ca",
+    "semantic_hash": ""
+  },
+  "e2e/agentic-exceptions.spec.js": {
+    "mtime": 1787817191.0878983,
+    "ast_hash": "64d0c0b40ac4a3a15819b41a42a06d8c",
     "semantic_hash": ""
   }
 }

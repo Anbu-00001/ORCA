@@ -30,13 +30,13 @@
     "semantic_hash": ""
   },
   "e2e/live.spec.js": {
-    "mtime": 1787808280.4473395,
-    "ast_hash": "753c0744dcb86afc9a84b1db0323520a",
+    "mtime": 1787816504.4931612,
+    "ast_hash": "e44f0c04fdc0dc9690c82c72887a5a24",
     "semantic_hash": ""
   },
   "e2e/mock.spec.js": {
-    "mtime": 1787811088.5969825,
-    "ast_hash": "712b75b9ec9181dc1e42d612b347cf30",
+    "mtime": 1787816251.7043536,
+    "ast_hash": "8f06de4092092c8066cf13b3111b2b1a",
     "semantic_hash": ""
   },
   "orca/__init__.py": {
@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "orca/api.py": {
-    "mtime": 1787806099.8648524,
-    "ast_hash": "4e9da454196f5b4e8886f40348ae2247",
+    "mtime": 1787815736.8942125,
+    "ast_hash": "7b10a717063bf106c36253bb78f9214b",
     "semantic_hash": ""
   },
   "orca/mcp_server.py": {
@@ -60,8 +60,8 @@
     "semantic_hash": "db159af6d93399127244cd18da2fab8f"
   },
   "orca/planner.py": {
-    "mtime": 1787805674.6103384,
-    "ast_hash": "ddd40e987f9155b15d373b738b55cdcd",
+    "mtime": 1787815717.5588217,
+    "ast_hash": "b5823ce3046d09d6cf7091beb36071e3",
     "semantic_hash": ""
   },
   "orca/policy.py": {
@@ -85,9 +85,9 @@
     "semantic_hash": "59b26cfb0825b134abb3aa3cbcaa87f2"
   },
   "pyproject.toml": {
-    "mtime": 1787754784.5536914,
-    "ast_hash": "1a7fe5f7d2f331c7e37c2afc903e9030",
-    "semantic_hash": "1a7fe5f7d2f331c7e37c2afc903e9030"
+    "mtime": 1787815849.0474699,
+    "ast_hash": "a14efcf8f3dd254e612051509b84a2fe",
+    "semantic_hash": ""
   },
   "scripts/generate_demo_scenarios.py": {
     "mtime": 1787808715.9614687,
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "tests/test_planner.py": {
-    "mtime": 1787808062.7996373,
-    "ast_hash": "a3710b512d97f02d835a3563a11f4ad4",
+    "mtime": 1787815771.087913,
+    "ast_hash": "1bc1b21e9b600dbea22a08a2a9a24250",
     "semantic_hash": ""
   },
   "tests/test_policy.py": {
@@ -145,19 +145,19 @@
     "semantic_hash": "725cd3dc40f334fb6a80e3ba6ac12932"
   },
   "web/mock_response.json": {
-    "mtime": 1787808333.5361183,
-    "ast_hash": "1fa0a0bb300688f511714698c32c7897",
+    "mtime": 1787816214.7814214,
+    "ast_hash": "316d065d18d298cf9110673cd53f5fac",
     "semantic_hash": ""
   },
   "API_CONTRACT.md": {
-    "mtime": 1787808777.1854541,
-    "ast_hash": "490c0e6b64b51fc74a9865644bb7716c",
+    "mtime": 1787816537.0141299,
+    "ast_hash": "bd3af817240f9d6cb00019545a70d66b",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1787753794.42479,
-    "ast_hash": "4f516bf63cd1f3c90c414737f95a6c64",
-    "semantic_hash": "4f516bf63cd1f3c90c414737f95a6c64"
+    "mtime": 1787815855.2744994,
+    "ast_hash": "672b21de29c391d4b0c2797a2b4829ab",
+    "semantic_hash": ""
   },
   "MANUAL_TASKS.md": {
     "mtime": 1787811266.3717723,
@@ -170,18 +170,18 @@
     "semantic_hash": "f575820d408edc8a0c5dab2b151fd3c0"
   },
   "README.md": {
-    "mtime": 1787808806.8028724,
-    "ast_hash": "ed7590d2cbec6b163c61009f401451f9",
+    "mtime": 1787816742.3625221,
+    "ast_hash": "0f7f19a98faa73b85b150d5c5e54cd57",
     "semantic_hash": ""
   },
   "SCRATCH.md": {
-    "mtime": 1787811249.2147985,
-    "ast_hash": "42a1649e30f54b012813f15b158ad217",
+    "mtime": 1787816832.6174822,
+    "ast_hash": "1dfac5ca5a01596631ce6237a437047c",
     "semantic_hash": ""
   },
   "TEAM_STATUS.md": {
-    "mtime": 1787811333.6728063,
-    "ast_hash": "44ed5d1509807e912c6c6bc579170b68",
+    "mtime": 1787816807.0288122,
+    "ast_hash": "762a85e93e17bce2347cc8a3ad7e3af5",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -190,8 +190,8 @@
     "semantic_hash": "ce7c3b009b67ff1849eb7d880e8e813a"
   },
   "web/index.html": {
-    "mtime": 1787811072.1050608,
-    "ast_hash": "164eca890a9f452d0127da6a9bc72744",
+    "mtime": 1787816166.7803342,
+    "ast_hash": "3076190740c15e068072648ed95a5d7d",
     "semantic_hash": ""
   },
   "docs/screenshots/orca_live_demo.png": {
@@ -225,8 +225,8 @@
     "semantic_hash": ""
   },
   "web/three-viz.js": {
-    "mtime": 1787806689.736029,
-    "ast_hash": "bbbb2a6aa16bf9a69fcd55981994c0ce",
+    "mtime": 1787815677.6731548,
+    "ast_hash": "a88c7d640553850ada1972bd4f76f7a9",
     "semantic_hash": ""
   },
   ".serena/memories/conventions.md": {
@@ -277,6 +277,16 @@
   "tests/fixtures/real_marineregions_imbl_response.json": {
     "mtime": 1787810272.1175053,
     "ast_hash": "6480c5d18ab6b672f1d3da4565ba94f7",
+    "semantic_hash": ""
+  },
+  "orca/agentic.py": {
+    "mtime": 1787816012.647652,
+    "ast_hash": "59eb702d11d3c0ea609ac7842f6c90fb",
+    "semantic_hash": ""
+  },
+  "tests/test_agentic.py": {
+    "mtime": 1787815930.7269738,
+    "ast_hash": "115163d474a665722a96c1bf5d0f81ca",
     "semantic_hash": ""
   }
 }

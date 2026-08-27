@@ -32,8 +32,12 @@ queries onto real zones and phrases answers in the query's own language
 (including real Tamil) — see "Agentic chatbot layer" below. Backend suite
 is **148 pytest tests, all green** (excluding `orca/mcp_server.py`, still
 broken — see below, unchanged; +1 more, `test_answer_question_live_end_to_end`,
-when `GROQ_API_KEY` is set); e2e is **24 Playwright tests, all green**
-(+1 more live test when the webServer is started with a real key).
+when `GROQ_API_KEY` is set); e2e is **33 Playwright tests, all green**,
+including a dedicated exceptional-cases sweep (`e2e/live.spec.js`'s
+"exceptional / error paths" block + `e2e/agentic-exceptions.spec.js`) —
+404/422 on the real endpoints, a real dead-port backend, a real 503, an
+empty-query no-op, and a *real* invalid Groq key hit live against a
+disposable second backend instance, not mocked.
 
 Two teammate-sourced research documents (`ORCA_AUTHENTICITY_UPGRADE.md`-
 style data/feature plan, and a design-system spec) proposed a large body
@@ -482,6 +486,38 @@ rule, not a separate style).
 
 **Setup (optional):** `cp .env.example .env`, fill in a free key from
 console.groq.com/keys, `source .env`. See README's "2b" step.
+
+**Exceptional cases, swept headless (2026-08-27):** every `raise
+HTTPException`/frontend `catch` in the codebase was grepped, then tested
+headless (Playwright) where it added real value beyond the existing
+pytest coverage:
+- `GET /evidence/{id}` for a real nonexistent id → 404, not a silent 200.
+- `POST /ask` with a missing field / wrong field type → 422, not a 500
+  or a fabricated answer.
+- Frontend against a real dead port (connection refused, not simulated)
+  → "ERROR" text, ask button re-enables, zero uncaught page errors.
+- Frontend against a real 503 (`page.route`-intercepted, same technique
+  the existing wifi-off test already uses) → same graceful handling.
+- Empty query / cleared coordinates → verified as a true no-op (zero
+  `/ask` requests fire), not a broken or hanging request.
+- **The one live gap that mattered most:** a genuinely invalid/revoked
+  `GROQ_API_KEY` hit for real. `e2e/agentic-exceptions.spec.js` spins up
+  a disposable second backend on its own port with a deliberately bad
+  key, and proves live (real 401 from the real Groq API) that both an
+  LLM-needing query (falls back to nearest-zone, badge honestly hidden)
+  and a substring-matching query (completely unaffected, zero-risk path
+  never touches the network) still answer correctly — this is the
+  single most likely real failure on demo day (key typo, revoked,
+  rate-limited), now actually proven, not just argued for.
+
+**Deliberately not tested headless:** "cache directory missing" for
+`/ask` (503, zero observations) and `/bathymetry` (503) — both already
+covered safely with `tmp_path` isolation at the pytest level
+(`test_bathymetry_missing_cache_returns_503_not_empty_200`,
+`test_build_recommendation_raises_on_zero_observations_everywhere`).
+Headless E2E has no safe way to simulate "the real cache is absent"
+without deleting/moving the actual `data/cache/` this repo ships with —
+not worth the risk for coverage that already exists at the right layer.
 
 ---
 
