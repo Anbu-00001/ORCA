@@ -22,13 +22,14 @@ from pathlib import Path
 
 from data.fetch import ZONES
 from orca.agents import (
+    _haversine_km,
     eo_satellite_agent,
     geofence_agent,
     hazard_agent,
     ocean_state_agent,
     weather_agent,
 )
-from orca.policy import Decision, Finding, resolve
+from orca.policy import RISK_OVERRIDE_THRESHOLD, Decision, Finding, resolve
 from orca.schema import MarineObservation
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
@@ -42,6 +43,21 @@ CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
 # just names the directory both sides agree on.
 FORECAST_CACHE_DIR = CACHE_DIR / "forecast"
 ZONE_MATCH_TOLERANCE_DEG = 0.05
+
+# R-60. The alternative search offers a zone the crew is expected to
+# actually divert to, so it is bounded by how far that is. Unbounded, it
+# sent Thoothukudi to Chennai (569 km) and Point Calimere to Chennai
+# (320 km) with Karaikal 72 km away -- R-16 takes the first genuine GO in
+# ZONES order, and Chennai is first in that list.
+#
+# Unlike the 2.5 m hard deny (R-7), this number has no Douglas-scale
+# provenance and is not presented as though it did. It is one boat's
+# divert range stated as arithmetic: a mechanised Tamil Nadu trawler
+# cruising ~7 kn (~13 km/h) spends ~7.5 h steaming 100 km, which is the
+# outer edge of what can be added to a single-day trip before fuel and
+# crew endurance -- not weather -- become the binding constraint. A
+# diversion the crew cannot reach before dark is not a safer alternative.
+MAX_ALTERNATIVE_KM = 100.0
 
 AGENTS = [eo_satellite_agent, ocean_state_agent, weather_agent, hazard_agent, geofence_agent]
 
@@ -123,6 +139,59 @@ def run_agents(observations: list[MarineObservation]) -> list[Finding]:
     return [agent(observations) for agent in AGENTS]
 
 
+def _zone_verdict(decision: Decision, findings: list[Finding]) -> Decision:
+    """Two fail-open corrections applied to one zone's Decision, both
+    living here rather than in orca/policy.py, which stays frozen (N-5)
+    with its three rules and its resolve([]) guard exactly as they are.
+
+    Applied once, where zone_results is built, so the primary decision,
+    the alternative search and zone_summaries all agree -- R-59 and R-39
+    modify the same lines of that loop, and done separately the second
+    would rewrite the first.
+
+    The two conditions are disjoint: a zone with no observations has no
+    danger to find. Order between them is for clarity, not correctness.
+    """
+    # R-39: no evidence at all. Five neutral findings are not five clean
+    # bills of health, and "No hazards found; conditions acceptable" from
+    # zero observations is the confident-gap failure of PRD §1.3.
+    # Deliberately NOT "DO NOT GO" -- conflating "I know it is dangerous"
+    # with "I do not know" teaches users to discount the one verdict that
+    # must never be discounted (Open Decision 8, resolved).
+    if not any(f.observations for f in findings):
+        blind = ", ".join(f.agent_name for f in findings)
+        return Decision(
+            action="CANNOT ASSESS",
+            reason="No observations available for this zone",
+            chosen=None,
+            overridden=[],
+            explanation=f"No agent had evidence at this zone ({blind}); ORCA is refusing to decide.",
+        )
+
+    # R-59: danger that never reached rule 2. policy.py gates rule 2 on
+    # opportunity AND danger, so hazards with nothing suggesting go fall
+    # through to rule 3 and return GO. The trigger is inverted --
+    # suggests_go goes false when water is cold or chlorophyll is
+    # cloud-masked -- so the worse the fishing looks, the more likely the
+    # safety override is skipped entirely.
+    if decision.action == "GO":
+        danger = [f for f in findings if f.risk_level >= RISK_OVERRIDE_THRESHOLD]
+        if danger:
+            # max(), not danger[0]: R-37 stays open in the frozen
+            # policy.py by decision, but there is no reason to introduce
+            # a second list-order pick on a path written today.
+            worst = max(danger, key=lambda f: f.risk_level)
+            return Decision(
+                action="SAFER ALTERNATIVE",
+                reason=worst.reason,
+                chosen=None,
+                overridden=[],  # nothing was sacrificed -- R-11
+                explanation=f"Hazard with no competing opportunity: {worst.reason}",
+            )
+
+    return decision
+
+
 def _collect_evidence(findings: list[Finding]) -> list[MarineObservation]:
     seen: dict[str, MarineObservation] = {}
     for finding in findings:
@@ -134,6 +203,19 @@ def _collect_evidence(findings: list[Finding]) -> list[MarineObservation]:
 def _render_text(final_action: str, primary_zone: dict, final_zone: dict, primary_decision: Decision) -> str:
     if final_action == "GO":
         return f"Go to {final_zone['name']}. {primary_decision.reason}."
+    # R-39: state the absence of evidence as an absence. Never "do not go
+    # to X", which would report ignorance as danger.
+    if final_action == "CANNOT ASSESS":
+        if final_zone["name"] != primary_zone["name"]:
+            return (
+                f"ORCA cannot assess {primary_zone['name']} — no readings are available for it. "
+                f"Go to {final_zone['name']} instead."
+            )
+        return (
+            f"ORCA cannot assess {primary_zone['name']} — no readings are available for it, "
+            "and no assessable zone was found nearby. This is not a judgement that conditions "
+            "are safe; do not treat it as one."
+        )
     if final_action == "SAFER ALTERNATIVE" and final_zone["name"] != primary_zone["name"]:
         return (
             f"Do not go to {primary_zone['name']} — {primary_decision.reason}. "
@@ -193,6 +275,11 @@ class Recommendation:
     # resolving a follow-up pronoun ("what's the wave height *there*?")
     # wants this one -- see web/index.html's rememberTurn().
     primary_zone: dict | None = None
+    # R-38 / R-40. Both are read off findings build_recommendation()
+    # already has; neither is a separate calculation and neither
+    # overloads `action`.
+    severity: str = "none"  # "none" | "advisory" | "hard_deny" | "unknown"
+    blind_agents: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -226,6 +313,8 @@ class Recommendation:
             "ranking": self.ranking,
             "lookup": self.lookup,
             "primary_zone": self.primary_zone,
+            "severity": self.severity,
+            "blind_agents": self.blind_agents,
         }
 
 
@@ -253,7 +342,7 @@ def build_recommendation(
     zone_results: dict[str, tuple[dict, Decision, list[Finding]]] = {}
     for zone in ordered_zones:
         findings = run_agents(observations_for_zone(observations, zone))
-        zone_results[zone["name"]] = (zone, resolve(findings), findings)
+        zone_results[zone["name"]] = (zone, _zone_verdict(resolve(findings), findings), findings)
 
     p_zone, p_decision, p_findings = zone_results[primary_zone["name"]]
 
@@ -266,12 +355,20 @@ def build_recommendation(
         for zone in ordered_zones[1:]:
             z, d, f = zone_results[zone["name"]]
             if d.action == "GO" and d.chosen is not None:
+                # R-60: only somewhere they could actually divert to.
+                if _haversine_km(p_zone["lat"], p_zone["lon"], z["lat"], z["lon"]) > MAX_ALTERNATIVE_KM:
+                    continue
                 alternative = (z, d, f)
                 break
 
         if alternative is not None:
             final_zone, _, alt_findings = alternative
-            final_action = "SAFER ALTERNATIVE"
+            # R-39b: a CANNOT ASSESS primary keeps its own verdict and is
+            # offered the alternative alongside it -- ORCA still cannot
+            # assess where they asked. Relabelling it SAFER ALTERNATIVE
+            # would render as "Do not go to X", conflating ignorance with
+            # danger, which is exactly what R-39 forbids.
+            final_action = "CANNOT ASSESS" if p_decision.action == "CANNOT ASSESS" else "SAFER ALTERNATIVE"
             overridden = [f for f in p_findings if f.suggests_go]
             evidence_findings = p_findings + alt_findings
         else:
@@ -284,7 +381,9 @@ def build_recommendation(
     # (SAFER ALTERNATIVE with a zone swap). A SAFER ALTERNATIVE with no
     # clean zone found, or a DO NOT GO, has nothing to point at.
     zone_was_swapped = final_zone["name"] != p_zone["name"]
-    has_concrete_zone = final_action == "GO" or (final_action == "SAFER ALTERNATIVE" and zone_was_swapped)
+    has_concrete_zone = final_action == "GO" or (
+        final_action in ("SAFER ALTERNATIVE", "CANNOT ASSESS") and zone_was_swapped
+    )
     chosen_zone = (
         {"name": final_zone["name"], "lat": final_zone["lat"], "lon": final_zone["lon"]}
         if has_concrete_zone
@@ -308,6 +407,25 @@ def build_recommendation(
         for zone_name, (zone, decision, findings) in zone_results.items()
     ]
 
+    # R-38: how strong the verdict is, without parsing prose. A hard deny
+    # that got rerouted still reads as action "SAFER ALTERNATIVE", which
+    # is indistinguishable from a mild wind override to the control-room
+    # user (§2, P1) consuming this programmatically.
+    if final_action == "CANNOT ASSESS":
+        severity = "unknown"  # nothing was assessed, so no severity was established
+    elif any(f.hard_deny for f in p_findings):
+        severity = "hard_deny"
+    elif final_action == "GO":
+        severity = "none"
+    else:
+        severity = "advisory"
+
+    # R-40: which agents were blind, not just which readings were stale
+    # (R-33 covers age). A GO resting on SST alone otherwise reads
+    # identically to one backed by every source. Names absence; never
+    # invents a reading to fill it.
+    blind_agents = [f.agent_name for f in p_findings if not f.observations]
+
     return Recommendation(
         id=f"rec_{uuid.uuid4().hex[:8]}",
         action=final_action,
@@ -320,4 +438,6 @@ def build_recommendation(
         agent_findings=p_findings,
         zone_summaries=zone_summaries,
         primary_zone={"name": p_zone["name"], "lat": p_zone["lat"], "lon": p_zone["lon"]},
+        severity=severity,
+        blind_agents=blind_agents,
     )
