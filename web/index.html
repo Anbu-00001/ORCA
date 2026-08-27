@@ -252,7 +252,13 @@
   }
   #answer-action.action-do-not-go { background: var(--danger-bg); color: var(--danger); }
   #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
-  #answer-action.action-unknown { background: transparent; color: var(--unknown); border: 1px solid var(--unknown); }
+  /* CANNOT ASSESS and any future unrecognised action. Deliberately
+     non-permissive: absence of a judgement must never look like GO. */
+  #answer-action.action-unknown {
+    background: transparent;
+    color: var(--unknown);
+    border: 1px solid var(--unknown);
+  }
   #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
   #answer-placeholder { color: var(--muted); font-style: italic; }
   /* Shown only when the backend actually used orca/agentic.py this
@@ -632,6 +638,9 @@
   }
 
   function actionClass(action) {
+    // The default branch must be NON-PERMISSIVE. GO has to be named
+    // explicitly; CANNOT ASSESS and any future unrecognised action use
+    // the neutral unknown state instead of silently failing open.
     if (action === "GO") return "action-go";
     if (action === "DO NOT GO") return "action-do-not-go";
     if (action === "SAFER ALTERNATIVE") return "action-safer-alternative";
