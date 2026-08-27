@@ -114,6 +114,13 @@ def _is_reachable(host: str = "marine-api.open-meteo.com", port: int = 443, time
     """Best-effort connectivity probe for the /health "offline_mode" badge
     ONLY. Never used to change what /ask or /evidence serve — both always
     read data/cache/ regardless of this result (CLAUDE.md rule 8).
+
+    R-54: called from /health and nowhere else. It used to run on every
+    /ask, which put a live socket connect in the request path and
+    contradicted N-6, N-7 and this module's own docstring — DNS
+    resolution is not bounded by the timeout argument, so a black-holed
+    DNS server could stall an answer that needs no network at all. It is
+    a display concern; it belongs on the endpoint that drives the badge.
     """
     try:
         socket.create_connection((host, port), timeout=timeout).close()
@@ -125,7 +132,12 @@ def _is_reachable(host: str = "marine-api.open-meteo.com", port: int = 443, time
 @app.post("/ask")
 def ask(request: AskRequest) -> dict:
     observations = load_cached_observations()
-    offline = _is_reachable()
+    # R-54: no probe here. /ask answers from data/cache/ unconditionally,
+    # so this answer *was* computed offline — that is a fact about how it
+    # was produced, not a measurement of the network, and it is true on
+    # every request. The badge's live connectivity reading comes from
+    # /health, which is where the socket connect now lives.
+    offline = True
     try:
         recommendation = answer_question(
             request.query,
