@@ -223,6 +223,7 @@
   }
   #answer-action.action-do-not-go { background: var(--danger-bg); color: var(--danger); }
   #answer-action.action-safer-alternative { background: var(--amber-bg); color: var(--amber-border); }
+  #answer-action.action-unknown { background: transparent; color: var(--unknown); border: 1px solid var(--unknown); }
   #answer-text { font-size: 1.05rem; line-height: 1.4; margin: 0; }
   #answer-placeholder { color: var(--muted); font-style: italic; }
   /* Shown only when the backend actually used orca/agentic.py this
@@ -585,9 +586,11 @@
   }
 
   function actionClass(action) {
+    if (action === "GO") return "action-go";
     if (action === "DO NOT GO") return "action-do-not-go";
     if (action === "SAFER ALTERNATIVE") return "action-safer-alternative";
-    return "action-go";
+    if (action === "CANNOT ASSESS") return "action-unknown";
+    return "action-unknown";
   }
 
   function formatNumber(value) {
