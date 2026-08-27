@@ -1,4 +1,9 @@
-# Tell GitHub Linguist to ignore Graphify generated files in language stats
-graphify-out/** linguist-generated=true
+# Exclude Graphify outputs and cache data from GitHub language statistics
+graphify-out/** linguist-detectable=false
+graphify-out/** linguist-vendored=true
+graphify-out/** linguist-documentation=true
+graphify-out/*.html linguist-detectable=false
 graphify-out/*.html linguist-vendored=true
-data/cache/** linguist-generated=true
+
+data/cache/** linguist-detectable=false
+data/cache/** linguist-vendored=true
