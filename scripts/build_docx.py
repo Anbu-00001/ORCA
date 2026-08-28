@@ -5,6 +5,25 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from data.fetch import ZONES  # single source of truth, not a hand-kept copy
+
+# Hand-listing these drifted: the document claimed Mahabalipuram, Pamban,
+# Tuticorin and Mallipattinam -- none of which the system has ever
+# evaluated -- while omitting Point Calimere, Mandapam, Rameswaram and
+# Thoothukudi, which it does. A submitted architecture document naming
+# four zones that do not exist is the kind of detail a reviewer checks.
+_ZONE_NAMES = [z["name"] for z in ZONES]
+ZONE_SENTENCE = (
+    f"{len(_ZONE_NAMES)} coastal zones: "
+    + ", ".join(_ZONE_NAMES[:-1])
+    + f", and {_ZONE_NAMES[-1]}"
+)
+
 def set_cell_background(cell, fill_hex):
     tcPr = cell._element.get_or_add_tcPr()
     shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill_hex}"/>')
@@ -160,7 +179,7 @@ def build_document():
 
     # SECTION 1: EXECUTIVE SUMMARY
     add_heading_1(doc, "1. Executive Summary & Core Engineering Philosophy")
-    add_p(doc, "ORCA (Oceanic Risk & Condition Advisory) is a domain-specific marine safety reasoning system built for traditional and artisanal fishermen operating along the Tamil Nadu coastline (India). The platform evaluates 10 major coastal zones: Chennai, Mahabalipuram, Cuddalore, Nagapattinam, Karaikal, Pamban, Tuticorin, Kanyakumari, Colachel, and Mallipattinam.")
+    add_p(doc, "ORCA (Oceanic Risk & Condition Advisory) is a domain-specific marine safety reasoning system built for traditional and artisanal fishermen operating along the Tamil Nadu coastline (India). The platform evaluates " + ZONE_SENTENCE + ".")
     
     add_callout(doc, "The Core Architecture Principle: Zero-Trust AI & Boring Safety Core",
                 "1. Deterministic Guarantee: Marine safety decisions (GO / DO NOT GO / SAFER ALTERNATIVE) are made exclusively by deterministic Python algorithms in policy.py and planner.py. Safety rules CANNOT be prompted out by an LLM.\n"
@@ -238,6 +257,10 @@ def build_document():
     \
     # Rule 3: Acceptable conditions with no hazards -> GO\
     return Decision(action='GO', reason='No hazards found; conditions acceptable')")
+
+    add_p(doc, "These three rules are the whole of orca/policy.py, which is frozen. They are not, however, the whole decision: orca/planner.py applies two corrections to each zone's Decision before it is accepted, one layer above the frozen module. Documenting the rules without them would overstate what policy.py alone guarantees.")
+    add_bullet(doc, " A zone where no agent had any observation returns CANNOT ASSESS, not GO. Five neutral findings are not five clean bills of health, and \u201cNo hazards found; conditions acceptable\u201d from an empty evidence list is a confident answer to a question the system cannot answer. Deliberately not DO NOT GO: conflating \u201cI know it is dangerous\u201d with \u201cI do not know\u201d teaches users to discount the one verdict that must never be discounted.", "R-39 \u2014 no evidence is not safety:")
+    add_bullet(doc, " Rule 2 above gates on opportunity AND danger, so a zone carrying a hazard with nothing suggesting go falls through to Rule 3 and returns GO. The trigger is inverted \u2014 suggests_go goes false when the water is cold or chlorophyll is cloud-masked \u2014 so the worse the fishing looks, the more likely the safety override is skipped. The planner returns SAFER ALTERNATIVE instead, naming the MOST SEVERE danger rather than the first in agent-registration order.", "R-59 \u2014 danger without opportunity:")
 
     # SECTION 4: AGENTIC CHATBOT WORKFLOW DETAILED BREAKDOWN
     add_heading_1(doc, "4. Detailed Agentic Chatbot Workflow (orca/agentic.py)")

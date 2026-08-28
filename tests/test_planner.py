@@ -9,13 +9,15 @@ zone swap. The flip test (wave height 3.1m vs 1.0m) must change the
 *final* recommendation end-to-end, not just the isolated policy call —
 that's the actual proof the whole pipeline is wired together live.
 """
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from orca.planner import (
     build_recommendation,
     load_cached_observations,
+    load_forecast_observations,
     observation_id,
     observations_for_zone,
     resolve_zone_from_query,
@@ -495,3 +497,50 @@ def test_r60_uses_the_existing_haversine_not_a_second_one():
     """
     from orca import agents, planner
     assert planner._haversine_km is agents._haversine_km
+
+
+# --- forecast cache staleness -------------------------------------------
+# The forecast cache does not expire on its own: data/fetch.py writes
+# observations that are tomorrow-relative-to-the-fetch, so a cache written
+# yesterday holds TODAY's readings. Serving those to "what about
+# tomorrow?" answers a different question than the one asked. Measured
+# live on 2026-08-28 against a cache fetched on the 27th: 200 observations
+# valid today, each reporting freshness_min 0 -- a forecast's valid_time
+# is ahead of its fetched_at, so the staleness clamp reads zero and never
+# catches it. The date is the only thing that can.
+def _write_forecast_cache(tmp_path, valid_time, fetched_at):
+    payload = [{
+        "variable": "wave_height_m", "value": 1.4, "unit": "m",
+        "lat": 9.28, "lon": 79.31,
+        "valid_time": valid_time.isoformat(), "fetched_at": fetched_at.isoformat(),
+        "source": "Open-Meteo Marine", "confidence": 0.75, "freshness_min": 0,
+        "provenance": "https://marine-api.open-meteo.com/v1/marine",
+    }]
+    (tmp_path / "zone.json").write_text(json.dumps(payload))
+    return tmp_path
+
+
+def test_forecast_cache_valid_for_tomorrow_is_loaded(tmp_path):
+    now = datetime.now(timezone.utc)
+    _write_forecast_cache(tmp_path, now + timedelta(days=1), now)
+    assert len(load_forecast_observations(tmp_path)) == 1
+
+
+def test_forecast_cache_valid_for_today_is_dropped_not_served_as_tomorrow(tmp_path):
+    """A cache fetched yesterday is today's data. It must not reach the
+    'tomorrow' path -- answer_question() then says it has no forecast,
+    which is true, instead of presenting today's numbers as tomorrow's.
+    """
+    now = datetime.now(timezone.utc)
+    _write_forecast_cache(tmp_path, now, now - timedelta(days=1))
+    assert load_forecast_observations(tmp_path) == []
+
+
+def test_forecast_cache_valid_for_the_day_after_tomorrow_is_dropped(tmp_path):
+    now = datetime.now(timezone.utc)
+    _write_forecast_cache(tmp_path, now + timedelta(days=2), now)
+    assert load_forecast_observations(tmp_path) == []
+
+
+def test_missing_forecast_cache_dir_is_absent_not_an_error(tmp_path):
+    assert load_forecast_observations(tmp_path / "nope") == []

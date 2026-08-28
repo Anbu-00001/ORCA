@@ -16,6 +16,7 @@ real whenever a connection exists.
 """
 import json
 import socket
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -219,14 +220,51 @@ def test_forecast_cache_directory_is_invisible_to_load_cached_observations(tmp_p
 
 def test_load_forecast_observations_reads_back_what_was_written(tmp_path):
     raw = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
-    tomorrow_obs = OpenMeteoMarineFetcher()._parse_point_at_offset(
+    parsed = OpenMeteoMarineFetcher()._parse_point_at_offset(
         raw, ZONE_A, datetime.now(timezone.utc), hours_ahead=24
     )
+    # The fixture is a captured response, so its valid_times are whatever
+    # day it was recorded. load_forecast_observations() now checks that
+    # what it hands back is genuinely valid for TOMORROW -- a forecast
+    # cache written yesterday holds today's readings, and serving those to
+    # "what about tomorrow?" answers a different question than the one
+    # asked. Re-date the parsed observations onto tomorrow so this stays a
+    # test of the write/read round-trip rather than of the calendar.
+    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+    tomorrow_obs = [
+        replace(o, valid_time=o.valid_time.replace(
+            year=tomorrow.year, month=tomorrow.month, day=tomorrow.day
+        ))
+        for o in parsed
+    ]
     write_cache("Open-Meteo Marine", tomorrow_obs, cache_dir=tmp_path / "forecast")
 
     loaded = load_forecast_observations(cache_dir=tmp_path / "forecast")
     assert len(loaded) == len(tomorrow_obs)
     assert {o.variable for o in loaded} == {o.variable for o in tomorrow_obs}
+
+
+def test_load_forecast_observations_drops_a_cache_written_yesterday(tmp_path):
+    """The regression this guard exists for: data/fetch.py run on the 27th
+    writes valid_times on the 28th. On the 28th those are TODAY's numbers,
+    and freshness_min cannot catch it -- a forecast's valid_time is ahead
+    of its fetched_at, so the staleness clamp reads 0. Only the date can.
+    """
+    raw = json.loads((FIXTURES / "real_openmeteo_marine_response.json").read_text())
+    parsed = OpenMeteoMarineFetcher()._parse_point_at_offset(
+        raw, ZONE_A, datetime.now(timezone.utc), hours_ahead=24
+    )
+    today = datetime.now(timezone.utc)
+    stale = [
+        replace(o, valid_time=o.valid_time.replace(
+            year=today.year, month=today.month, day=today.day
+        ))
+        for o in parsed
+    ]
+    assert stale, "fixture parsed to nothing -- test would pass vacuously"
+    write_cache("Open-Meteo Marine", stale, cache_dir=tmp_path / "forecast")
+
+    assert load_forecast_observations(cache_dir=tmp_path / "forecast") == []
 
 
 def test_load_forecast_observations_returns_empty_list_when_uncached(tmp_path):

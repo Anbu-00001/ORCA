@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from data.fetch import ZONES
@@ -31,6 +32,8 @@ from orca.agents import (
 )
 from orca.policy import RISK_OVERRIDE_THRESHOLD, Decision, Finding, resolve
 from orca.schema import MarineObservation
+
+logger = logging.getLogger("orca.planner")
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
 # Tomorrow's forecast, for orca/agentic.py's data_lookup answers only --
@@ -94,11 +97,36 @@ def load_forecast_observations(cache_dir: Path | None = None) -> list[MarineObse
     the only caller. Returns [] if the forecast cache hasn't been
     populated yet (e.g. an older data/fetch.py run, or this run's
     tomorrow-fetch failed) -- absent, not fabricated, per CLAUDE.md rule 1.
+
+    "Tomorrow" is re-checked against the CLOCK, not merely against the
+    file's existence, because the cache does not expire on its own. The
+    forecast data/fetch.py writes is tomorrow-relative-to-the-fetch: run
+    it on the 27th and every valid_time in here reads 2026-08-28. Come
+    the 28th those same rows are today's, and the unfiltered loader
+    handed them to the "what about tomorrow?" path as tomorrow's --
+    answering a different question than the one asked, which is the exact
+    failure the honesty work exists to remove. Measured on 2026-08-28
+    with a cache fetched on the 27th: 200 observations valid TODAY served
+    as tomorrow's forecast, each reporting freshness_min 0 (a forecast's
+    valid_time is ahead of its fetched_at, so the staleness clamp reads
+    zero and cannot catch this).
+
+    Dropping them is all that is needed: answer_question() already treats
+    an empty forecast as "no forecast cached for tomorrow" and says so in
+    the answer. Stale in, silence out -- never a stale number wearing
+    tomorrow's label.
     """
     cache_dir = Path(cache_dir) if cache_dir else FORECAST_CACHE_DIR
     if not cache_dir.exists():
         return []
-    return _load_observations_from(cache_dir)
+    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
+    fresh = [o for o in _load_observations_from(cache_dir) if o.valid_time.date() == tomorrow]
+    if not fresh:
+        logger.warning(
+            "Forecast cache holds nothing valid for %s -- re-run `python -m data.fetch`. "
+            "'What about tomorrow?' will answer for today and say so.", tomorrow
+        )
+    return fresh
 
 
 def observation_id(obs: MarineObservation) -> str:

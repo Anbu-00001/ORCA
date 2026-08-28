@@ -78,3 +78,62 @@ def test_frontend_history_cap_does_not_exceed_the_backend_cap(html):
     -- anything above MAX_TURNS is silently dropped by sanitize(), which
     would make the UI's memory quietly shorter than it looks."""
     assert _js_number(html, "HISTORY_MAX") <= MAX_TURNS
+
+
+# --- fail-open guards on the two action->appearance maps ----------------
+# Both views turn `action` into a colour, and both must be non-permissive
+# on an action they do not recognise. The amended R-25 is explicit that a
+# new value in an existing enum is NOT an additive change: a client that
+# switches on `action` and defaults to "proceed" has built a fail-open.
+# CANNOT ASSESS (R-39) is the first such value, and it exists precisely so
+# that ignorance is never rendered as safety.
+#
+# This was live: web/three-viz.js read `ACTION_COLOR[action] || COLOR_LOW`
+# with no CANNOT ASSESS key, and COLOR_LOW is the GO green -- so the
+# reasoning graph drew "ORCA cannot assess this zone" in exactly the
+# colour that means go. index.html's actionClass() had already been made
+# non-permissive; this file had not.
+THREE_VIZ_JS = Path(__file__).resolve().parent.parent / "web" / "three-viz.js"
+
+ACTIONS = ("GO", "DO NOT GO", "SAFER ALTERNATIVE", "CANNOT ASSESS")
+
+
+@pytest.fixture(scope="module")
+def three_viz() -> str:
+    return THREE_VIZ_JS.read_text()
+
+
+@pytest.mark.parametrize("action", ACTIONS)
+def test_three_viz_action_colour_map_covers_every_action(three_viz, action):
+    block = re.search(r"const ACTION_COLOR = \{(.*?)\};", three_viz, re.S)
+    assert block, "could not find ACTION_COLOR in web/three-viz.js"
+    assert f'"{action}"' in block.group(1), (
+        f"{action!r} is missing from ACTION_COLOR, so it falls through to the "
+        "default branch instead of getting its own colour"
+    )
+
+
+def test_three_viz_action_colour_default_is_not_the_go_colour(three_viz):
+    match = re.search(r"ACTION_COLOR\[recommendation\.action\]\s*\|\|\s*(\w+)", three_viz)
+    assert match, "could not find the ACTION_COLOR lookup in web/three-viz.js"
+    assert match.group(1) != "COLOR_LOW", (
+        "the unrecognised-action fallback is COLOR_LOW, the GO green -- an "
+        "unknown verdict must never render as permission to go (R-25/R-39)"
+    )
+
+
+@pytest.mark.parametrize("action", ACTIONS)
+def test_index_html_action_class_covers_every_action(html, action):
+    assert f'action === "{action}"' in html, (
+        f"actionClass() in web/index.html does not name {action!r} explicitly"
+    )
+
+
+def test_index_html_action_class_default_is_not_permissive(html):
+    body = re.search(r"function actionClass\(action\) \{(.*?)\n  \}", html, re.S)
+    assert body, "could not find actionClass() in web/index.html"
+    final_return = body.group(1).strip().splitlines()[-1].strip()
+    assert final_return == 'return "action-unknown";', (
+        f"actionClass()'s default branch is {final_return!r}; it must be the "
+        "neutral unknown state, never a decided verdict"
+    )

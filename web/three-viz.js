@@ -30,10 +30,15 @@ function riskColor(risk) {
   return c;
 }
 
+// index.html's --unknown. CANNOT ASSESS is a real verdict (R-39), not a
+// missing key, so it gets its own colour rather than a fallback.
+const COLOR_UNKNOWN = new THREE.Color(0x6b7a82);
+
 const ACTION_COLOR = {
   "GO": COLOR_LOW,
   "DO NOT GO": COLOR_HIGH,
   "SAFER ALTERNATIVE": COLOR_MID,
+  "CANNOT ASSESS": COLOR_UNKNOWN,
 };
 
 // Draws text onto a canvas and uses it as a sprite texture -- the boring,
@@ -989,7 +994,13 @@ export class ReasoningGraph extends ThreeVizBase {
     const findings = recommendation.agent_findings || [];
     const evidenceById = new Map((recommendation.evidence || []).map((o) => [o.id, o]));
 
-    const coreColor = ACTION_COLOR[recommendation.action] || COLOR_LOW;
+    // NON-PERMISSIVE default, mirroring actionClass() in index.html.
+    // COLOR_LOW is the GO green, so `|| COLOR_LOW` painted CANNOT ASSESS
+    // -- and every future action the amended R-25 allows -- in the one
+    // colour that means "safe to go". R-39 introduced CANNOT ASSESS
+    // precisely so ignorance is never rendered as safety; this view was
+    // still undoing that.
+    const coreColor = ACTION_COLOR[recommendation.action] || COLOR_UNKNOWN;
     const core = new THREE.Mesh(
       new THREE.SphereGeometry(0.5, 32, 32),
       new THREE.MeshStandardMaterial({ color: coreColor, emissive: coreColor, emissiveIntensity: 0.35 })
@@ -1309,7 +1320,24 @@ export class OceanDiorama extends ThreeVizBase {
         const b = a + 1;
         const cIdx = a + cols;
         const d = cIdx + 1;
-        indices.push(a, cIdx, b, b, cIdx, d);
+        // Winding matters twice over here, and getting it backwards is
+        // what made the landmass render black.
+        //
+        // j runs east so x increases with it, but i runs north and
+        // _latToZ() maps increasing latitude to DECREASING z -- so the
+        // grid's (i, j) order is already mirrored in world space. Winding
+        // a-cIdx-b on top of that put every face's normal at -Y: the mesh
+        // was back-facing from above, ShaderMaterial culls back faces by
+        // default, and the terrain simply was not drawn. What showed
+        // through the hole was _buildSkirt()'s near-black block walls,
+        // which are DoubleSide -- hence "the land is a black mass".
+        //
+        // The same -Y normals also fed the shader, where the land branch
+        // reads N.y for its top-vs-bevel mix and the seabed dots N
+        // against the sun, so no amount of lighting work could have
+        // fixed it. a-b-cIdx winds counter-clockwise seen from above:
+        // normals +Y, faces front, land buff, seabed lit.
+        indices.push(a, b, cIdx, b, d, cIdx);
       }
     }
 
@@ -1439,7 +1467,22 @@ export class OceanDiorama extends ThreeVizBase {
         const edgeLon = Math.min(Math.max(min_lon + ((x + this._width / 2) / this._width) * (max_lon - min_lon), min_lon), max_lon);
         const edgeLat = Math.min(Math.max(max_lat - ((z + this._depth / 2) / this._depth) * (max_lat - min_lat), min_lat), max_lat);
         const edgeDepth = -this._heightAt(edgeLat, edgeLon);
-        depths[i] = edgeDepth + (OPEN_OCEAN_M - edgeDepth) * t;
+        // Only WATER may deepen outwards. Where the surveyed block ends
+        // on land, the land is what continues past it -- so hold the
+        // edge value and let the fragment shader's `wet` test discard,
+        // exactly as it does for land inside the block.
+        //
+        // Blending unconditionally drew the sea over inland India. The
+        // cached ETOPO bbox spans 76.9-80.6E / 7.8-13.4N because Colachel
+        // sits on the Arabian Sea side, which drags the western edge
+        // across the Western Ghats: 87% of the west edge and 93% of the
+        // north edge are land, up to 1,929 m. Easing those toward
+        // OPEN_OCEAN_M put a waterline 94% of the way out into the ring
+        // and full-amplitude waves over the Ghats beyond it -- geography
+        // ORCA does not have data for, drawn as though it did.
+        depths[i] = edgeDepth > 0
+          ? edgeDepth + (OPEN_OCEAN_M - edgeDepth) * t
+          : edgeDepth;
       }
     }
     geometry.setAttribute("aDepth", new THREE.BufferAttribute(depths, 1));
