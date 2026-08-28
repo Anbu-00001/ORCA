@@ -439,6 +439,11 @@
     border: 1px solid rgba(164, 50, 29, 0.5);
   }
   .legend-swatch.depth-ramp { background: linear-gradient(180deg, #3f9c9a 0%, #17567a 55%, #0a2036 100%); }
+  .legend-swatch.isobath {
+    background: repeating-linear-gradient(180deg, #c2e7ef 0 1px, #17567a 1px 6px);
+  }
+  /* The same buff the terrain shader paints land with. */
+  .legend-swatch.chart-land { background: #dbc9a3; border: 1px solid #988767; }
 
   .legend-text { font-size: 0.66rem; line-height: 1.42; color: #b7d0de; }
   .legend-text b {
@@ -533,6 +538,10 @@
   #sandbox-scale .deny-tick { color: #d97a63; margin-right: 8.4%; }
 
   #sandbox-note { margin: 0.6rem 0 0; font-size: 0.7rem; line-height: 1.45; color: #cfe3ee; min-height: 2.05em; }
+  /* Waiting on a real reading: present, obviously not yet usable. */
+  #sandbox-panel.is-idle #sandbox-value { color: #4d6b7d; }
+  #sandbox-panel.is-idle #sandbox-flag { color: #6d8a9c; }
+  #sandbox-panel.is-idle #sandbox-wave { opacity: 0.35; cursor: not-allowed; }
   #sandbox-reset {
     display: block; width: 100%; margin-top: 0.6rem; padding: 0.4rem;
     background: transparent; color: #9fc8db;
@@ -986,6 +995,26 @@
   }
   /* No verdict, no sea -- same rule as the horizon above. */
   #answer-card:not(:has(#answer-action:not(:empty))) #sea-canvas { display: none; }
+  /* Says so, on the field, whenever the water is following the
+     environment sandbox's hypothesis instead of a measurement. Takes
+     the sandbox panel's own amber (#f0c04a in web/three-viz-app.js's
+     panel) rather than a safety colour: this is not a hazard, it is a
+     statement that nothing here was measured. */
+  #sea-hypothetical {
+    display: none;
+    position: absolute;
+    left: 1.5rem; right: 1.5rem; bottom: 0.7rem;
+    z-index: 2;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.64rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #f0c04a;
+    padding-top: 0.5rem;
+    border-top: 1px dashed rgba(240, 192, 74, 0.6);
+    pointer-events: none;
+  }
+  #sea-hypothetical.visible { display: block; }
   /* The canvas is absolutely positioned, so without this the static
      in-flow text would paint underneath it. */
   #answer-action, #answer-text, #agentic-badge, #severity-indicator,
@@ -1108,8 +1137,18 @@
         </div>
         <div class="legend-row">
           <span class="legend-swatch depth-ramp"></span>
-          <span class="legend-text"><b>Seafloor</b>Real ETOPO 2022 relief. Shallow shelf
-            to abyssal plain, seen through the water.</span>
+          <span class="legend-text"><b>Seafloor</b>Real ETOPO 2022 relief, shelf to
+            abyssal plain, seen through the water.</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-swatch isobath"></span>
+          <span class="legend-text"><b>Depth contours</b>20, 50, 100, 200, 500, 1 000
+            and 2 000&nbsp;m, read off the cached grid.</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-swatch chart-land"></span>
+          <span class="legend-text"><b>Land</b>Drawn flat, chart-style. ETOPO posts one
+            sample per ~55&nbsp;km&sup2; &mdash; too coarse for real relief.</span>
         </div>
         <p class="legend-hint">Click any beam to ask ORCA about that zone.</p>
       </div>
@@ -1747,30 +1786,72 @@
     return { waveM: Math.max(0, waveM), denyM: denyM, maxM: maxM };
   }
 
+  // The environment sandbox (web/three-viz-app.js) lets someone drag
+  // the sea to a height nobody measured. While it holds a hypothesis
+  // the water here follows it, so the 2.5 m threshold can be crossed
+  // and seen rather than explained -- but the field says so, loudly,
+  // for as long as it does. The verdict field is where the real
+  // advisory lives; an unmarked hypothesis rendered there is exactly
+  // the fabricated-reading failure CLAUDE.md's first rule is about.
+  const sandboxPanel = document.getElementById("sandbox-panel");
+  const sandboxValue = document.getElementById("sandbox-value");
+
+  function readSandbox() {
+    if (!sandboxPanel || !sandboxValue) return null;
+    if (!sandboxPanel.classList.contains("visible")) return null;
+    if (!sandboxPanel.classList.contains("is-hypothetical")) return null;
+    const m = parseFloat(sandboxValue.textContent);
+    return isFinite(m) ? m : null;
+  }
+
+  // Declares the hypothesis on the field itself. Created here, like
+  // the canvas, so the markup carries no element that could be left
+  // behind saying something untrue if this script never runs.
+  const flag = document.createElement("div");
+  flag.id = "sea-hypothetical";
+  flag.setAttribute("aria-live", "polite");
+  card.appendChild(flag);
+
   // Sea state -> motion. The curve is deliberately not linear: the
   // difference between 0.4 m and 1.2 m matters far more to a small
   // boat than the difference between 4 m and 5 m, and the eye should
   // read that the same way.
+  const STILL = { amp: 0, k: 0.02, speed: 0, level: 0.16, breaking: 0 };
   let sea = { amp: 0, k: 0.02, speed: 0, level: 0, breaking: 0 };
+  let target = Object.assign({}, STILL);
 
   function syncSea() {
     const r = readSea();
     if (!r) {
       // No observation. Flat, still, low -- never a plausible calm sea.
-      sea = { amp: 0, k: 0.02, speed: 0, level: 0.16, breaking: 0 };
+      target = Object.assign({}, STILL);
+      flag.textContent = "";
+      flag.classList.remove("visible");
       return;
     }
-    const ratio = Math.min(1, r.waveM / r.maxM);
+    const hypothetical = readSandbox();
+    const waveM = hypothetical === null ? r.waveM : Math.max(0, hypothetical);
+
+    if (hypothetical === null) {
+      flag.textContent = "";
+      flag.classList.remove("visible");
+    } else {
+      flag.textContent = "Hypothetical sea — " + waveM.toFixed(1) + " m, not measured";
+      flag.classList.add("visible");
+    }
+
+    const ratio = Math.min(1, waveM / r.maxM);
     const shaped = Math.pow(ratio, 0.72);
-    sea = {
+    target = {
       amp: 1.5 + 26 * shaped,               // crest height, px
       k: (Math.PI * 2) / (340 - 190 * shaped), // shorter swell as it builds
       speed: 0.00020 + 0.00075 * shaped,
       level: 0.19 + 0.19 * shaped,          // the water itself rises
       // Whitecaps begin exactly at ORCA's hard-deny height and are
       // fully formed a metre past it. Read from the ruler, so this
-      // can never disagree with the line drawn above it.
-      breaking: Math.max(0, Math.min(1, (r.waveM - r.denyM) / 1.0)),
+      // can never disagree with the line drawn above it -- or with
+      // the sandbox's own "crosses the 2.5 m hard-deny line" note.
+      breaking: Math.max(0, Math.min(1, (waveM - r.denyM) / 1.0)),
     };
   }
 
@@ -1793,23 +1874,34 @@
       + amp * 0.12 * Math.sin(sea.k * 3.7 * x + t * sea.speed * 2.2 + 4.1);
   }
 
-  // The rise: on a new verdict the water floods up from nothing. One
-  // orchestrated moment per answer, not an ambient loop.
-  let riseFrom = 0, riseAt = 0;
-  const RISE_MS = 900;
-  function easeOutCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  // The water eases toward whatever the current sea state is rather
+  // than cutting to it. That gives the flood-up on a new verdict (the
+  // state is reset to nothing first) and, for free, makes dragging
+  // the sandbox slider feel like a sea building rather than a value
+  // changing.
+  let last = 0;
+  function ease(dt) {
+    const k = Math.min(1, dt / 240);
+    sea.amp += (target.amp - sea.amp) * k;
+    sea.k += (target.k - sea.k) * k;
+    sea.speed += (target.speed - sea.speed) * k;
+    sea.level += (target.level - sea.level) * k;
+    sea.breaking += (target.breaking - sea.breaking) * k;
+  }
 
   function render(t) {
+    const dt = last ? Math.min(64, t - last) : 16;
+    last = t;
+    if (stillMedia && stillMedia.matches) sea = Object.assign({}, target);
+    else ease(dt);
+
     ctx.clearRect(0, 0, w, h);
     if (h <= 0) return;
 
-    const rising = stillMedia && stillMedia.matches
-      ? 1
-      : easeOutCubic(Math.min(1, (t - riseAt) / RISE_MS));
-    const level = (riseFrom + (sea.level - riseFrom) * rising) * h;
+    const level = sea.level * h;
     if (level <= 0.5) return;
 
-    const amp = sea.amp * rising;
+    const amp = sea.amp;
     const base = h - level;
     const step = 3;
 
@@ -1847,7 +1939,7 @@
 
     // Whitecaps -- only past the hard-deny height. Drawn on the crests
     // themselves, so they appear where the sea is actually steepest.
-    if (sea.breaking > 0 && rising > 0.35) {
+    if (sea.breaking > 0.02 && sea.level > 0.08) {
       ctx.strokeStyle = "rgba(255, 255, 255, " + (0.35 + 0.5 * sea.breaking).toFixed(3) + ")";
       ctx.lineWidth = 2;
       ctx.lineCap = "round";
@@ -1879,22 +1971,32 @@
     if (!raf) raf = window.requestAnimationFrame(loop);
   }
 
+  // A new answer floods the water up from nothing: the state is reset
+  // and eased back to the new sea. Dragging the sandbox slider does
+  // not reset it -- there the water should build continuously from
+  // where it already is, which is the whole point of the gesture.
   function onAnswer() {
-    const before = sea.level;
     syncSea();
     resize();
-    // Only re-flood when the water actually has somewhere to go --
-    // a repeated identical verdict should not replay the animation.
-    if (Math.abs(before - sea.level) > 0.001 || before === 0) {
-      riseFrom = 0;
-      riseAt = (window.performance && performance.now()) || 0;
-    }
+    sea.level = 0;
+    sea.amp = 0;
+    sea.breaking = 0;
+    start();
+  }
+  function onSandbox() {
+    syncSea();
     start();
   }
 
-  const observer = new MutationObserver(onAnswer);
-  observer.observe(rulerBody, { childList: true, subtree: true, characterData: true });
-  observer.observe(action, { attributes: true, attributeFilter: ["class"], childList: true });
+  const answerObserver = new MutationObserver(onAnswer);
+  answerObserver.observe(rulerBody, { childList: true, subtree: true, characterData: true });
+  answerObserver.observe(action, { attributes: true, attributeFilter: ["class"], childList: true });
+
+  if (sandboxPanel && sandboxValue) {
+    const sandboxObserver = new MutationObserver(onSandbox);
+    sandboxObserver.observe(sandboxPanel, { attributes: true, attributeFilter: ["class"] });
+    sandboxObserver.observe(sandboxValue, { childList: true, characterData: true, subtree: true });
+  }
 
   if (window.ResizeObserver) {
     new ResizeObserver(function () { resize(); start(); }).observe(card);

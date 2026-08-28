@@ -68,13 +68,29 @@ function ensureReasoningGraph() {
 
 function ensureOceanDiorama() {
   if (!oceanDiorama) {
-    oceanDiorama = new OceanDiorama(document.getElementById("ocean3d-container"));
-    oceanDiorama.onWaveChange(renderSandbox);
-    if (latestBathymetry) {
-      oceanDiorama.setBathymetry(latestBathymetry);
-      if (latestRecommendation) oceanDiorama.setZoneSummaries(latestRecommendation.zone_summaries || []);
+    const container = document.getElementById("ocean3d-container");
+    try {
+      oceanDiorama = new OceanDiorama(container);
+      oceanDiorama.onWaveChange(renderSandbox);
+      if (latestBathymetry) {
+        oceanDiorama.setBathymetry(latestBathymetry);
+        if (latestRecommendation) oceanDiorama.setZoneSummaries(latestRecommendation.zone_summaries || []);
+      }
+      seedSandbox();
+    } catch (err) {
+      // Anything thrown while building the scene -- a bad shader, a
+      // malformed grid -- used to leave start() uncalled and the canvas
+      // simply black, which is indistinguishable from a slow load. Say
+      // so instead. Not swallowed: rethrown to the console with its
+      // stack intact (CLAUDE.md rule 2).
+      oceanDiorama = null;
+      if (container) {
+        container.classList.remove("awaiting");
+        container.textContent = "3D ocean failed to build — see the browser console.";
+      }
+      console.error("ORCA: 3D ocean build failed —", err);
+      throw err;
     }
-    seedSandbox();
   } else {
     oceanDiorama.start();
   }
@@ -119,11 +135,27 @@ function seedSandbox() {
   const seeded = oceanDiorama.setWaveFromEvidence(
     (latestRecommendation && latestRecommendation.evidence) || []
   );
-  // No wave reading in this answer means there is nothing to perturb.
-  // An absent value is correct; a placeholder would not be.
-  panel.classList.toggle("visible", seeded);
-  if (!seeded) return;
   const slider = document.getElementById("sandbox-wave");
+
+  // The panel always shows, but it only becomes operable once a real
+  // wave_height_m has arrived to depart FROM. Hiding it outright just
+  // read as a broken feature; seeding it with a made-up default would
+  // be worse -- a hypothesis has to be a departure from a measurement,
+  // and an absent reading has to look absent (CLAUDE.md rule 1).
+  panel.classList.add("visible");
+  panel.classList.toggle("is-idle", !seeded);
+  if (slider) slider.disabled = !seeded;
+
+  if (!seeded) {
+    document.getElementById("sandbox-value").textContent = "—";
+    document.getElementById("sandbox-band").textContent = "";
+    document.getElementById("sandbox-flag").className = "observed";
+    document.getElementById("sandbox-flag").textContent = "NO READING";
+    document.getElementById("sandbox-note").textContent =
+      "Ask ORCA about a zone to load its measured sea state, then drag to explore another.";
+    document.getElementById("sandbox-reset").classList.add("hidden");
+    return;
+  }
   if (slider) slider.value = String(oceanDiorama.waveState.heightM);
 }
 

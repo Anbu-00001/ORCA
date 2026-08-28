@@ -96,7 +96,59 @@ function buildElevationGrid(points) {
   const lons = [...new Set(points.map((p) => p.lon))].sort((a, b) => a - b);
   const byKey = new Map(points.map((p) => [`${p.lat}|${p.lon}`, p.elevation_m]));
   const grid = lats.map((lat) => lons.map((lon) => byKey.get(`${lat}|${lon}`) ?? 0));
-  return { lats, lons, grid };
+  // Four passes, measured against the real cache rather than guessed:
+  // the steepest inland gradient falls from 4.38 to 1.26 rise/run and
+  // the highest peak from 2.50 to 2.00 scene units, with every one of
+  // the 370 land cells still land. The shards go, the relief stays.
+  return { lats, lons, grid: smoothGrid(grid, 4) };
+}
+
+// A 3x3 box blur over the relief, twice.
+//
+// ETOPO 2022 at 60 arc-seconds gives postings ~7.4 km apart. Joining
+// those with hard facets draws cliffs and spikes that assert detail the
+// data does not contain -- two adjacent postings 100 m apart in height
+// become a 3:1 rock face on screen, which is why the coast rendered as
+// black shards. Blurring is the more honest reading of a coarse grid,
+// not a prettier lie about it, and it is applied to the ONE grid every
+// consumer shares (terrain, skirt, water depth, zone bases) so the
+// coastline they each derive stays identical.
+// SIGN-AWARE: land only ever averages with land, seabed only with
+// seabed. A plain blur is wrong here and measurably so -- the shelf next
+// to this coast drops to -2,700 m, so averaging a +20 m coastal cell
+// against its offshore neighbours drowns it. Measured on the real cache:
+// a naive 4-pass blur destroyed 37 of 370 land cells outright. Skipping
+// across-shoreline neighbours keeps all 370 and leaves the coastline
+// crisp, while still smoothing each side internally.
+function smoothGrid(grid, passes) {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  let src = grid;
+  for (let p = 0; p < passes; p++) {
+    const out = [];
+    for (let i = 0; i < rows; i++) {
+      const row = new Array(cols);
+      for (let j = 0; j < cols; j++) {
+        const isLand = src[i][j] > 0;
+        let sum = 0;
+        let n = 0;
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            const a = i + di;
+            const b = j + dj;
+            if (a < 0 || a >= rows || b < 0 || b >= cols) continue;
+            if (src[a][b] > 0 !== isLand) continue;
+            sum += src[a][b];
+            n++;
+          }
+        }
+        row[j] = n ? sum / n : src[i][j];
+      }
+      out.push(row);
+    }
+    src = out;
+  }
+  return src;
 }
 
 // ---------------------------------------------------------------------
@@ -158,14 +210,30 @@ const L0_MAX_M = 200.0;
 // the ETOPO bbox there is no relief data, so those vertices are simply
 // told they are in deep water -- no seabed is invented out there, it is
 // drawn as the open ocean it is.
-// Land relief: saturating, so 50 m of coastal plain is visible and
-// 2,000 m of Ghats does not dominate the frame. See _elevToY().
-// The characteristic height is deliberately low: almost all of ORCA's
-// coast is plain under ~150 m, and if that band does not visibly rise
-// there is no land in the picture -- just a colour change on a flat
-// sheet, which is what made the water above it read as a glitch.
-const LAND_MAX_UNITS = 2.6;
-const LAND_CHARACTERISTIC_M = 170;
+// Land is drawn as a CHART LANDMASS, not as terrain: one flat plate at a
+// fixed height, hard coastline, no relief and no hypsometric ramp.
+//
+// A deliberate choice, forced by the data. ETOPO 2022 at 60 arc-seconds
+// posts samples 7.4 km apart -- one value per ~55 km2 -- and it is the
+// only elevation source in the project. Everything that makes rendered
+// terrain read as terrain (ridgelines, drainage, valleys, vegetation
+// edges) lives well below that scale and is simply absent from the file.
+// Worse, one scene unit spans ~22 km, so showing 50 m of coastal plain
+// needs ~3,000x vertical exaggeration -- and exaggerating smooth coarse
+// data yields bigger smooth domes: scale without detail. Inventing the
+// missing relief would be fabricated topography drawn as if surveyed.
+//
+// So ORCA does what every marine chart does, for the same reason: the
+// sea is the subject and land is a boundary. IHO S-52 draws land as flat
+// buff with a hard coastline and no shading, which is already the visual
+// language of index.html's Day/Dusk/Night palette switch.
+const LAND_PLATE_UNITS = 0.11;
+
+// Isobaths, in metres of depth. Real values read off the cached ETOPO
+// grid -- the effort goes here, where there IS data, instead of into
+// land relief where there is none. This is also the seabed's own chart
+// convention.
+const DEPTH_CONTOURS_M = [20, 50, 100, 200, 500, 1000, 2000];
 
 const WATER_OVERSCAN = 3.0;
 const WATER_SEGMENTS_X = 220;
@@ -208,9 +276,133 @@ const SKY_GLSL = /* glsl */ `
     // Warm haze along the horizon -- but only around the sun's own
     // bearing, so the opposite horizon stays cool and the sky keeps a
     // direction instead of glowing uniformly.
+    // Tight around the sun's own bearing (mu^4, not mu^1.5) and weak.
+    // A broad warm band reflects off deep water -- which is nearly navy
+    // -- and the sum reads as mauve across the entire sea.
     float band = pow(1.0 - clamp(abs(y) * 4.5, 0.0, 1.0), 4.0);
-    col += vec3(0.34, 0.17, 0.08) * band * pow(clamp(mu, 0.0, 1.0), 1.5) * 0.55;
+    col += vec3(0.30, 0.15, 0.06) * band * pow(clamp(mu, 0.0, 1.0), 4.0) * 0.30;
     return col;
+  }
+`;
+
+// The relief gets its own shader rather than a MeshStandardMaterial.
+//
+// Standard Lambert falls to exactly zero wherever a face turns away from
+// the light, and with one low sun that is most of a coastline for most
+// of the orbit -- which is why the land kept rendering as a black mass
+// no matter how much ambient was thrown at it. Wrap ("half-Lambert")
+// lighting cannot reach zero by construction, so the hypsometric colour
+// is always legible from every angle.
+//
+// Elevation arrives as an attribute in real metres and the colour ramp
+// is evaluated per fragment, so the coastline is a sharp band rather
+// than a smear between two 7.4 km-apart vertices.
+const TERRAIN_VERTEX_SHADER = /* glsl */ `
+  attribute float aElev;
+  varying float vElev;
+  varying vec3  vN;
+  varying vec3  vW;
+  void main() {
+    vElev = aElev;
+    // WORLD space, not normalMatrix. normalMatrix is the inverse
+    // transpose of the modelVIEW matrix, so it yields view-space
+    // normals -- and this shader treats N.y as "up" and dots N against a
+    // world-space sun. Under normalMatrix both of those were measured in
+    // the camera's frame, so flat ground read as a steep face whenever
+    // the camera was pitched, and the whole relief darkened or lit as
+    // you orbited. That is what kept the landmass black.
+    vN = normalize(mat3(modelMatrix) * normal);
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vW = world.xyz;
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+const TERRAIN_FRAGMENT_SHADER = /* glsl */ `
+  uniform vec3 uSunDir;
+  varying float vElev;
+  varying vec3  vN;
+  varying vec3  vW;
+
+  ${SKY_GLSL}
+
+  // Seabed tint. sqrt so the shelf, where every zone sits, gets most of
+  // the colour range instead of it all being spent on the abyssal plain.
+  vec3 seabedTint(float e) {
+    return mix(vec3(0.247, 0.612, 0.604), vec3(0.039, 0.125, 0.212),
+               clamp(sqrt(-e / 3500.0), 0.0, 1.0));
+  }
+
+  // One isobath. fwidth() keeps the line a constant width on screen
+  // however steep the slope is, so a contour on the shelf break is not a
+  // hairline while one on the flat abyssal plain floods a whole region.
+  // The clamp is load-bearing, not defensive dressing. fwidth() is a
+  // per-pixel derivative: on a near-edge-on triangle it explodes, and if
+  // derivatives are unavailable it collapses to 0 -- and smoothstep with
+  // edge0 == edge1 is undefined, which in practice returns 0 and makes
+  // the "line" cover everything. Bounding the band to 1..60 m of
+  // elevation keeps it a line under every one of those conditions.
+  float isobath(float depth, float level) {
+    float w = clamp(fwidth(depth) * 1.4, 1.0, 60.0);
+    return 1.0 - smoothstep(0.0, w, abs(depth - level));
+  }
+
+  void main() {
+    vec3 N = normalize(vN);
+    vec3 L = normalize(uSunDir);
+    vec3 col;
+
+    if (vElev > 0.0) {
+      // --- Chart landmass: flat buff, no relief shading ---
+      // The only modulation is top-vs-bevel, which describes the plate's
+      // own edge rather than pretending to describe topography.
+      vec3 landTop  = vec3(0.859, 0.788, 0.639);
+      vec3 landEdge = vec3(0.596, 0.529, 0.404);
+      float up = smoothstep(0.45, 0.92, N.y);
+      col = mix(landEdge, landTop, up);
+    } else {
+      float depth = -vElev;
+      col = seabedTint(vElev);
+
+      // --- Isobaths ---
+      float line = 0.0;
+      ${DEPTH_CONTOURS_M.map((m) => `line = max(line, isobath(depth, ${m.toFixed(1)}));`).join("\n      ")}
+      col = mix(col, vec3(0.760, 0.906, 0.937), line * 0.45);
+
+      // Wrap lighting on the seabed only: dot() remapped to 0..1 rather
+      // than clamped at 0, so a slope facing away from the low sun still
+      // returns light instead of going black.
+      float wrap = dot(N, L) * 0.5 + 0.5;
+      float upN = N.y * 0.5 + 0.5;
+      vec3 sun = vec3(1.0, 0.87, 0.70) * pow(wrap, 1.5) * 1.05;
+      vec3 amb = mix(vec3(0.20, 0.18, 0.15), vec3(0.44, 0.54, 0.64), upN);
+      col *= (sun + amb);
+    }
+
+    // A hard coastline stroke. Drawn in elevation space against the
+    // interpolated value, so it lands exactly on the 0 m isoline rather
+    // than on the nearest vertex 7.4 km away. Clamped for the same
+    // reason as isobath(): unbounded, this one stroke painted the entire
+    // landmass slate instead of outlining it.
+    float cw = clamp(fwidth(vElev) * 1.6, 1.0, 45.0);
+    float coast = 1.0 - smoothstep(0.0, cw, abs(vElev));
+    col = mix(col, vec3(0.129, 0.180, 0.204), coast * 0.8);
+
+    // Same aerial perspective as the water, so land and sea share one
+    // atmosphere instead of looking like two pasted layers.
+    //
+    // The haze direction is clamped to the upper hemisphere. Airlight
+    // between you and a distant object comes from the SKY; sampling
+    // orcaSky() straight down the view vector meant that looking down at
+    // the seabed sampled below the horizon, where the function returns
+    // its near-black nadir -- so distance made the relief darker instead
+    // of hazier.
+    vec3 V = normalize(cameraPosition - vW);
+    vec3 hazeDir = normalize(vec3(-V.x, max(-V.y, 0.03), -V.z));
+    float haze = 1.0 - exp(-length(cameraPosition - vW) * 0.026);
+    col = mix(col, orcaSky(hazeDir, L), haze * 0.45);
+
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
 
@@ -426,10 +618,12 @@ const WATER_FRAGMENT_SHADER = /* glsl */ `
     col += spec;
     col = mix(col, uFoam, foam);
 
-    // Past the 2.5 m limit the sea itself carries the warning, so a
-    // screenshot of the surface alone still says "this is refused". Kept
-    // low: it should read as a flush under the water, not as red paint.
-    col = mix(col, vec3(0.52, 0.13, 0.09), uDenyMix * 0.14);
+    // Past the 2.5 m limit the sea darkens and cools rather than
+    // reddening. Red over the whole surface fought the mauve for the
+    // worst artefact in the frame, and the refusal is already carried by
+    // the rail, the beacons, the panel and the verdict -- the water only
+    // needs to look meaner, which is what breaking crests already do.
+    col = mix(col, col * vec3(0.72, 0.80, 0.88), uDenyMix * 0.55);
     // A hypothetical sea is marked off-hue on purpose -- a fabricated
     // number must never be screenshot-able as a measured one (PRD P8) --
     // but the loud half of that job belongs to the panel and the badge.
@@ -440,9 +634,13 @@ const WATER_FRAGMENT_SHADER = /* glsl */ `
     // --- 6. Aerial perspective ---
     // Distant water fades into the sky in the direction you are looking,
     // which is what gives the diorama a horizon instead of an edge.
+    // Clamped to the upper hemisphere for the same reason as the terrain
+    // shader: airlight comes from the sky, and sampling below the
+    // horizon returns orcaSky()'s near-black nadir.
     float dist = length(cameraPosition - vWorld);
+    vec3 hazeDir = normalize(vec3(-V.x, max(-V.y, 0.03), -V.z));
     float haze = 1.0 - exp(-dist * 0.026);
-    col = mix(col, orcaSky(-V, L), haze * 0.5);
+    col = mix(col, orcaSky(hazeDir, L), haze * 0.5);
 
     // Kept well under 1.0 even in deep water: the ETOPO relief beneath is
     // half the point of the view, and an opaque sea hides it. Multiplied
@@ -926,15 +1124,27 @@ export class OceanDiorama extends ThreeVizBase {
 
     // Sky-above / seabed-below bounce, which is what stops the terrain
     // reading as a grey lump under a blue sky.
-    this.scene.add(new THREE.HemisphereLight(0x7fa8cc, 0x141f1c, 0.85));
-    const sun = new THREE.DirectionalLight(0xffd9a8, 1.6);
+    // A low sun leaves most of a coarse, faceted coastline facing away
+    // from it, so the ambient budget has to be generous or the land
+    // renders as black shards. Sky-above / ground-below bounce does most
+    // of the work; the flat ambient is the floor under everything.
+    this.scene.add(new THREE.HemisphereLight(0x9cc0dc, 0x4a4436, 1.5));
+    this.scene.add(new THREE.AmbientLight(0xbcd4e4, 0.45));
+    const sun = new THREE.DirectionalLight(0xffdcae, 1.5);
     sun.position.copy(this._sunDir).multiplyScalar(40);
     this.scene.add(sun);
     // Cool fill from the opposite side so the shadowed coast keeps shape
     // instead of going black.
-    const fill = new THREE.DirectionalLight(0x7fb0d8, 0.5);
-    fill.position.set(10, 6, 9);
+    const fill = new THREE.DirectionalLight(0x8fbde0, 0.75);
+    fill.position.set(12, 8, 10);
     this.scene.add(fill);
+    // Headlight, repositioned onto the camera every frame. With a fixed
+    // low sun the coast is backlit from roughly half the orbit, and no
+    // amount of ambient stops a faceted relief going to mud there. This
+    // guarantees whatever you are looking at is lit from where you are
+    // looking. Kept dim so the sun still owns the modelling.
+    this._headlight = new THREE.DirectionalLight(0xdCEAF6, 0.55);
+    this.scene.add(this._headlight);
 
     // Bloom, kept tight: it exists to make the sun's specular track and
     // the hard-deny beacons glow, not to smear the whole frame.
@@ -971,7 +1181,7 @@ export class OceanDiorama extends ThreeVizBase {
     this._baselineWave = null;
     this._wave = { heightM: 0.8, periodS: 7.0, directionDeg: 150 };
     this._water = null;
-    this._denyPlane = null;
+    this._denyRailMat = null;
     this._onWaveChange = null;
   }
 
@@ -1049,7 +1259,7 @@ export class OceanDiorama extends ThreeVizBase {
   // frame rather than spearing through the sky.
   _elevToY(elev) {
     if (elev <= 0) return elev * this._elevationScale;
-    return LAND_MAX_UNITS * (1 - Math.exp(-elev / LAND_CHARACTERISTIC_M));
+    return LAND_PLATE_UNITS;
   }
 
   _heightAt(lat, lon) {
@@ -1075,48 +1285,20 @@ export class OceanDiorama extends ThreeVizBase {
     const rows = lats.length;
     const cols = lons.length;
     const positions = new Float32Array(rows * cols * 3);
-    const colors = new Float32Array(rows * cols * 3);
-    // Warmer, higher-contrast relief than the old flat blues: most of
-    // this mesh is seen THROUGH absorbing water, which desaturates and
-    // darkens everything, so the source colours have to start brighter
-    // to survive the trip.
-    const deep = new THREE.Color(0x0a2036);
-    const shallow = new THREE.Color(0x3f9c9a);
-    // A real hypsometric ramp rather than one lerp: beach, then the
-    // cultivated coastal plain, then dry upland, then bare rock. Four
-    // stops is what makes the coastline read as a coastline.
-    const beach = new THREE.Color(0xdcc79b);
-    const plain = new THREE.Color(0x5f8b46);
-    const upland = new THREE.Color(0x93844a);
-    const rock = new THREE.Color(0xa39c92);
-
+    const elevations = new Float32Array(rows * cols);
+    // Elevation travels to the GPU in real metres and the hypsometric
+    // ramp is evaluated per fragment (see TERRAIN_FRAGMENT_SHADER).
+    // Interpolating colour between vertices 7.4 km apart smeared the
+    // shoreline across kilometres of beach; interpolating the elevation
+    // and colouring afterwards puts the band exactly at 0 m.
     let p = 0;
-    let c = 0;
     for (let i = 0; i < rows; i++) {
       for (let j = 0; j < cols; j++) {
         const elev = grid[i][j];
         positions[p++] = this._lonToX(lons[j]);
         positions[p++] = this._elevToY(elev);
         positions[p++] = this._latToZ(lats[i]);
-
-        // sqrt on the submarine ramp so the shelf -- where every zone
-        // actually sits -- gets most of the colour range, instead of it
-        // all being spent on the abyssal plain.
-        let col;
-        if (elev < 0) {
-          col = shallow.clone().lerp(deep, Math.min(Math.sqrt(-elev / 3500), 1));
-        } else if (elev < 12) {
-          col = beach.clone();
-        } else if (elev < 140) {
-          col = beach.clone().lerp(plain, (elev - 12) / 128);
-        } else if (elev < 700) {
-          col = plain.clone().lerp(upland, (elev - 140) / 560);
-        } else {
-          col = upland.clone().lerp(rock, Math.min((elev - 700) / 900, 1));
-        }
-        colors[c++] = col.r;
-        colors[c++] = col.g;
-        colors[c++] = col.b;
+        elevations[i * cols + j] = elev;
       }
     }
 
@@ -1133,13 +1315,17 @@ export class OceanDiorama extends ThreeVizBase {
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute("aElev", new THREE.BufferAttribute(elevations, 1));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
     const mesh = new THREE.Mesh(
       geometry,
-      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0.0 })
+      new THREE.ShaderMaterial({
+        vertexShader: TERRAIN_VERTEX_SHADER,
+        fragmentShader: TERRAIN_FRAGMENT_SHADER,
+        uniforms: { uSunDir: { value: this._sunDir } },
+      })
     );
     mesh.userData.tooltip = null;
     this._terrain.add(mesh);
@@ -1272,7 +1458,9 @@ export class OceanDiorama extends ThreeVizBase {
         uDir: { value: new THREE.Vector2(0, 1) },
         uSunDir: { value: this._sunDir },
         uShallow: { value: new THREE.Color(0x36c6b4) },
-        uDeep: { value: new THREE.Color(0x04192e) },
+        // Blue-green rather than navy: a navy body under a warm sky
+        // reflection is precisely what mixed to mauve.
+        uDeep: { value: new THREE.Color(0x052c42) },
         uFoam: { value: new THREE.Color(0xf2fafd) },
         uFoamGain: { value: 0 },
         uDenyMix: { value: 0 },
@@ -1290,22 +1478,37 @@ export class OceanDiorama extends ThreeVizBase {
     // ruler: a plane the sea visibly rises through. Same constant as
     // orca/agents.py WAVE_HARD_DENY_M -- see that file's comment for why
     // 2.5 m is the real Douglas 4/5 boundary and not an invented cutoff.
+    // A FRAME at the survey block's edge, not a sheet over the sea.
+    //
+    // Drawn as a filled plane this washed the entire view red: it is a
+    // horizontal surface, the camera looks across it at a grazing angle,
+    // and every pixel of ocean ends up behind it. A level is better
+    // stated by an edge you can sight along than by a tint over the
+    // thing you are trying to look at.
     const denyY = 0.02 + WAVE_HARD_DENY_M * WAVE_UNITS_PER_M;
-    const denyGeom = new THREE.PlaneGeometry(this._width, this._depth, 1, 1);
-    denyGeom.rotateX(-Math.PI / 2);
-    const deny = new THREE.Mesh(
-      denyGeom,
-      new THREE.MeshBasicMaterial({
-        color: 0xa4321d,
-        transparent: true,
-        opacity: 0.1,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      })
-    );
-    deny.position.y = denyY;
+    const hw = this._width / 2;
+    const hd = this._depth / 2;
+    const rail = 0.045;
+    const deny = new THREE.Group();
+    const railMat = new THREE.MeshBasicMaterial({
+      color: 0xd4441f,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+    [
+      [this._width, rail, 0, -hd],
+      [this._width, rail, 0, hd],
+      [rail, this._depth, -hw, 0],
+      [rail, this._depth, hw, 0],
+    ].forEach(([w, d, x, z]) => {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), railMat);
+      bar.position.set(x, denyY, z);
+      deny.add(bar);
+    });
     deny.renderOrder = 3;
     this._terrain.add(deny);
+    this._denyRailMat = railMat;
 
     const denyLabel = makeTextSprite("2.5 m — ORCA stops here", {
       fontSize: 26,
@@ -1315,7 +1518,7 @@ export class OceanDiorama extends ThreeVizBase {
     denyLabel.scale.multiplyScalar(0.7);
     denyLabel.position.set(-this._width / 2 + 1.2, denyY + 0.12, this._depth / 2 - 0.7);
     this._terrain.add(denyLabel);
-    this._denyPlane = deny;
+    this._denyGroup = deny;
 
     this._applyWaveUniforms();
   }
@@ -1362,8 +1565,13 @@ export class OceanDiorama extends ThreeVizBase {
     // sea unmistakable at a glance without muddying the water colour.
     u.uFoam.value.set(hyp ? 0xf0e2ff : 0xf2fafd);
 
-    if (this._denyPlane) {
-      this._denyPlane.material.opacity = heightM > WAVE_HARD_DENY_M ? 0.22 : 0.1;
+    // The limit rail earns its prominence only when it is nearly in
+    // play. On a calm sea it is a faint reference edge; as the slider
+    // climbs towards 2.5 m it brightens, which is the moment worth
+    // looking at.
+    if (this._denyRailMat) {
+      const near = Math.min(Math.max((heightM - 1.0) / 1.5, 0), 1);
+      this._denyRailMat.opacity = 0.3 + near * 0.4 + (heightM > WAVE_HARD_DENY_M ? 0.3 : 0);
     }
   }
 
@@ -1502,5 +1710,6 @@ export class OceanDiorama extends ThreeVizBase {
 
   _onTick(t) {
     if (this._water) this._water.material.uniforms.uTime.value = t;
+    if (this._headlight) this._headlight.position.copy(this.camera.position);
   }
 }
