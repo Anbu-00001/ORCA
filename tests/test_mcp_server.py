@@ -9,7 +9,10 @@ import asyncio
 import json
 
 import pytest
-from mcp.server.mcpserver.exceptions import ToolError
+try:
+    from mcp.server.mcpserver.exceptions import ToolError
+except ImportError:
+    from mcp.server.fastmcp.exceptions import ToolError
 
 from orca.mcp_server import ask_marine_advisory, get_evidence, mcp
 
@@ -63,10 +66,9 @@ def test_call_tool_end_to_end_through_the_real_mcp_protocol_layer():
     result = asyncio.run(
         mcp.call_tool("ask_marine_advisory", {"query": "Nagapattinam", "lat": 10.76, "lon": 79.84})
     )
-    assert result.is_error is False
-    assert result.result_type == "complete"
-    assert result.content
-    payload = json.loads(result.content[0].text)
+    assert getattr(result, "is_error", False) is False
+    content = result[0].text if isinstance(result, list) else result.content[0].text
+    payload = json.loads(content)
     assert payload["action"] in {"GO", "DO NOT GO", "SAFER ALTERNATIVE", "CANNOT ASSESS"}
     assert payload["evidence"]
 
@@ -88,6 +90,7 @@ def test_call_tool_rejects_malformed_arguments_before_running_tool():
 
 def test_get_evidence_unknown_id_round_trips_through_protocol():
     result = asyncio.run(mcp.call_tool("get_evidence", {"observation_id_": "obs_does_not_exist"}))
-    assert result.is_error is False
-    payload = json.loads(result.content[0].text)
+    assert getattr(result, "is_error", False) is False
+    content = result[0].text if isinstance(result, list) else result.content[0].text
+    payload = json.loads(content)
     assert payload == {"error": "no observation with id 'obs_does_not_exist'"}

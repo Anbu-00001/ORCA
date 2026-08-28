@@ -11,7 +11,10 @@ Run directly (stdio transport, for a local MCP client config):
 """
 from __future__ import annotations
 
-from mcp.server.mcpserver import MCPServer
+try:
+    from mcp.server.mcpserver import MCPServer
+except ImportError:
+    from mcp.server.fastmcp import FastMCP as MCPServer
 
 from orca.planner import build_recommendation, load_cached_observations, observation_id
 
