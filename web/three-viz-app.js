@@ -329,6 +329,14 @@ function wireLegend() {
   const toggle = document.getElementById("legend-toggle");
   if (!legend || !toggle) return;
   toggle.addEventListener("click", () => {
+    // Narrow screens use .expanded (collapsed by default, see the
+    // max-width:900px block in index.html); wide screens use .collapsed
+    // (expanded by default). One button, both directions.
+    if (window.innerWidth <= 900) {
+      const shown = legend.classList.toggle("expanded");
+      toggle.setAttribute("aria-expanded", String(shown));
+      return;
+    }
     const collapsed = legend.classList.toggle("collapsed");
     toggle.setAttribute("aria-expanded", String(!collapsed));
   });

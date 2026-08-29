@@ -1,0 +1,447 @@
+{
+  "source": "India Meteorological Department (CAP v1.2 public feed)",
+  "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/rss.xml",
+  "fetched_at": "2026-08-29T19:18:03.152039+00:00",
+  "alerts": [
+    {
+      "identifier": "urn:oid:2.49.0.1.356.0.2026.8.29.8.52.26",
+      "sender_name": "NWFC DIVISION, IMD, NEW DELHI",
+      "event": "Extremely heavy",
+      "headline": "Heavy to very heavy with extremely heavy rainfall",
+      "description": "Heavy to Very heavy rainfall at few places and extremely Heavy Rainfall at isolated places very likely over Odisha.",
+      "instruction": "Action suggested\n\n\tAvoid roadway underpasses, drainage ditches, low lying areas and areas where water collects – they can unexpectedly flood or overflow.\n\t      Stay away from power lines or electrical wires.\n\t      Don’t stay in kuchcha houses during heavy rainfall as it may collapse anytime soon.\n\t       Drive carefully.",
+      "severity": "Severe",
+      "urgency": "Expected",
+      "certainty": "Likely",
+      "onset": "2026-08-29T09:00:00+05:30",
+      "expires": "2026-08-31T09:00:00+05:30",
+      "sent": "2026-08-29T14:22:26+05:30",
+      "area_desc": "ODISHA",
+      "polygon": [
+        [
+          21.5348,
+          87.4072
+        ],
+        [
+          22.3501,
+          86.001
+        ],
+        [
+          22.3501,
+          83.9355
+        ],
+        [
+          20.715,
+          82.8809
+        ],
+        [
+          19.6012,
+          82.1777
+        ],
+        [
+          18.8127,
+          83.3203
+        ],
+        [
+          19.0621,
+          84.7705
+        ],
+        [
+          20.5917,
+          86.792
+        ],
+        [
+          21.5348,
+          87.4072
+        ]
+      ],
+      "web": "https://mausam.imd.gov.in/imd_latest/contents/subdivisionwise-warning.php",
+      "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/2026-08-29-08-52-26.xml",
+      "signed": true
+    },
+    {
+      "identifier": "urn:oid:2.49.0.1.356.0.2026.8.26.6.1.5",
+      "sender_name": "NWFC DIVISION, IMD, NEW DELHI",
+      "event": "Extremely heavy",
+      "headline": "Heavy to very heavy with extremely heavy rainfall",
+      "description": "Heavy to Very heavy rainfall at few places and extremely Heavy Rainfall at isolated places very likely over West Uttar Pradesh and West Madhya Pradesh.",
+      "instruction": "Action suggested\n\n\tAvoid roadway underpasses, drainage ditches, low lying areas and areas where water collects – they can unexpectedly flood or overflow.\n\t      Stay away from power lines or electrical wires.\n\t      Don’t stay in kuchcha houses during heavy rainfall as it may collapse anytime soon.\n\t       Drive carefully.",
+      "severity": "Severe",
+      "urgency": "Expected",
+      "certainty": "Likely",
+      "onset": "2026-08-26T06:00:00+05:30",
+      "expires": "2026-08-27T06:00:00+05:30",
+      "sent": "2026-08-26T11:31:05+05:30",
+      "area_desc": "ODISHA",
+      "polygon": [
+        [
+          28.652,
+          80.1123
+        ],
+        [
+          29.9549,
+          78.3545
+        ],
+        [
+          27.9556,
+          77.4756
+        ],
+        [
+          26.7064,
+          77.8271
+        ],
+        [
+          25.4433,
+          75.1904
+        ],
+        [
+          24.1668,
+          74.5752
+        ],
+        [
+          21.9023,
+          74.2236
+        ],
+        [
+          22.2281,
+          76.7725
+        ],
+        [
+          23.0393,
+          78.7939
+        ],
+        [
+          24.647,
+          80.2881
+        ],
+        [
+          25.9185,
+          81.4307
+        ],
+        [
+          27.2546,
+          81.6943
+        ],
+        [
+          28.652,
+          80.1123
+        ]
+      ],
+      "web": "https://mausam.imd.gov.in/imd_latest/contents/subdivisionwise-warning.php",
+      "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/2026-08-26-06-01-05.xml",
+      "signed": true
+    },
+    {
+      "identifier": "urn:oid:2.49.0.1.356.0.2026.8.23.7.37.38",
+      "sender_name": "NWFC DIVISION, IMD, NEW DELHI",
+      "event": "Extremely heavy",
+      "headline": "Heavy to very heavy with extremely heavy rainfall",
+      "description": "Heavy to Very heavy rainfall at few places and extremely Heavy Rainfall at isolated places very likely over Odisha.",
+      "instruction": "Action suggested\n\n\tAvoid roadway underpasses, drainage ditches, low lying areas and areas where water collects – they can unexpectedly flood or overflow.\n\t      Stay away from power lines or electrical wires.\n\t      Don’t stay in kuchcha houses during heavy rainfall as it may collapse anytime soon.\n\t       Drive carefully.",
+      "severity": "Severe",
+      "urgency": "Expected",
+      "certainty": "Likely",
+      "onset": "2026-08-23T06:00:00+05:30",
+      "expires": "2026-08-24T06:00:00+05:30",
+      "sent": "2026-08-23T13:07:38+05:30",
+      "area_desc": "ODISHA",
+      "polygon": [
+        [
+          21.4326,
+          83.4741
+        ],
+        [
+          20.8999,
+          82.4194
+        ],
+        [
+          20.0766,
+          82.5952
+        ],
+        [
+          19.5805,
+          81.936
+        ],
+        [
+          18.6254,
+          81.6724
+        ],
+        [
+          17.9578,
+          81.4966
+        ],
+        [
+          18.6254,
+          82.9028
+        ],
+        [
+          18.7919,
+          83.5181
+        ],
+        [
+          18.7087,
+          84.3091
+        ],
+        [
+          19.4148,
+          84.9243
+        ],
+        [
+          20.0353,
+          85.2319
+        ],
+        [
+          19.746,
+          85.6714
+        ],
+        [
+          20.2828,
+          86.5503
+        ],
+        [
+          20.8999,
+          86.814
+        ],
+        [
+          22.1671,
+          85.144
+        ],
+        [
+          22.4516,
+          84.2212
+        ],
+        [
+          21.4326,
+          83.4741
+        ]
+      ],
+      "web": "https://mausam.imd.gov.in/imd_latest/contents/subdivisionwise-warning.php",
+      "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/2026-08-23-07-37-38.xml",
+      "signed": true
+    },
+    {
+      "identifier": "urn:oid:2.49.0.1.356.0.2026.8.18.8.34.22",
+      "sender_name": "NWFC DIVISION, IMD, NEW DELHI",
+      "event": "Extremely heavy",
+      "headline": "Heavy to very heavy with extremely heavy rainfall",
+      "description": "Heavy to Very heavy rainfall at few places and extremely Heavy Rainfall at isolated places very likely over Jharkhand.",
+      "instruction": "Action suggested\n\n\tAvoid roadway underpasses, drainage ditches, low lying areas and areas where water collects – they can unexpectedly flood or overflow.\n\t      Stay away from power lines or electrical wires.\n\t      Don’t stay in kuchcha houses during heavy rainfall as it may collapse anytime soon.\n\t       Drive carefully.",
+      "severity": "Severe",
+      "urgency": "Expected",
+      "certainty": "Likely",
+      "onset": "2026-08-18T06:00:00+05:30",
+      "expires": "2026-08-19T06:00:00+05:30",
+      "sent": "2026-08-18T14:04:22+05:30",
+      "area_desc": "GWB ODISHA CHHATTISGARH",
+      "polygon": [
+        [
+          24.3458,
+          87.5551
+        ],
+        [
+          24.7456,
+          86.3344
+        ],
+        [
+          24.6569,
+          84.8695
+        ],
+        [
+          24.8785,
+          83.3559
+        ],
+        [
+          24.4792,
+          82.6723
+        ],
+        [
+          24.2123,
+          82.3305
+        ],
+        [
+          23.6321,
+          82.6723
+        ],
+        [
+          23.2737,
+          82.9652
+        ],
+        [
+          22.7344,
+          83.5023
+        ],
+        [
+          22.6443,
+          83.8441
+        ],
+        [
+          22.3285,
+          84.5766
+        ],
+        [
+          22.3285,
+          84.7719
+        ],
+        [
+          22.3285,
+          85.3578
+        ],
+        [
+          22.3285,
+          85.6996
+        ],
+        [
+          22.5541,
+          86.0414
+        ],
+        [
+          23.184,
+          86.3344
+        ],
+        [
+          23.5873,
+          86.5297
+        ],
+        [
+          24.3458,
+          87.5551
+        ]
+      ],
+      "web": "https://mausam.imd.gov.in/imd_latest/contents/subdivisionwise-warning.php",
+      "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/2026-08-18-08-34-22.xml",
+      "signed": true
+    },
+    {
+      "identifier": "urn:oid:2.49.0.1.356.0.2026.8.18.5.50.25",
+      "sender_name": "NWFC DIVISION, IMD, NEW DELHI",
+      "event": "Extremely heavy",
+      "headline": "Heavy to very heavy with extremely heavy rainfall",
+      "description": "Extremely Heavy Rainfall at isolated places very likely over East Uttar Pradesh and East Madhya Pradesh.",
+      "instruction": "Action suggested\n\n\tAvoid roadway underpasses, drainage ditches, low lying areas and areas where water collects – they can unexpectedly flood or overflow.\n\t      Stay away from power lines or electrical wires.\n\t      Don’t stay in kuchcha houses during heavy rainfall as it may collapse anytime soon.\n\t       Drive carefully.",
+      "severity": "Severe",
+      "urgency": "Expected",
+      "certainty": "Likely",
+      "onset": "2026-08-18T06:00:00+05:30",
+      "expires": "2026-08-19T06:00:00+05:30",
+      "sent": "2026-08-18T11:20:25+05:30",
+      "area_desc": "GWB ODISHA CHHATTISGARH",
+      "polygon": [
+        [
+          27.5278,
+          82.5732
+        ],
+        [
+          25.7207,
+          79.6729
+        ],
+        [
+          24.0866,
+          77.959
+        ],
+        [
+          22.5126,
+          77.7832
+        ],
+        [
+          21.6574,
+          78.6621
+        ],
+        [
+          21.3712,
+          80.5518
+        ],
+        [
+          23.1202,
+          81.6504
+        ],
+        [
+          24.8466,
+          83.1006
+        ],
+        [
+          26.7064,
+          83.9795
+        ],
+        [
+          27.5278,
+          82.5732
+        ]
+      ],
+      "web": "https://mausam.imd.gov.in/imd_latest/contents/subdivisionwise-warning.php",
+      "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/2026-08-18-05-50-25.xml",
+      "signed": true
+    },
+    {
+      "identifier": "urn:oid:2.49.0.1.356.0.2026.8.17.9.18.50",
+      "sender_name": "NWFC DIVISION, IMD, NEW DELHI",
+      "event": "Extremely heavy",
+      "headline": "Heavy to very heavy with extremely heavy rainfall",
+      "description": "Extremely Heavy Rainfall at isolated places very likely over north Chhattisgarh, Gangetic West Bengal and north Odisha.",
+      "instruction": "Action suggested\n\n\tAvoid roadway underpasses, drainage ditches, low lying areas and areas where water collects – they can unexpectedly flood or overflow.\n\t      Stay away from power lines or electrical wires.\n\t      Don’t stay in kuchcha houses during heavy rainfall as it may collapse anytime soon.\n\t       Drive carefully.",
+      "severity": "Severe",
+      "urgency": "Expected",
+      "certainty": "Likely",
+      "onset": "2026-08-17T06:45:00+05:30",
+      "expires": "2026-08-18T06:45:00+05:30",
+      "sent": "2026-08-17T14:48:50+05:30",
+      "area_desc": "GWB ODISHA CHHATTISGARH",
+      "polygon": [
+        [
+          22.4188,
+          88.8734
+        ],
+        [
+          24.0341,
+          88.2387
+        ],
+        [
+          23.8109,
+          86.5297
+        ],
+        [
+          22.6894,
+          86.5785
+        ],
+        [
+          22.2381,
+          84.7231
+        ],
+        [
+          23.184,
+          83.8441
+        ],
+        [
+          23.8109,
+          81.9399
+        ],
+        [
+          21.604,
+          81.4027
+        ],
+        [
+          20.0982,
+          82.4281
+        ],
+        [
+          20.0065,
+          85.8949
+        ],
+        [
+          21.0126,
+          86.432
+        ],
+        [
+          21.7854,
+          87.1156
+        ],
+        [
+          22.4188,
+          88.8734
+        ]
+      ],
+      "web": "https://mausam.imd.gov.in/imd_latest/contents/subdivisionwise-warning.php",
+      "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/2026-08-17-09-18-50.xml",
+      "signed": true
+    }
+  ]
+}

@@ -1,4 +1,8 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
 
 android {
     namespace 'org.orca.advisory'
@@ -8,49 +12,40 @@ android {
         applicationId "org.orca.advisory"
         minSdk 24          // Android 7.0 -- covers the mid-range Android
                            // phones ORCA's users actually own
-        // targetSdk 34, NOT 35, and deliberately.
-        //
-        // Android 15 FORCES edge-to-edge for targetSdk 35: the window
-        // draws under the status and navigation bars, and the app has to
-        // apply the insets itself. Two attempts at that on the device --
-        // a setOnApplyWindowInsetsListener and then setFitsSystemWindows
-        // -- both left the ORCA wordmark behind the clock and the Tamil
-        // button behind the navigation bar. At 34 the platform insets the
-        // window normally and the page gets its own usable area.
-        //
-        // This is a sideloaded prototype APK, not a Play Store release
-        // (Play requires a current targetSdk). Revisit when it ships, and
-        // do the edge-to-edge work properly then rather than guessing at
-        // it the night before a demo.
-        targetSdk 34
-        versionCode 1
-        versionName "1.0-prototype"
+        targetSdk 35
+        versionCode 3
+        versionName "3.0-storm-drift"
     }
 
     sourceSets {
         main {
-            // THE WEB CLIENT IS NOT COPIED, IT IS REFERENCED.
-            //
-            // ../../../web is the same web/ the browser and the PWA serve.
-            // A copy under mobile/ would be a second frontend that drifts
-            // from the first, and the two would eventually disagree about
-            // what ORCA says -- the same argument docs/MOBILE_APP.md §2
-            // makes for never re-implementing the verdict.
-            //
             // mobile/seed carries bundle.json, the advisory the APK ships
             // with so it answers on first launch having never seen a
-            // network. See MainActivity's seed comment.
-            assets.srcDirs += ['../../../web', '../../seed']
+            // network. Regenerate with:
+            //   curl -s localhost:8000/bundle -o mobile/seed/bundle.json
+            //
+            // NOTE: web/ is no longer an asset source. Up to v1 this app
+            // was a WebView over web/, which was a fair criticism -- it
+            // looked exactly like the website and did nothing a browser
+            // could not. v2 is a real Compose UI. web/ stays the browser
+            // client; this is the phone client.
+            assets.srcDirs += ['../../seed']
         }
     }
 
+    buildFeatures { compose true }
+
+    // JVM unit tests for the pure logic -- the relay's accept/reject rules
+    // are safety-relevant and must be testable without two phones and a
+    // radio. returnDefaultValues lets android.util.Log no-op instead of
+    // throwing; nothing under test depends on its return value.
+    testOptions { unitTests.returnDefaultValues = true }
+
     buildTypes {
         release {
-            minifyEnabled false        // one Activity; nothing to shrink
+            minifyEnabled false
             // Signed with the debug key on purpose: this is a prototype
             // APK for sideloading and demo, not a Play Store artifact.
-            // mobile/README.md says so out loud rather than implying a
-            // production release.
             signingConfig signingConfigs.debug
         }
     }
@@ -59,24 +54,26 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget = '17' }
 }
 
 dependencies {
-    // The ONLY dependency, and it is the one that makes this work at all:
-    // WebViewAssetLoader serves the bundled assets over
-    // https://appassets.androidplatform.net/ instead of file://.
-    //
-    // That is not cosmetic. file:// has an opaque origin, so localStorage
-    // is unreliable and service workers are unavailable entirely --
-    // web/offline.js stores the advisory in localStorage and web/sw.js is
-    // a service worker, so a file:// WebView would silently lose BOTH
-    // halves of the offline story. WebViewAssetLoader's origin is treated
-    // as a secure context by WebView, which restores both.
-    implementation 'androidx.webkit:webkit:1.12.1'
-    // NO appcompat. It was here only to supply a theme parent, and it
-    // drags in kotlin-stdlib-jdk7/jdk8 1.6.21, which collides with the
-    // kotlin-stdlib 1.8.22 webkit brings -- the build failed on ~20
-    // duplicate classes. A platform theme costs nothing and removes the
-    // conflict outright rather than pinning around it (CLAUDE.md rule 7:
-    // no frameworks for five functions).
+    // Compose, via the BOM so every artifact stays on one version set.
+    implementation platform('androidx.compose:compose-bom:2024.09.03')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'androidx.activity:activity-compose:1.9.2'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.6'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    // The real org.json, because the Android stub throws on every call and
+    // validateReceived() parses untrusted JSON from another boat -- the one
+    // thing most worth testing here.
+    testImplementation 'org.json:json:20231013'
+
+    // NO appcompat: it drags in kotlin-stdlib-jdk7/jdk8 1.6.21, which
+    // collided with the newer stdlib and failed the build on ~20
+    // duplicate classes. Compose does not need it.
 }

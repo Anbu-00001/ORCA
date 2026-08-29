@@ -93,6 +93,11 @@ public class BoundaryWatchService extends Service implements LocationListener {
     private double urgentKm = 2.0, warningKm = 5.0, advisoryKm = 10.0;
     private String lang = "ta";
     private String lastBand = "";
+    /** Minutes-to-boundary at the last announcement, so a fast approach
+     *  inside an already-announced band can speak again. */
+    private Double lastAnnouncedMinutes = null;
+    /** Every fix seen. BoundaryAlarm prunes to its own window. */
+    private final List<BoundaryAlarm.Fix> history = new ArrayList<>();
     private TextToSpeech tts;
     private LocationManager locationManager;
 
@@ -191,56 +196,46 @@ public class BoundaryWatchService extends Service implements LocationListener {
         double km = distanceToBoundaryKm(location.getLatitude(), location.getLongitude());
         if (km < 0) return;
 
-        String band;
-        if (km <= urgentKm) band = "urgent";
-        else if (km <= warningKm) band = "warning";
-        else if (km <= advisoryKm) band = "advisory";
-        else band = "clear";
+        // Distance alone is the wrong signal in BOTH directions: a boat
+        // working a net parallel to the line at 4.9 km is not going to
+        // cross but gets warned every time GPS noise nudges it over the
+        // band edge, and a boat at 11 km running straight at the line gets
+        // nothing. What matters is whether the gap is CLOSING. The rules
+        // live in BoundaryAlarm, where they are unit-tested without a boat.
+        history.add(new BoundaryAlarm.Fix(System.currentTimeMillis(), km));
+        // Keep the list from growing without bound on a multi-day trip;
+        // BoundaryAlarm only ever looks at its own window anyway.
+        while (history.size() > 240) history.remove(0);
 
-        // Announce only on a CHANGE of band. Repeating the same warning
-        // every thirty seconds is how an alert gets ignored, and an
-        // ignored alert is the same as no alert.
-        if (band.equals(lastBand)) {
-            updateOngoing(km, band);
+        BoundaryAlarm.Decision d = BoundaryAlarm.INSTANCE.decide(
+                history,
+                new BoundaryAlarm.Bands(urgentKm, warningKm, advisoryKm),
+                lastBand.isEmpty() ? null : lastBand,
+                lastAnnouncedMinutes,
+                System.currentTimeMillis());
+
+        if (!d.getAnnounce()) {
+            Log.d(TAG, "Boundary silent: " + d.getWhy());
+            updateOngoing(km, d.getBand());
             return;
         }
-        lastBand = band;
 
-        if ("clear".equals(band)) {
-            updateOngoing(km, band);
-            return;
-        }
-        String spoken = message(band, km);
-        Log.i(TAG, "Boundary " + band + " at " + String.format(Locale.US, "%.1f", km) + " km");
+        lastBand = d.getBand();
+        lastAnnouncedMinutes = d.getMinutesToBoundary();
+
+        String spoken = BoundaryAlarm.INSTANCE.message(d, km, "ta".equals(lang));
+        Log.i(TAG, "Boundary " + d.getBand() + " at "
+                + String.format(Locale.US, "%.1f", km) + " km — " + d.getWhy());
         if (tts != null) tts.speak(spoken, TextToSpeech.QUEUE_FLUSH, null, "orca-boundary");
-        alert(spoken, band);
-        updateOngoing(km, band);
+        alert(spoken, d.getBand());
+        updateOngoing(km, d.getBand());
     }
 
-    /**
-     * The spoken warning. Tamil strings are the same ones in
-     * orca/phrase_ta.py's IMBL table -- duplicated here only because a
-     * background service cannot reach the Python process. They are short
-     * and lead with the action, because whoever hears this is steering.
-     */
-    private String message(String band, double km) {
-        String n = String.format(Locale.US, "%.0f", km);
-        boolean ta = "ta".equals(lang);
-        switch (band) {
-            case "urgent":
-                return ta
-                        ? "ஆபத்து. இலங்கை கடல் எல்லைக்கு மிக அருகில் இருக்கிறீர்கள். இப்போதே திரும்பிச் செல்லுங்கள்."
-                        : "Danger. You are very close to the Sri Lanka maritime boundary. Turn back now.";
-            case "warning":
-                return ta
-                        ? "எச்சரிக்கை. கடல் எல்லை " + n + " கிலோமீட்டர் தொலைவில் உள்ளது. மேற்கு நோக்கித் திரும்புங்கள்."
-                        : "Warning. The maritime boundary is " + n + " kilometres away. Turn west.";
-            default:
-                return ta
-                        ? "கடல் எல்லை " + n + " கிலோமீட்டர் தொலைவில் உள்ளது. கவனமாக இருங்கள்."
-                        : "The maritime boundary is " + n + " kilometres away. Be careful.";
-        }
-    }
+    // The spoken wording now lives in BoundaryAlarm.message(), with the
+    // rest of the alarm rules. It was duplicated here until the closing-
+    // speed logic moved out, and two copies of a safety string is exactly
+    // the second-copy-that-can-disagree problem the bands were kept out of
+    // this file to avoid.
 
     // --- geometry (ported from orca/agents.py) --------------------------
 

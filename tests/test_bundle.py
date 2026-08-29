@@ -153,3 +153,61 @@ def test_the_boundary_bands_come_from_the_geofence_agent_not_a_second_copy(bundl
     assert bands["advisory"] == agents.IMBL_ADVISORY_KM
     # Ordering the client relies on when picking a band.
     assert bands["urgent"] < bands["warning"] < bands["advisory"]
+
+
+# --- Potential Fishing Zones (SIH26176's first example query) -----------
+
+def test_pfz_ranks_every_zone_and_cites_its_readings():
+    """"Where is the nearest Potential Fishing Zone today?" is the first
+    example query in the problem statement. Every number shown must still
+    trace to a MarineObservation (CLAUDE.md rule 3)."""
+    response = client.get("/pfz")
+    if response.status_code == 503:
+        pytest.skip("no cached observations")
+    body = response.json()
+    assert {z["zone"] for z in body["zones"]} == {z["name"] for z in ZONES}
+    for entry in body["zones"]:
+        for reading in (entry["chlorophyll"], entry["sst"]):
+            if reading is not None:
+                for field in ("value", "unit", "source", "valid_time", "confidence", "id"):
+                    assert reading.get(field) not in (None, ""), entry
+
+
+def test_pfz_uses_the_eo_agents_thresholds_not_a_second_copy():
+    """A second productivity rule would be a second thing that can
+    disagree with the agent whose finding the verdict already cites."""
+    from orca import agents
+    criteria = client.get("/pfz").json()["criteria"]
+    assert criteria["chlorophyll_min_mg_m3"] == agents.CHLOROPHYLL_PRODUCTIVE_MG_M3
+    assert criteria["sst_range_c"] == list(agents.SST_PRODUCTIVE_RANGE_C)
+
+
+def test_a_cloudy_zone_is_unseen_not_unproductive():
+    """THE distinction that matters here. VIIRS cannot see through cloud,
+    and six of ten zones had no usable pixel in a 15-day window. "We could
+    not see" and "there are no fish" are different statements, and
+    collapsing them into False is the fabrication rule 1 forbids."""
+    entries = client.get("/pfz").json()["zones"]
+    for entry in entries:
+        if entry["chlorophyll"] is None:
+            assert entry["productive"] is None, entry["zone"]
+            assert "cannot tell" in entry["why"].lower() or "no cloud-free" in entry["why"].lower()
+        else:
+            assert entry["productive"] in (True, False), entry["zone"]
+
+
+def test_unseen_zones_sort_last_but_are_never_dropped():
+    """A crew needs to know ORCA could not see a place, not to have it
+    quietly vanish from the list."""
+    entries = client.get("/pfz").json()["zones"]
+    seen_flags = [e["productive"] is not None for e in entries]
+    # every True before every False: unseen zones are at the end
+    assert seen_flags == sorted(seen_flags, reverse=True)
+    assert len(entries) == len(ZONES)
+
+
+def test_pfz_never_claims_a_catch_quantity():
+    """INCOIS's own PFZ advisories carry this limitation. Chlorophyll is a
+    productivity proxy, not a fish count."""
+    body = client.get("/pfz").json()
+    assert "not a catch" in body["criteria"]["note"].lower()

@@ -27,13 +27,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from data.fetch import ZONES
-from orca import agents, observations
+from orca import agents, alerts as alerts_mod, drift as drift_mod, observations
 from orca.agentic import answer_question, is_configured, quota_snapshot
 from orca.planner import (
     build_recommendation,
     load_cached_observations,
     load_forecast_observations,
     observation_id,
+    observations_for_zone,
 )
 
 logger = logging.getLogger("orca.api")
@@ -88,6 +89,13 @@ app = FastAPI(title="ORCA", description="Marine advisory reasoning layer")
 # from its own cache file rather than through orca.planner.
 BATHYMETRY_CACHE_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "cache" / "bathymetry" / "bathymetry_grid.json"
+)
+
+# IMD's public CAP warning feed, cached by data/fetch.py. Same reasoning as
+# BATHYMETRY_CACHE_PATH: these are signed alert documents, not point
+# observations, so they do not travel through orca/planner.py as evidence.
+CAP_ALERTS_CACHE_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "cache" / "alerts" / "imd_cap_alerts.json"
 )
 
 app.add_middleware(
@@ -262,7 +270,102 @@ def bundle(zones: str | None = None) -> dict:
         # and a warning band. It never says GO or DO NOT GO -- that stays
         # orca/policy.py's, and reaches the phone only inside `zones`.
         "boundary": _boundary_payload(),
+        # IMD's own storm/cyclone warnings, shipped WHOLE -- polygons and
+        # all -- rather than pre-matched to the ten zone centroids. A boat
+        # 40 km offshore is not at a zone centroid, and the only position
+        # that matters for "is the warning over ME" is the phone's own GPS
+        # fix. So the phone runs the same point-in-polygon orca/alerts.py
+        # runs, against geometry IMD published and signed.
+        #
+        # Same principle as `boundary` above: the client executes geometry
+        # it was GIVEN. It does not own a threshold and does not decide a
+        # severity -- CAP states its own.
+        "alerts": _alerts_payload(),
+        # The four numbers orca/drift.py needs, per zone, so a crew whose
+        # engine has died can get a drift box with no signal. Surfaced
+        # explicitly because wind/current DIRECTION are not part of the
+        # advisory evidence set -- they change no verdict -- but without
+        # them a drift box cannot be computed at all.
+        "drift_inputs": _drift_inputs(selected, observations),
     }
+
+
+def _alerts_payload() -> dict | None:
+    """The cached IMD CAP feed, with expired warnings already dropped.
+
+    Returns None if the feed has never been fetched, and the phone shows
+    "not checked" rather than "all clear". Those are different facts and
+    conflating them is the Ockhi failure in miniature: the crews who died
+    were not told the warning was missing, they were told nothing.
+    """
+    path = CAP_ALERTS_CACHE_PATH
+    if not path.exists():
+        logger.warning(
+            "IMD CAP cache absent at %s -- /bundle will carry no storm warnings "
+            "and the app will say so. Run `python -m data.fetch`.",
+            path,
+        )
+        return None
+    raw = json.loads(path.read_text())
+    now = datetime.now(timezone.utc)
+    live = []
+    for alert in raw.get("alerts", []):
+        expires = alert.get("expires")
+        if expires:
+            try:
+                if datetime.fromisoformat(expires) <= now:
+                    continue
+            except ValueError:
+                # An unparseable expiry is not a licence to drop a storm
+                # warning -- keep it and let the phone show it as undated.
+                logger.warning("CAP alert %s has unparseable expires=%r", alert.get("identifier"), expires)
+        live.append(alert)
+    return {
+        "source": raw.get("source"),
+        "provenance": raw.get("provenance"),
+        "fetched_at": raw.get("fetched_at"),
+        "alerts": live,
+    }
+
+
+def _drift_inputs(selected: list[dict], observations: list) -> list[dict]:
+    """Wind and current, speed AND direction, at each zone.
+
+    Missing entries are reported as null, never defaulted. orca/drift.py
+    refuses on a null and the phone shows why -- a drift box built on an
+    assumed wind direction is a fabricated position, and this one gets
+    read out to a rescue.
+    """
+    def _at(zone: dict, variable: str) -> dict | None:
+        matches = [
+            o for o in observations
+            if o.variable == variable
+            and abs(o.lat - zone["lat"]) < 1e-6
+            and abs(o.lon - zone["lon"]) < 1e-6
+        ]
+        if not matches:
+            return None
+        newest = max(matches, key=lambda o: o.fetched_at)
+        return {
+            "value": newest.value,
+            "unit": newest.unit,
+            "source": newest.source,
+            "valid_time": newest.valid_time.isoformat(),
+            "id": observation_id(newest),
+        }
+
+    rows = []
+    for zone in selected:
+        rows.append({
+            "zone": zone["name"],
+            "lat": zone["lat"],
+            "lon": zone["lon"],
+            "wind_speed_kmh": _at(zone, "wind_speed_kmh"),
+            "wind_direction_deg": _at(zone, "wind_direction_deg"),
+            "current_speed_kmh": _at(zone, "ocean_current_velocity_kmh"),
+            "current_direction_deg": _at(zone, "ocean_current_direction_deg"),
+        })
+    return rows
 
 
 def _boundary_payload() -> dict | None:
@@ -338,6 +441,124 @@ def post_observation(payload: dict) -> dict:
     }
 
 
+@app.get("/pfz")
+def potential_fishing_zones() -> dict:
+    """Potential Fishing Zones, ranked. SIH26176's FIRST example query.
+
+    The problem statement opens with "Where is the nearest Potential
+    Fishing Zone today?" and ORCA could already answer it -- it just never
+    exposed the answer. eo_satellite_agent() has computed exactly this
+    since the beginning: chlorophyll at or above
+    CHLOROPHYLL_PRODUCTIVE_MG_M3, with SST inside SST_PRODUCTIVE_RANGE_C,
+    is the standard PFZ signature INCOIS itself uses. This endpoint reads
+    those SAME constants and the SAME cached observations and ranks the
+    ten zones by them.
+
+    NO NEW SCIENCE, and deliberately so. A second productivity rule would
+    be a second thing that can disagree with the agent whose finding the
+    verdict already cites.
+
+    WHAT IS HONESTLY ABSENT. A zone with no cloud-free chlorophyll pixel
+    gets `productive: null`, not `false`. VIIRS cannot see through cloud,
+    and six of ten zones had no usable pixel in a 15-day window when this
+    was written. "We could not see" and "there are no fish" are different
+    statements and conflating them is exactly what CLAUDE.md rule 1
+    forbids. The client renders the two differently.
+
+    ALSO ABSENT: how many fish. INCOIS's own PFZ advisories carry the same
+    limitation, and stating it is the honest thing to do -- chlorophyll is
+    a proxy for primary productivity, not a catch estimate.
+    """
+    observations = load_cached_observations()
+    if not observations:
+        raise HTTPException(
+            status_code=503,
+            detail="No cached observations -- run `python -m data.fetch` first",
+        )
+
+    entries = []
+    for zone in ZONES:
+        local = observations_for_zone(observations, zone)
+        chl = _reading(local, "chlorophyll_mg_m3")
+        sst = _reading(local, "sst_c")
+
+        if chl is None:
+            productive = None          # unseen, NOT unproductive
+            why = ("No cloud-free satellite chlorophyll pixel for this zone. "
+                   "ORCA cannot tell whether the water here is productive.")
+        else:
+            warm = sst is not None and (
+                agents.SST_PRODUCTIVE_RANGE_C[0] <= sst.value <= agents.SST_PRODUCTIVE_RANGE_C[1]
+            )
+            productive = chl.value >= agents.CHLOROPHYLL_PRODUCTIVE_MG_M3 and warm
+            if productive:
+                why = (f"Chlorophyll {chl.value:.2f} mg/m³ is at or above the "
+                       f"{agents.CHLOROPHYLL_PRODUCTIVE_MG_M3} mg/m³ productivity threshold, "
+                       f"and SST {sst.value:.1f}°C is inside the "
+                       f"{agents.SST_PRODUCTIVE_RANGE_C[0]}-{agents.SST_PRODUCTIVE_RANGE_C[1]}°C range "
+                       "fish aggregate in.")
+            elif chl.value >= agents.CHLOROPHYLL_PRODUCTIVE_MG_M3:
+                why = (f"Chlorophyll {chl.value:.2f} mg/m³ is productive, but SST "
+                       + (f"{sst.value:.1f}°C is outside the aggregation range."
+                          if sst is not None else "is not available."))
+            else:
+                why = (f"Chlorophyll {chl.value:.2f} mg/m³ is below the "
+                       f"{agents.CHLOROPHYLL_PRODUCTIVE_MG_M3} mg/m³ threshold.")
+
+        entries.append({
+            "zone": zone["name"],
+            "lat": zone["lat"],
+            "lon": zone["lon"],
+            "productive": productive,
+            "why": why,
+            # Every number carries its observation id, so the client can
+            # tap through to source, valid_time and confidence exactly as
+            # the evidence panel does (CLAUDE.md rule 3).
+            "chlorophyll": _cited(chl),
+            "sst": _cited(sst),
+        })
+
+    # Productive first, then by chlorophyll descending. Unseen zones sort
+    # LAST rather than being dropped: a crew needs to know ORCA could not
+    # see a place, not to have it quietly vanish from the list.
+    def sort_key(e):
+        seen = e["productive"] is not None
+        chl_value = e["chlorophyll"]["value"] if e["chlorophyll"] else -1.0
+        return (not seen, not bool(e["productive"]), -chl_value)
+
+    entries.sort(key=sort_key)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "criteria": {
+            "chlorophyll_min_mg_m3": agents.CHLOROPHYLL_PRODUCTIVE_MG_M3,
+            "sst_range_c": list(agents.SST_PRODUCTIVE_RANGE_C),
+            "note": ("Chlorophyll is a proxy for primary productivity, not a catch "
+                     "estimate. ORCA reports where conditions favour aggregation, "
+                     "never how many fish are present."),
+        },
+        "zones": entries,
+    }
+
+
+def _reading(observations, variable):
+    """Newest observation of one variable, or None. Selection only."""
+    matches = [o for o in observations if o.variable == variable]
+    return max(matches, key=lambda o: o.fetched_at) if matches else None
+
+
+def _cited(observation) -> dict | None:
+    if observation is None:
+        return None
+    return {
+        "value": observation.value,
+        "unit": observation.unit,
+        "source": observation.source,
+        "valid_time": observation.valid_time.isoformat(),
+        "confidence": observation.confidence,
+        "id": observation_id(observation),
+    }
+
+
 @app.get("/evidence/{observation_id_}")
 def get_evidence(observation_id_: str) -> dict:
     observations = load_cached_observations()
@@ -355,6 +576,94 @@ def bathymetry() -> dict:
             detail="Bathymetry cache not populated -- run `python -m data.fetch` first",
         )
     return json.loads(BATHYMETRY_CACHE_PATH.read_text())
+
+
+@app.get("/alerts")
+def storm_alerts(lat: float | None = None, lon: float | None = None) -> dict:
+    """IMD warnings, optionally sorted against one position.
+
+    With no lat/lon this is the raw cached feed. With a position it is
+    orca/alerts.py's three buckets -- covering / ungeolocated / elsewhere
+    -- which is the same computation the phone runs offline against its
+    own GPS fix.
+    """
+    payload = _alerts_payload()
+    if lat is None or lon is None:
+        if payload is None:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "No IMD CAP feed cached -- run `python -m data.fetch`. "
+                    "ORCA reports that it has not checked, rather than reporting all clear."
+                ),
+            )
+        return payload
+    return {
+        "lat": lat,
+        "lon": lon,
+        **alerts_mod.active_alerts_for(lat, lon, payload, datetime.now(timezone.utc)),
+    }
+
+
+@app.get("/drift")
+def drift(lat: float, lon: float, hours: float = 6.0, zone: str | None = None) -> dict:
+    """Where a hull with a dead engine ends up, by the Leeway model.
+
+    The wind and current used are the newest cached readings for `zone`
+    (or the nearest ORCA zone, if not named) -- ORCA has no field at
+    arbitrary points and will not interpolate one into existence.
+    """
+    if hours <= 0 or hours > 48:
+        raise HTTPException(status_code=400, detail="hours must be between 0 and 48")
+
+    observations = load_cached_observations()
+    if not observations:
+        raise HTTPException(
+            status_code=503,
+            detail="No cached observations -- run `python -m data.fetch` first",
+        )
+
+    if zone:
+        match = [z for z in ZONES if z["name"].lower() == zone.strip().lower()]
+        if not match:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown zone {zone!r}. ORCA covers: {', '.join(z['name'] for z in ZONES)}",
+            )
+        source_zone = match[0]
+    else:
+        source_zone = min(
+            ZONES,
+            key=lambda z: (z["lat"] - lat) ** 2 + (z["lon"] - lon) ** 2,
+        )
+
+    inputs = _drift_inputs([source_zone], observations)[0]
+
+    def _val(key):
+        entry = inputs.get(key)
+        return entry["value"] if entry else None
+
+    result = drift_mod.drift_forecast(
+        lat, lon,
+        _val("wind_speed_kmh"), _val("wind_direction_deg"),
+        _val("current_speed_kmh"), _val("current_direction_deg"),
+        hours=hours,
+    )
+    return {
+        "requested": {"lat": lat, "lon": lon, "hours": hours},
+        "readings_from": {
+            "zone": source_zone["name"],
+            "lat": source_zone["lat"],
+            "lon": source_zone["lon"],
+            "note": (
+                "Wind and current are the newest cached readings at this zone, "
+                "not at the requested position. ORCA does not interpolate a field "
+                "it did not measure."
+            ),
+        },
+        "inputs": inputs,
+        "drift": result,
+    }
 
 
 @app.get("/health")

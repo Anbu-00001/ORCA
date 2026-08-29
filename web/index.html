@@ -500,7 +500,16 @@
   /* On a narrow deck the key would eat the scene, so it gives back some
      width -- but it stays openable, which a display:none here would not. */
   @media (max-width: 900px) {
-    #ocean3d-legend { width: 186px; }
+    /* On a phone the legend was a 226px floating panel over a 412px
+       screen, sitting on top of #sandbox-panel and most of the 3D scene
+       -- the "merged and stupid" overlap. Collapse it by default here
+       and bound its height so it can never cover the sandbox again. The
+       user can still open it; it just is not open uninvited. */
+    #ocean3d-legend {
+      width: auto; right: 14px; max-height: 42vh; overflow-y: auto;
+    }
+    #ocean3d-legend #legend-body { display: none; }
+    #ocean3d-legend.expanded #legend-body { display: block; }
     .legend-text { font-size: 0.62rem; }
   }
 
@@ -620,7 +629,7 @@
   #sandbox-panel.is-hypothetical #sandbox-note { color: #f4dda3; }
 
   @media (max-width: 900px) {
-    #sandbox-panel { left: 14px; right: 14px; width: auto; bottom: 10px; }
+    #sandbox-panel { left: 14px; right: 14px; width: auto; bottom: 10px; max-height: 40vh; overflow-y: auto; }
     #sandbox-foot { display: none; }
   }
   #ocean3d-container.awaiting::after {
@@ -924,6 +933,17 @@
   /* Seeded from the APK, never refreshed on this device. Same brass as
      "stored", dimmer, because it is real but unverified-here data. */
   #cache-status[data-state="seed"] { color: var(--brass); opacity: 0.8; }
+
+  /* NOTHING may scroll the page sideways. Reported on a 412px phone: the
+     header ran off the right edge, taking the palette switch with it, and
+     the whole layout read as broken in every palette -- which is why it
+     looked like a dusk/night bug rather than an overflow bug. Belt and
+     braces: cap the root, and let the header wrap instead of pushing. */
+  html, body { max-width: 100%; overflow-x: hidden; }
+  @media (max-width: 640px) {
+    header { flex-wrap: wrap; row-gap: 0.4rem; }
+    .brand h1 span { display: none; }   /* "— coastal fishing advisory" */
+  }
 
   /* ---------- native-only controls -----------------------------
      Present only inside the Android shell (web/native.js sets

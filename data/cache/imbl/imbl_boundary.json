@@ -1,7 +1,7 @@
 {
   "source": "Marine Regions (Flanders Marine Institute / IOC-UNESCO) -- India-Sri Lanka IMBL",
   "provenance": "https://geo.vliz.be/geoserver/MarineRegions/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=eez_boundaries&outputformat=application%2Fjson&CQL_FILTER=line_name%3D%27Sri+Lanka+-+India%27",
-  "fetched_at": "2026-08-28T18:23:31.302517+00:00",
+  "fetched_at": "2026-08-29T19:17:57.409674+00:00",
   "segments": [
     [
       [

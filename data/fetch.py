@@ -252,7 +252,7 @@ class OpenMeteoForecastFetcher:
 
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
     SOURCE_NAME = "Open-Meteo Forecast"
-    HOURLY_VARS = "wind_speed_10m,wind_gusts_10m,precipitation,rain"
+    HOURLY_VARS = "wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,rain"
     # Open-Meteo exposes every hourly variable as a `current` variable
     # too, under the same name; fetch() uses these, fetch_tomorrow()
     # still needs the hourly series.
@@ -260,6 +260,10 @@ class OpenMeteoForecastFetcher:
     _VAR_MAP = {
         "wind_speed_10m": "wind_speed_kmh",
         "wind_gusts_10m": "wind_gusts_kmh",
+        # Direction is the input the drift model cannot work without: leeway
+        # is decomposed downwind and crosswind of the TRUE wind bearing, so a
+        # speed with no bearing gives a drift circle, not a drift box.
+        "wind_direction_10m": "wind_direction_deg",
         "precipitation": "precipitation_mm",
         "rain": "rain_mm",
     }
@@ -705,6 +709,137 @@ def write_cache(source_name: str, observations: list[MarineObservation], cache_d
     return path
 
 
+
+# ---------------------------------------------------------------------------
+# IMD storm/cyclone warnings, via the public CAP feed
+# ---------------------------------------------------------------------------
+
+
+class IMDCapAlertFetcher:
+    """India Meteorological Department warnings, as signed CAP 1.2 documents.
+
+    Why this feed and not IMD's own API: api.imd.gov.in has exactly the
+    endpoints we want (/api/v1/seabulletin, /portwarning, /coastalbulletin,
+    /cyclone_track) but every one of them is behind static-IP whitelisting
+    granted by application to IMD's ISSD. A demo machine cannot hold a
+    whitelisted IP, so those are documented in docs/RESEARCH.md as the
+    production path and not used here.
+
+    This feed is the same authority publishing through the CAP alert hub:
+    public, unauthenticated, OASIS CAP v1.2, and every document carries an
+    XML-DSig RSA-SHA256 signature. Each alert states its own polygon, onset
+    and expiry, which is what lets orca/alerts.py answer "is THIS zone under
+    a warning right now" without ORCA inventing anything.
+
+    What it does NOT do: this is IMD's national feed. On an ordinary day it
+    carries inland rainfall warnings and nothing over the Tamil Nadu coast,
+    and the honest answer for a zone is then "no active IMD warning" -- not
+    a reassurance that the weather is fine. See orca/alerts.py.
+    """
+
+    RSS_URL = "https://cap-sources.s3.amazonaws.com/in-imd-en/rss.xml"
+    SOURCE_NAME = "India Meteorological Department (CAP v1.2 public feed)"
+    CAP_NS = {"cap": "urn:oasis:names:tc:emergency:cap:1.2"}
+    # The feed keeps a long tail. Anything already expired is dropped at
+    # match time; this only bounds how many documents we pull per refresh.
+    MAX_ALERTS = 25
+
+    def fetch(self) -> dict:
+        resp = requests.get(self.RSS_URL, timeout=30)
+        resp.raise_for_status()
+
+        links = self._parse_rss(resp.text)
+        alerts = []
+        for link in links[: self.MAX_ALERTS]:
+            alerts.append(self._fetch_one(link))
+
+        return {
+            "source": self.SOURCE_NAME,
+            "provenance": self.RSS_URL,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "alerts": alerts,
+        }
+
+    def _parse_rss(self, xml_text: str) -> list[str]:
+        import xml.etree.ElementTree as ET
+
+        root = ET.fromstring(xml_text)
+        links = []
+        for item in root.iter("item"):
+            link = item.findtext("link")
+            if link:
+                links.append(link.strip())
+        return links
+
+    def _fetch_one(self, cap_url: str) -> dict:
+        import xml.etree.ElementTree as ET
+
+        resp = requests.get(cap_url, timeout=30)
+        resp.raise_for_status()
+        root = ET.fromstring(resp.text)
+        ns = self.CAP_NS
+
+        info = root.find("cap:info", ns)
+        if info is None:
+            raise ValueError(f"CAP document has no <info> block: {cap_url}")
+
+        area = info.find("cap:area", ns)
+        polygon = None
+        area_desc = None
+        if area is not None:
+            area_desc = (area.findtext("cap:areaDesc", namespaces=ns) or "").strip() or None
+            polygon = self._parse_polygon(area.findtext("cap:polygon", namespaces=ns))
+
+        return {
+            "identifier": (root.findtext("cap:identifier", namespaces=ns) or "").strip(),
+            "sender_name": (info.findtext("cap:senderName", namespaces=ns) or "").strip(),
+            "event": (info.findtext("cap:event", namespaces=ns) or "").strip(),
+            "headline": (info.findtext("cap:headline", namespaces=ns) or "").strip(),
+            "description": (info.findtext("cap:description", namespaces=ns) or "").strip(),
+            "instruction": (info.findtext("cap:instruction", namespaces=ns) or "").strip(),
+            "severity": (info.findtext("cap:severity", namespaces=ns) or "").strip(),
+            "urgency": (info.findtext("cap:urgency", namespaces=ns) or "").strip(),
+            "certainty": (info.findtext("cap:certainty", namespaces=ns) or "").strip(),
+            "onset": (info.findtext("cap:onset", namespaces=ns) or "").strip() or None,
+            "expires": (info.findtext("cap:expires", namespaces=ns) or "").strip() or None,
+            "sent": (root.findtext("cap:sent", namespaces=ns) or "").strip() or None,
+            "area_desc": area_desc,
+            # (lat, lon) pairs, matching MarineObservation field order. None
+            # means the alert named no polygon -- it is kept and shown, but
+            # orca/alerts.py will never claim it covers a specific zone.
+            "polygon": polygon,
+            "web": (info.findtext("cap:web", namespaces=ns) or "").strip() or None,
+            "provenance": cap_url,
+            "signed": root.find(".//{http://www.w3.org/2000/09/xmldsig#}Signature") is not None,
+        }
+
+    def _parse_polygon(self, raw: str | None) -> list[list[float]] | None:
+        """CAP polygons are space-separated "lat,lon" pairs.
+
+        A malformed pair is fatal rather than skipped: a polygon missing a
+        vertex is a DIFFERENT polygon, and silently shrinking a storm
+        warning's footprint is exactly the fabrication rule 1 forbids.
+        """
+        if not raw or not raw.strip():
+            return None
+        points = []
+        for pair in raw.split():
+            lat_s, _, lon_s = pair.partition(",")
+            points.append([float(lat_s), float(lon_s)])
+        if len(points) < 3:
+            raise ValueError(f"CAP polygon has fewer than 3 vertices: {raw!r}")
+        return points
+
+
+def write_cap_alert_cache(payload: dict, cache_dir: Path) -> Path:
+    """Own subdirectory, same reason as write_imbl_cache()."""
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / "imd_cap_alerts.json"
+    path.write_text(__import__("json").dumps(payload, indent=2, ensure_ascii=False))
+    return path
+
+
 def main() -> int:
     results, errors = fetch_all()
 
@@ -737,6 +872,17 @@ def main() -> int:
         print(f"PASS  {MarineRegionsIMBLFetcher.SOURCE_NAME}: {n_points} boundary points -> {path}")
     except Exception as exc:  # noqa: BLE001 — logged loudly, never swallowed
         print(f"FAIL  {MarineRegionsIMBLFetcher.SOURCE_NAME}: {exc}", file=sys.stderr)
+
+    # IMD storm/cyclone warnings. Same isolation as bathymetry/IMBL: these
+    # are alert documents, not advisory evidence, so a feed outage never
+    # fails the GO / DO NOT GO run -- the app then says "not checked",
+    # which is the honest state and a different thing from "all clear".
+    try:
+        payload = IMDCapAlertFetcher().fetch()
+        path = write_cap_alert_cache(payload, cache_dir=CACHE_DIR / "alerts")
+        print(f"PASS  {IMDCapAlertFetcher.SOURCE_NAME}: {len(payload['alerts'])} alerts -> {path}")
+    except Exception as exc:  # noqa: BLE001 — logged loudly, never swallowed
+        print(f"FAIL  {IMDCapAlertFetcher.SOURCE_NAME}: {exc}", file=sys.stderr)
 
     # Tomorrow's forecast, for orca/agentic.py's "what about tomorrow"
     # data_lookup answers only -- never read by load_cached_observations()

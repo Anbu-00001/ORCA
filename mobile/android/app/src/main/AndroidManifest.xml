@@ -27,6 +27,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- BOAT-TO-BOAT RELAY. Mobile signal stops ~15 km offshore, which is
+         why ISRO issues satellite receivers. Boats meet each other out
+         there, and their phones can see each other: BLE carries the 52 KB
+         advisory between them. Nothing is uploaded anywhere and no boat is
+         identified - the advertisement carries an age and a zone count,
+         not a name. See FleetRelay.kt. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
     <!-- No SEND_SMS. The distress message is handed to the phone's own
          messaging app via ACTION_SENDTO, which needs no permission and
          puts the crew in the loop before anything is sent. Android 15
