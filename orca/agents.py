@@ -268,8 +268,38 @@ def _point_in_polygon(lat: float, lon: float, polygon: list[tuple[float, float]]
     return inside
 
 
-def geofence_agent(observations: list[MarineObservation], imbl_segments: list | None = None) -> Finding:
-    if not observations:
+def geofence_agent(
+    observations: list[MarineObservation],
+    imbl_segments: list | None = None,
+    *,
+    position: tuple[float, float] | None = None,
+) -> Finding:
+    """R-36: where this check runs must not depend on which observations
+    happen to exist.
+
+    `position` is the (lat, lon) actually asked about. orca/planner.py
+    passes the zone's own coordinates, which it always knows, so the
+    geofence is now checked at the queried location rather than at
+    whichever observation sorted first. Previously a point with no cached
+    readings could not be geofence-checked AT ALL -- and being inside a
+    marine national park is true whether or not a satellite passed over
+    it that morning. Geometry is not evidence-dependent.
+
+    Resolves Open Decision 9 without breaking R-5's uniform
+    `list[MarineObservation] -> Finding` shape: `position` is
+    KEYWORD-ONLY and optional, so `agent(observations)` still calls all
+    five agents identically, and the rejected alternative -- a synthetic
+    position-carrying observation -- stays rejected (CLAUDE.md rule 1).
+
+    Falls back to observations[0] only when no position is supplied, so
+    existing direct callers keep their behaviour exactly.
+    """
+    ref = observations[0] if observations else None
+    if position is not None:
+        lat, lon = position
+    elif ref is not None:
+        lat, lon = ref.lat, ref.lon
+    else:
         return Finding(
             agent_name="geofence_agent",
             suggests_go=False,
@@ -279,11 +309,10 @@ def geofence_agent(observations: list[MarineObservation], imbl_segments: list | 
             observations=[],
         )
 
-    ref = observations[0]
-    inside_mpa = _point_in_polygon(ref.lat, ref.lon, PROHIBITED_ZONE)
+    inside_mpa = _point_in_polygon(lat, lon, PROHIBITED_ZONE)
 
     segments = imbl_segments if imbl_segments is not None else _load_imbl_segments()
-    imbl_km = _distance_to_imbl_km(ref.lat, ref.lon, segments)
+    imbl_km = _distance_to_imbl_km(lat, lon, segments)
 
     reasons: list[str] = []
     risk_level = 0.0
@@ -315,5 +344,9 @@ def geofence_agent(observations: list[MarineObservation], imbl_segments: list | 
         risk_level=risk_level,
         hard_deny=hard_deny,
         reason="; ".join(reasons),
-        observations=[ref],
+        # Cite an observation only if one exists. This finding's content
+        # comes from geometry, not from a reading, so with no cached data
+        # there is nothing to cite -- and an empty list here is what keeps
+        # R-39's "no evidence at this zone" guard reading true.
+        observations=[ref] if ref is not None else [],
     )

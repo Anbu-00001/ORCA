@@ -1,0 +1,183 @@
+R-37 — name the MOST SEVERE hazard, not the first in registration order
+
+WHY THIS IS A PATCH FILE AND NOT A COMMIT
+-----------------------------------------
+It edits orca/policy.py, which CLAUDE.md rule 5 freezes ("Do not modify
+orca/schema.py or orca/policy.py once tests pass, unless explicitly
+asked") and which PRD N-5 restates. PRD §5 also records a deliberate
+decision to leave R-37 open there: orca/planner.py's _zone_verdict()
+already uses max() on the path written for R-59, with the note "R-37
+stays open in the frozen policy.py by decision".
+
+So this is not something to apply on a generic "fix the bugs" — it needs
+a human to decide. Everything needed to make that decision is below.
+Applying it is one command; so is walking away from it.
+
+WHAT IS WRONG
+-------------
+policy.py picks the finding it names by LIST ORDER:
+
+    primary        = hard_denials[0]
+    primary_danger = danger[0]
+
+AGENTS is [eo_satellite, ocean_state, weather, hazard, geofence], so
+weather_agent is ALWAYS considered before hazard_agent. When both cross
+the 0.6 threshold, ORCA reports the wind and never mentions the sea.
+
+MEASURED, on the real data/cache/ of 2026-08-28, forcing 2.4 m waves
+(deliberately just BELOW the 2.5 m Douglas 4/5 hard deny, so the crew is
+one step from the limit and most needs to be told):
+
+    zone              names            actual worst              verdict
+    Point Calimere    wind  0.70       hazard_agent  0.96        WRONG
+    Mandapam          wind  0.74       hazard_agent  0.96        WRONG
+    Rameswaram        wind  0.95       hazard_agent  0.96        WRONG
+    Thoothukudi       wind  0.66       hazard_agent  0.96        WRONG
+
+    4 of the 6 zones carrying more than one danger named the wrong
+    hazard. After this patch: 6 of 6 name the worst one.
+
+The same list-order pick is in rule 1: with a wave hard-deny AND a
+geofence hard-deny, hazard_agent (index 3) is named and the fact that the
+boat is inside a marine national park is never said.
+
+WHY max() IS SAFE HERE
+----------------------
+  * It changes WHICH finding is quoted. It never changes the ACTION.
+    The set `danger` and the set `hard_denials` are unchanged, so every
+    GO / DO NOT GO / SAFER ALTERNATIVE / CANNOT ASSESS verdict is
+    byte-identical before and after.
+  * Python's max() returns the FIRST maximum, so an exact tie keeps
+    today's registration order. This is a strict refinement, never a
+    reshuffle of equally severe findings.
+  * zone_summaries already does exactly this (PRD R-18, "a single hazard
+    must not be diluted"), and _zone_verdict()'s R-59 path already does
+    it too. This makes the third site agree with the other two rather
+    than introducing a new rule.
+  * policy.py stays deterministic, LLM-free and network-free
+    (CLAUDE.md rule 4). No new imports, no new dependencies (rule 6).
+
+VERIFICATION ALREADY DONE
+-------------------------
+With this patch applied on 2026-08-28:
+    .venv/bin/python -m pytest -q      ->  295 passed, 1 skipped
+    npx playwright test                ->   54 passed, 1 skipped
+Four new tests in tests/test_policy.py pin the behaviour, including the
+tie case and the single-danger no-op case. G-4 still holds: deleting rule
+2 still fails test_rule_2_is_load_bearing_do_not_delete.
+
+TO APPLY
+--------
+    git apply docs/team/r37-name-the-most-severe-hazard.patch
+    .venv/bin/python -m pytest -q
+
+TO CHECK IT APPLIES CLEANLY WITHOUT TOUCHING ANYTHING
+-----------------------------------------------------
+    git apply --check docs/team/r37-name-the-most-severe-hazard.patch
+
+TO REVERSE IT
+-------------
+    git apply -R docs/team/r37-name-the-most-severe-hazard.patch
+
+AFTER APPLYING, PRD.md needs two edits (not included here, PRD.md is
+hand-maintained): flip R-37 to Met in §5, and strike the "The decision
+names the first danger, not the worst" row from the open-defects table.
+
+--- 8< --- patch begins --- 8< ---
+diff --git a/orca/policy.py b/orca/policy.py
+index 968819d..74610c2 100644
+--- a/orca/policy.py
++++ b/orca/policy.py
+@@ -46,9 +46,13 @@ def resolve(findings: list[Finding]) -> Decision:
+         raise ValueError("resolve() requires at least one Finding; refusing to decide on no evidence")
+ 
+     # Rule 1: any hard denial wins outright, unconditionally.
++    # R-37: when several findings deny, name the most severe rather than
++    # whichever agent happens to be registered first. max() returns the
++    # first maximum, so an exact tie keeps today's registration order and
++    # the change is a strict refinement, never a reshuffle.
+     hard_denials = [f for f in findings if f.hard_deny]
+     if hard_denials:
+-        primary = hard_denials[0]
++        primary = max(hard_denials, key=lambda f: f.risk_level)
+         return Decision(
+             action="DO NOT GO",
+             reason=primary.reason,
+@@ -61,8 +65,16 @@ def resolve(findings: list[Finding]) -> Decision:
+     danger = [f for f in findings if f.risk_level >= RISK_OVERRIDE_THRESHOLD]
+ 
+     # Rule 2: opportunity contradicted by elevated risk -> safety wins.
++    # R-37: the MOST SEVERE danger, not the first in AGENTS order.
++    # weather_agent is registered before hazard_agent, so with 2.4 m waves
++    # (risk 0.96) and 27.9 km/h wind (0.70) this named the wind and never
++    # mentioned the sea state -- to a crew one step below the 2.5 m hard
++    # deny. Measured on the 2026-08-28 cache: 4 of the 6 zones carrying
++    # more than one danger reported the wrong hazard at 2.4 m.
++    # zone_summaries already applies exactly this rule ("a single hazard
++    # must not be diluted", R-18); the reason string now applies it too.
+     if opportunity and danger:
+-        primary_danger = danger[0]
++        primary_danger = max(danger, key=lambda f: f.risk_level)
+         return Decision(
+             action="SAFER ALTERNATIVE",
+             reason=primary_danger.reason,
+diff --git a/tests/test_policy.py b/tests/test_policy.py
+index 29b9f85..feaed6e 100644
+--- a/tests/test_policy.py
++++ b/tests/test_policy.py
+@@ -197,3 +197,55 @@ def test_policy_module_makes_no_llm_calls():
+     forbidden = ["openai", "anthropic", "Claude(", "llm(", "chat.completions", "requests.get", "requests.post"]
+     for token in forbidden:
+         assert token.lower() not in source.lower(), f"policy.py must not contain {token!r}"
++
++
++# --- R-37: name the most severe hazard, not the first registered --------
++# AGENTS order is [eo, ocean_state, weather, hazard, geofence], so
++# weather_agent always precedes hazard_agent. With both above the 0.6
++# threshold, danger[0] named the wind and the 2.4 m sea state was never
++# mentioned. Measured on the 2026-08-28 cache: 4 of the 6 zones carrying
++# more than one danger reported the wrong hazard at 2.4 m waves.
++def _danger(name, risk, *, suggests_go=False, hard_deny=False):
++    return Finding(
++        agent_name=name, suggests_go=suggests_go, risk_level=risk,
++        hard_deny=hard_deny, reason=f"{name} reason",
++    )
++
++
++def test_r37_rule_2_names_the_most_severe_danger_not_the_first():
++    findings = [
++        _danger("eo_satellite_agent", 0.0, suggests_go=True),
++        _danger("weather_agent", 0.70),   # first in registration order
++        _danger("hazard_agent", 0.96),    # but this is the real danger
++    ]
++    decision = resolve(findings)
++    assert decision.action == "SAFER ALTERNATIVE"
++    assert decision.reason == "hazard_agent reason"
++    assert "hazard_agent" in decision.explanation
++
++
++def test_r37_rule_1_names_the_most_severe_hard_denial():
++    findings = [
++        _danger("hazard_agent", 0.80, hard_deny=True),
++        _danger("geofence_agent", 1.00, hard_deny=True),
++    ]
++    assert resolve(findings).reason == "geofence_agent reason"
++
++
++def test_r37_an_exact_tie_keeps_registration_order():
++    """max() returns the first maximum, so this is a strict refinement of
++    the old behaviour -- never a reshuffle of equally severe findings."""
++    findings = [
++        _danger("eo_satellite_agent", 0.0, suggests_go=True),
++        _danger("weather_agent", 0.80),
++        _danger("hazard_agent", 0.80),
++    ]
++    assert resolve(findings).reason == "weather_agent reason"
++
++
++def test_r37_single_danger_is_unaffected():
++    findings = [
++        _danger("eo_satellite_agent", 0.0, suggests_go=True),
++        _danger("weather_agent", 0.70),
++    ]
++    assert resolve(findings).reason == "weather_agent reason"

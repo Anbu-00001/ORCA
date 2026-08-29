@@ -65,6 +65,48 @@ MAX_ALTERNATIVE_KM = 100.0
 AGENTS = [eo_satellite_agent, ocean_state_agent, weather_agent, hazard_agent, geofence_agent]
 
 
+def _newest_per_reading(observations: list[MarineObservation]) -> list[MarineObservation]:
+    """Keep only the most recently fetched observation of each distinct
+    reading -- one per (source, variable, latitude, longitude).
+
+    data/cache/ accumulates ONE FILE PER DAY (open-meteo-marine_2026-08-26
+    .json, ..._08-27.json, ..._08-28.json), and this loader reads all of
+    them. Nothing deduplicated the result, so a zone carried the same
+    variable several times over and orca/agents.py's _find() returned the
+    FIRST match -- which, because sorted() orders those filenames by date
+    ascending, was always the OLDEST one.
+
+    Measured on 2026-08-28, immediately after a successful `python -m
+    data.fetch`: Chennai's wave height was served as 0.74 m fetched 30.2 h
+    earlier, while the 0.72 m reading fetched 0.0 h earlier sat unused in
+    the same cache. Same for SST and wind.
+
+    Two things made this worse than a stale number:
+
+      * freshness_min is computed at FETCH time (fetched_at - valid_time),
+        so it describes how old a reading was when collected, not how
+        long it has since sat in the cache. The 30-hour-old reading
+        reported freshness_min = 10 -- the UI showed "10 min old" for
+        data from the previous day, which is precisely the confident-gap
+        failure the evidence panel exists to prevent (R-33).
+      * Re-running data/fetch.py before a demo did NOT help. It wrote a
+        new file that this loader then ignored in favour of the old ones,
+        so the refresh looked successful and changed nothing.
+
+    Selection only -- every observation returned is a real one that a
+    fetcher actually wrote (CLAUDE.md rule 1). Nothing is merged,
+    averaged or interpolated. Ties on fetched_at fall back to the later
+    valid_time so the result does not depend on filesystem order.
+    """
+    newest: dict[tuple, MarineObservation] = {}
+    for obs in observations:
+        key = (obs.source, obs.variable, obs.lat, obs.lon)
+        held = newest.get(key)
+        if held is None or (obs.fetched_at, obs.valid_time) > (held.fetched_at, held.valid_time):
+            newest[key] = obs
+    return list(newest.values())
+
+
 def _load_observations_from(cache_dir: Path) -> list[MarineObservation]:
     observations: list[MarineObservation] = []
     for path in sorted(cache_dir.glob("*.json")):
@@ -85,7 +127,7 @@ def _load_observations_from(cache_dir: Path) -> list[MarineObservation]:
                     provenance=item["provenance"],
                 )
             )
-    return observations
+    return _newest_per_reading(observations)
 
 
 def load_cached_observations(cache_dir: Path | None = None) -> list[MarineObservation]:
@@ -163,8 +205,33 @@ def resolve_zone_from_query(query: str, lat: float, lon: float, zones: list[dict
     )
 
 
-def run_agents(observations: list[MarineObservation]) -> list[Finding]:
-    return [agent(observations) for agent in AGENTS]
+def run_agents(
+    observations: list[MarineObservation],
+    *,
+    position: tuple[float, float] | None = None,
+) -> list[Finding]:
+    """R-5's uniform `list[MarineObservation] -> Finding` call, plus the
+    one thing that genuinely is not evidence-derived: where the question
+    was asked.
+
+    R-36. geofence_agent answers a question about GEOMETRY -- is this
+    point inside a marine national park, how far is the IMBL -- and
+    geometry does not depend on whether a satellite passed overhead.
+    Deriving its position from observations[0] meant a point with no
+    cached readings could not be geofence-checked at all, and meant the
+    check silently moved to whichever observation happened to sort first.
+    The planner always knows the zone it is evaluating, so it says so.
+
+    `position` is keyword-only and passed to the one agent that accepts
+    it, so the other four keep being called exactly as R-5 describes.
+    """
+    findings: list[Finding] = []
+    for agent in AGENTS:
+        if agent is geofence_agent and position is not None:
+            findings.append(agent(observations, position=position))
+        else:
+            findings.append(agent(observations))
+    return findings
 
 
 def _zone_verdict(decision: Decision, findings: list[Finding]) -> Decision:
@@ -186,6 +253,18 @@ def _zone_verdict(decision: Decision, findings: list[Finding]) -> Decision:
     # Deliberately NOT "DO NOT GO" -- conflating "I know it is dangerous"
     # with "I do not know" teaches users to discount the one verdict that
     # must never be discounted (Open Decision 8, resolved).
+    # ...but a HARD DENIAL is knowledge, not ignorance, and policy.py's
+    # rule 1 says it wins outright and unconditionally. The planner must
+    # not quietly undo that. geofence_agent answers from geometry, so
+    # since R-36 gave it the queried position it can hard-deny a point
+    # with no cached readings at all -- "this is inside the Gulf of
+    # Mannar Marine National Park" is true whether or not a satellite
+    # passed over this morning. Reporting that as CANNOT ASSESS would be
+    # R-39's own error pointed the other way: dressing a verdict up as
+    # ignorance, and downgrading a legal prohibition to "I don't know".
+    if any(f.hard_deny for f in findings):
+        return decision
+
     if not any(f.observations for f in findings):
         blind = ", ".join(f.agent_name for f in findings)
         return Decision(
@@ -369,7 +448,12 @@ def build_recommendation(
 
     zone_results: dict[str, tuple[dict, Decision, list[Finding]]] = {}
     for zone in ordered_zones:
-        findings = run_agents(observations_for_zone(observations, zone))
+        findings = run_agents(
+            observations_for_zone(observations, zone),
+            # R-36: the zone actually being evaluated, not a coordinate
+            # scavenged from whichever observation sorted first.
+            position=(zone["lat"], zone["lon"]),
+        )
         zone_results[zone["name"]] = (zone, _zone_verdict(resolve(findings), findings), findings)
 
     p_zone, p_decision, p_findings = zone_results[primary_zone["name"]]

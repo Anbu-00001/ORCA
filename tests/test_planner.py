@@ -23,7 +23,9 @@ from orca.planner import (
     resolve_zone_from_query,
     run_agents,
     _zone_by_substring,
+    _zone_verdict,
 )
+from orca.policy import resolve
 from orca.schema import MarineObservation
 from data.fetch import ZONES
 
@@ -544,3 +546,147 @@ def test_forecast_cache_valid_for_the_day_after_tomorrow_is_dropped(tmp_path):
 
 def test_missing_forecast_cache_dir_is_absent_not_an_error(tmp_path):
     assert load_forecast_observations(tmp_path / "nope") == []
+
+
+# --- hard-deny precedence over R-39's CANNOT ASSESS ---------------------
+# policy.py rule 1: "any hard denial wins outright, unconditionally." The
+# planner's R-39 guard was overriding it. This became reachable with R-36:
+# geofence_agent answers from geometry, so given the queried position it
+# can hard-deny a point with no cached readings at all. Reporting that as
+# CANNOT ASSESS is R-39's own error pointed the other way -- dressing a
+# verdict up as ignorance, and downgrading a legal prohibition to "I do
+# not know".
+_INSIDE_MPA = (9.20, 79.17)   # Krusadai I., Gulf of Mannar Marine National Park
+_OPEN_WATER = (13.08, 80.29)  # Chennai
+
+
+def test_hard_deny_survives_a_zone_with_no_observations():
+    findings = run_agents([], position=_INSIDE_MPA)
+    assert any(f.hard_deny for f in findings), "geofence should hard-deny inside the MPA"
+    decision = _zone_verdict(resolve(findings), findings)
+    assert decision.action == "DO NOT GO"
+    assert "restricted marine zone" in decision.reason
+
+
+def test_r39_still_returns_cannot_assess_when_nothing_is_denied():
+    """The guard must keep firing everywhere it did before -- this fix
+    narrows it to hard denials only, it does not remove it."""
+    findings = run_agents([], position=_OPEN_WATER)
+    assert not any(f.hard_deny for f in findings)
+    decision = _zone_verdict(resolve(findings), findings)
+    assert decision.action == "CANNOT ASSESS"
+
+
+@pytest.mark.parametrize("zone", ZONES, ids=lambda z: z["name"])
+def test_r36_each_zone_is_geofenced_at_its_own_coordinates(zone):
+    """Every zone's geofence result must be reproducible from that zone's
+    OWN lat/lon -- which is the whole content of R-36. Run with no
+    observations at all, so nothing but the passed position can be
+    driving the answer.
+    """
+    from orca.agents import (
+        _distance_to_imbl_km, _load_imbl_segments, _point_in_polygon, PROHIBITED_ZONE,
+        IMBL_ADVISORY_KM, IMBL_URGENT_KM,
+    )
+    findings = run_agents([], position=(zone["lat"], zone["lon"]))
+    geofence = [f for f in findings if f.agent_name == "geofence_agent"][0]
+
+    imbl_km = _distance_to_imbl_km(zone["lat"], zone["lon"], _load_imbl_segments())
+    expect_deny = (
+        _point_in_polygon(zone["lat"], zone["lon"], PROHIBITED_ZONE)
+        or (imbl_km is not None and imbl_km <= IMBL_URGENT_KM)
+    )
+    assert geofence.hard_deny == expect_deny
+
+    # And the distance it reports is the distance from THIS zone.
+    if imbl_km is not None and imbl_km <= IMBL_ADVISORY_KM:
+        assert f"{imbl_km:.1f} km" in geofence.reason
+    else:
+        assert "Outside restricted zones" in geofence.reason
+
+
+def test_r36_a_zone_far_from_every_boundary_is_reported_as_outside():
+    """Guards the parametrized test above from passing vacuously: at least
+    one covered zone must actually take the 'Outside restricted zones'
+    branch, or the assertions never exercise anything."""
+    findings = run_agents([], position=_OPEN_WATER)
+    geofence = [f for f in findings if f.agent_name == "geofence_agent"][0]
+    assert geofence.reason == "Outside restricted zones"
+    assert geofence.hard_deny is False and geofence.risk_level == 0.0
+
+
+# --- newest-reading-wins in a multi-day cache ---------------------------
+# data/cache/ accumulates one file per day and the loader reads all of
+# them. Nothing deduplicated the result, so orca/agents.py's _find()
+# returned the first match -- which, because sorted() orders those
+# filenames by date ascending, was always the OLDEST. Measured live on
+# 2026-08-28 straight after a successful `python -m data.fetch`: Chennai's
+# wave height was served as 0.74 m fetched 30.2 h earlier while the 0.72 m
+# reading fetched 0.0 h earlier sat unused in the same cache.
+#
+# The compounding part: freshness_min is computed at FETCH time, so the
+# 30-hour-old reading reported freshness_min = 10 and the UI showed
+# "10 min old". And re-running data/fetch.py before a demo did not help --
+# it wrote a new file this loader then ignored.
+def _cache_row(variable, value, valid_time, fetched_at, lat=9.28, lon=79.31,
+               source="Open-Meteo Marine", freshness_min=10):
+    return {
+        "variable": variable, "value": value, "unit": "m", "lat": lat, "lon": lon,
+        "valid_time": valid_time.isoformat(), "fetched_at": fetched_at.isoformat(),
+        "source": source, "confidence": 0.9, "freshness_min": freshness_min,
+        "provenance": "https://marine-api.open-meteo.com/v1/marine",
+    }
+
+
+def test_a_multi_day_cache_serves_the_newest_reading_not_the_first_file(tmp_path):
+    now = datetime.now(timezone.utc)
+    old, new = now - timedelta(days=1), now
+    # Filenames deliberately sort oldest-first, reproducing the real bug.
+    (tmp_path / "open-meteo-marine_2026-08-27.json").write_text(
+        json.dumps([_cache_row("wave_height_m", 0.74, old, old)]))
+    (tmp_path / "open-meteo-marine_2026-08-28.json").write_text(
+        json.dumps([_cache_row("wave_height_m", 0.72, new, new)]))
+
+    loaded = load_cached_observations(tmp_path)
+    assert len(loaded) == 1, "the same reading must not appear twice"
+    assert loaded[0].value == 0.72
+    assert loaded[0].fetched_at == new
+
+
+def test_the_agent_that_reads_the_cache_gets_the_newest_value(tmp_path):
+    """_find() takes the first match, so dedup is what actually protects
+    the agents -- this is the end-to-end version of the test above."""
+    from orca.agents import _find
+    now = datetime.now(timezone.utc)
+    old, new = now - timedelta(days=1), now
+    (tmp_path / "a_2026-08-27.json").write_text(
+        json.dumps([_cache_row("wave_height_m", 2.9, old, old)]))
+    (tmp_path / "b_2026-08-28.json").write_text(
+        json.dumps([_cache_row("wave_height_m", 0.5, new, new)]))
+    assert _find(load_cached_observations(tmp_path), "wave_height_m").value == 0.5
+
+
+def test_distinct_readings_are_all_kept(tmp_path):
+    """Dedup is per (source, variable, lat, lon) -- it must not collapse
+    different variables, different places, or different sources."""
+    now = datetime.now(timezone.utc)
+    (tmp_path / "c.json").write_text(json.dumps([
+        _cache_row("wave_height_m", 1.0, now, now),
+        _cache_row("sst_c", 29.0, now, now),                      # other variable
+        _cache_row("wave_height_m", 2.0, now, now, lat=13.08, lon=80.29),  # other place
+        _cache_row("wave_height_m", 3.0, now, now, source="Other Source"), # other source
+    ]))
+    assert len(load_cached_observations(tmp_path)) == 4
+
+
+def test_dedup_never_invents_a_value(tmp_path):
+    """Selection only -- every observation returned was written by a
+    fetcher. Nothing is merged, averaged or interpolated (rule 1)."""
+    now = datetime.now(timezone.utc)
+    written = [0.74, 0.72, 0.80]
+    for i, v in enumerate(written):
+        (tmp_path / f"f{i}.json").write_text(
+            json.dumps([_cache_row("wave_height_m", v, now - timedelta(hours=i), now - timedelta(hours=i))]))
+    loaded = load_cached_observations(tmp_path)
+    assert len(loaded) == 1
+    assert loaded[0].value in written

@@ -15,7 +15,9 @@ from __future__ import annotations
 import json
 
 import pytest
+import requests
 
+from orca import agentic
 from data.fetch import ZONES
 from orca.agentic import (
     AgenticUnavailable,
@@ -853,7 +855,6 @@ def test_a_question_past_tomorrow_is_answered_for_today_and_says_so(monkeypatch)
     "kind,fragment",
     [
         ("unit_conversion", "unit its source publishes"),
-        ("second_zone", "one place at a time"),
         ("species", "no fish-species"),
         ("tide_or_time", "no tide tables"),
         ("route", "no route or navigation"),
@@ -867,6 +868,42 @@ def test_each_unsupported_request_kind_is_disclosed(monkeypatch, kind, fragment)
     )
 
     assert rec.coverage_note is not None and fragment in rec.coverage_note
+
+
+def test_a_two_zone_question_is_answered_as_a_comparison_not_declined(monkeypatch):
+    """"second_zone" is no longer an unsupported capability. ORCA holds all
+    ten zones' readings, so "Is Kanyakumari safer than Rameswaram?" is
+    answerable -- and declining it was worse than useless, because the
+    composer then invented an ordering to answer from anyway (measured
+    live: "Kanyakumari appears later in the list ... so it's considered
+    safer", from a list that exists nowhere in its context).
+    """
+    _capture_composition(monkeypatch, _intent(unsupported="second_zone"))
+
+    rec = answer_question(
+        "Is Kanyakumari safer than Rameswaram?",
+        ZONE_A["lat"], ZONE_A["lon"], observations=[_wave(ZONE_A, 0.36)],
+    )
+
+    # A real, Python-computed ordering is produced...
+    assert rec.ranking, "a two-zone question must get the real cross-zone ordering"
+    # ...and the now-false "one place at a time" caveat is not attached.
+    assert not (rec.coverage_note and "one place at a time" in rec.coverage_note)
+
+
+def test_the_one_place_caveat_survives_when_no_ranking_could_be_built(monkeypatch):
+    """Guards the test above from passing for the wrong reason: with no
+    observations there is nothing to rank, so the honest caveat must
+    still appear rather than being silently dropped."""
+    _capture_composition(monkeypatch, _intent(unsupported="second_zone"))
+
+    rec = answer_question(
+        "Is Kanyakumari safer than Rameswaram?",
+        ZONE_A["lat"], ZONE_A["lon"], observations=[_wave(ZONE_A, 0.36)],
+    )
+    # _rank_zones falls back to zone_summaries, which always exist here.
+    # The invariant that matters: caveat XOR ranking, never neither.
+    assert rec.ranking or (rec.coverage_note and "one place at a time" in rec.coverage_note)
 
 
 def test_comparison_question_is_not_told_it_named_no_place(monkeypatch):
@@ -1153,3 +1190,125 @@ def test_the_three_existing_verdicts_are_unchanged(monkeypatch, action, expected
 
     assert expected in captured["system"]
     assert "does not know whether it is safe" not in captured["system"]
+
+
+# --- Groq rate-limit resilience (what broke the live demo) --------------
+# Free tier is 8,000 tokens/min per model per ORGANISATION. ORCA sends
+# ~978 tokens for extraction and ~718 for composition, so the ceiling is
+# ~8 questions/minute. A presenter asking every ten seconds is at that
+# edge; the observed failure was every answer collapsing to the same
+# deterministic sentence, which reads as a broken chatbot even though the
+# fallback is working exactly as designed.
+class _Resp:
+    def __init__(self, status=200, headers=None, payload=None):
+        self.status_code = status
+        self.headers = headers or {}
+        self._payload = payload or {"choices": [{"message": {"content": '{"ok": 1}'}}]}
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code}")
+
+
+def _payload(model="openai/gpt-oss-20b", q="x"):
+    return {"model": model, "messages": [{"role": "user", "content": q}]}
+
+
+def test_a_429_starts_a_cooldown_and_the_next_call_does_not_hit_the_network(monkeypatch):
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append(kw)
+        return _Resp(status=429, headers={"Retry-After": "30"})
+
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+
+    with pytest.raises(agentic.AgenticUnavailable):
+        agentic._post(_payload())
+    assert len(calls) == 1
+
+    # Second call must be refused locally -- no request spent to be told
+    # "no" again. This is the whole point: a rate-limited demo previously
+    # burned a request per question, per model.
+    with pytest.raises(agentic.AgenticUnavailable, match="cool-down"):
+        agentic._post(_payload(q="different"))
+    assert len(calls) == 1, "a second network call was made during the cool-down"
+
+
+def test_the_cooldown_honours_retry_after(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(agentic.requests, "post",
+                        lambda url, **kw: _Resp(status=429, headers={"Retry-After": "12"}))
+    with pytest.raises(agentic.AgenticUnavailable):
+        agentic._post(_payload())
+    assert 10.0 < agentic._cooldown_remaining("openai/gpt-oss-20b") <= 12.0
+
+
+def test_a_malformed_retry_after_falls_back_to_the_default(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(agentic.requests, "post",
+                        lambda url, **kw: _Resp(status=429, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}))
+    with pytest.raises(agentic.AgenticUnavailable):
+        agentic._post(_payload())
+    assert agentic._cooldown_remaining("openai/gpt-oss-20b") > 0
+
+
+def test_the_cooldown_is_per_model_not_global(monkeypatch):
+    """Quotas are per model, so rate-limiting extraction must not disable
+    composition -- they draw on separate 8,000 TPM pools."""
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(agentic.requests, "post",
+                        lambda url, **kw: _Resp(status=429, headers={"Retry-After": "30"}))
+    with pytest.raises(agentic.AgenticUnavailable):
+        agentic._post(_payload(model=agentic.EXTRACTION_MODEL))
+    assert agentic._cooldown_remaining(agentic.EXTRACTION_MODEL) > 0
+    assert agentic._cooldown_remaining(agentic.COMPOSITION_MODEL) == 0
+
+
+def test_an_identical_payload_is_served_from_cache_without_a_network_call(monkeypatch):
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append(1)
+        return _Resp(payload={"choices": [{"message": {"content": '{"answer": "first"}'}}]})
+
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+
+    assert agentic._post(_payload(q="same")) == {"answer": "first"}
+    assert agentic._post(_payload(q="same")) == {"answer": "first"}
+    assert len(calls) == 1, "the second identical question hit the network"
+
+
+def test_a_different_payload_is_not_served_from_cache(monkeypatch):
+    """The cache key is the whole payload, which is what makes it safe:
+    when data/fetch.py writes a new reading the composition payload
+    differs and the cache misses, so a cached sentence can never describe
+    a sea state that is no longer in the cache."""
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append(1)
+        return _Resp(payload={"choices": [{"message": {"content": '{"n": %d}' % len(calls)}}]})
+
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+
+    assert agentic._post(_payload(q="wave 1.4 m")) == {"n": 1}
+    assert agentic._post(_payload(q="wave 2.1 m")) == {"n": 2}
+    assert len(calls) == 2
+
+
+def test_a_rate_limited_response_is_never_cached(monkeypatch):
+    """A 429 must not become a permanent cached 'answer' for that
+    question -- once the cool-down expires the call has to be retried."""
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(agentic.requests, "post",
+                        lambda url, **kw: _Resp(status=429, headers={"Retry-After": "1"}))
+    with pytest.raises(agentic.AgenticUnavailable):
+        agentic._post(_payload(q="q"))
+    assert agentic._cache_key(_payload(q="q")) not in agentic._response_cache

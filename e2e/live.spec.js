@@ -473,3 +473,60 @@ test.describe('page behaviour with all external network blocked (wifi-off simula
     await expect(page.getByTestId('evidence-item').first()).toBeVisible();
   });
 });
+
+// The gap that let a broken demo ship. The wifi-off test above asserts a
+// question still gets an ANSWER, which was always true -- the answer path
+// reads data/cache/ and never needed the network. Nothing asserted that
+// the things a judge actually looks at still DRAW.
+//
+// They did not. Measured 2026-08-29 with every non-localhost request
+// blocked: nine resources failed (three.js, its addons, MapLibre's JS and
+// CSS, the webfont) and `#ocean3d-container canvas` was never created, so
+// the 3D Ocean tab was empty. Both libraries are vendored into
+// web/vendor/ now (scripts/vendor_web_deps.py); these tests are what stop
+// them drifting back to a CDN.
+test.describe('3D view with all external network blocked', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/*', (route) => {
+      const url = new URL(route.request().url());
+      const isLocal = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+      return isLocal ? route.continue() : route.abort('internetdisconnected');
+    });
+  });
+
+  test('the 3D ocean view still builds a WebGL canvas offline', async ({ page }) => {
+    await page.goto(`/index.html?api=${encodeURIComponent(API)}`);
+    await page.getByTestId('view-toggle-3d').click();
+    await expect(page.locator('#ocean3d-container canvas')).toBeVisible({ timeout: 20000 });
+  });
+
+  test('no page resource is fetched from a third-party origin', async ({ page }) => {
+    const external = [];
+    page.on('request', (r) => {
+      const h = new URL(r.url()).hostname;
+      if (h !== '127.0.0.1' && h !== 'localhost') external.push(r.url());
+    });
+    await page.goto(`/index.html?api=${encodeURIComponent(API)}`);
+    await page.getByTestId('view-toggle-3d').click();
+    await page.waitForTimeout(4000);
+
+    // Basemap TILES are allowed to be remote -- the 2D map degrades to
+    // #map-fallback without them and that path is covered above. Nothing
+    // that the page needs in order to RUN may be remote.
+    const blocking = external.filter((u) => !/tiles\.|fonts\.googleapis|fonts\.gstatic/.test(u));
+    expect(blocking, `these must be vendored:\n${blocking.join('\n')}`).toEqual([]);
+  });
+
+  test('the depth colour bar reports the real range of the loaded grid', async ({ page }) => {
+    await page.goto(`/index.html?api=${encodeURIComponent(API)}`);
+    await page.getByTestId('view-toggle-3d').click();
+    await expect(page.locator('#ocean3d-container canvas')).toBeVisible({ timeout: 20000 });
+
+    // A colormap with no stated variable, range or unit is decoration.
+    // These three assertions are what make it a measurement.
+    await expect(page.getByTestId('depth-colorbar')).toBeVisible();
+    await expect(page.locator('#depth-colorbar-unit')).toContainText('m below sea level');
+    const max = await page.locator('#depth-colorbar-max').textContent();
+    expect(Number(String(max).replace(/[^0-9]/g, ''))).toBeGreaterThan(100);
+  });
+});

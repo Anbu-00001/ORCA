@@ -37,10 +37,12 @@ before; this module can only ever add to that, never replace it.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import time
+from collections import OrderedDict
 
 import requests
 
@@ -86,6 +88,94 @@ LAYER_BUDGET_S = 10.0
 # starting one only spends the rest of the budget in order to fail anyway.
 MIN_CALL_BUDGET_S = 0.5
 
+# --- Groq rate-limit cool-down (the thing that broke the live demo) -----
+#
+# Groq's free tier allows 30 requests/min but only 8,000 TOKENS/min, per
+# model per ORGANISATION -- and tokens are what binds. Measured on this
+# prompt set: extraction sends ~978 tokens and composition ~718, so the
+# ceiling is ~8 questions/minute before a 429, lower once completions are
+# counted. A presenter asking a question every ten seconds while talking
+# is already at that edge; a teammate testing on the same key pushes it
+# over. What the audience then sees is not an error -- the fallback is
+# correct and silent -- but every answer collapsing to the same
+# deterministic sentence, which reads as a broken chatbot.
+#
+# Two things made it worse than it needed to be:
+#   * a 429 was retried on the NEXT question, and the next, each one
+#     spending a request to be told "no" again;
+#   * extraction failing did not stop composition from also being tried,
+#     so a rate-limited question burned TWO 429s, not one.
+#
+# So: remember the cool-down Groq itself asks for (Retry-After, else a
+# conservative default) and skip calls to that model until it expires.
+# Skipping is instant, which also removes the network wait from the
+# fallback path -- the answer arrives immediately instead of after a
+# timeout. Per model, because the quotas are per model.
+RATE_LIMIT_STATUS = 429
+DEFAULT_COOLDOWN_S = 60.0
+MAX_COOLDOWN_S = 300.0
+_cooldown_until: dict[str, float] = {}
+
+
+def _cooldown_remaining(model: str) -> float:
+    """Seconds left before `model` may be called again. 0.0 when ready."""
+    return max(0.0, _cooldown_until.get(model, 0.0) - time.monotonic())
+
+
+def _begin_cooldown(model: str, retry_after: str | None) -> float:
+    """Record the cool-down Groq asked for. Returns its length in seconds."""
+    seconds = DEFAULT_COOLDOWN_S
+    if retry_after:
+        try:
+            seconds = float(retry_after)
+        except ValueError:
+            pass  # a date-form Retry-After -- the default is close enough
+    seconds = min(max(seconds, 1.0), MAX_COOLDOWN_S)
+    _cooldown_until[model] = time.monotonic() + seconds
+    return seconds
+
+
+def reset_rate_limit_state() -> None:
+    """Clear all cool-downs. For tests, and for an operator who has just
+    switched to a key with its own quota."""
+    _cooldown_until.clear()
+
+
+# --- Response cache -----------------------------------------------------
+#
+# The same question asked twice sends Groq a byte-identical payload, and
+# a byte-identical payload has a byte-identical answer. Remembering it
+# costs nothing and removes the single biggest source of demo rate-limit
+# pressure: a presenter re-asking the question they just showed, a judge
+# repeating it on their own laptop, a rehearsal run.
+#
+# Keyed on the WHOLE payload, which is what makes this safe rather than
+# merely convenient. The composition payload carries the actual readings
+# it is asked to phrase, so the moment data/fetch.py writes a new number
+# the payload differs and the cache misses. There is no way for it to
+# serve a sentence about a sea state that is no longer in the cache.
+#
+# It never caches a verdict. GO / DO NOT GO / SAFER ALTERNATIVE /
+# CANNOT ASSESS are recomputed by orca/policy.py from live observations
+# on every single request, cached or not (CLAUDE.md rule 4). What is
+# remembered here is only the model's phrasing and its parse of the
+# question.
+RESPONSE_CACHE_MAX = 256
+_response_cache: "OrderedDict[str, dict]" = OrderedDict()
+
+
+def _cache_key(payload: dict) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+
+
+def reset_response_cache() -> None:
+    """For tests, and after a cache refresh if an operator wants the
+    model re-consulted even on payloads it has already seen."""
+    _response_cache.clear()
+
+
 # The closed sets extraction may return. Defined once and used BOTH in the
 # JSON schema sent to the model and in the re-validation of its reply --
 # writing them twice meant a value could be added to the schema, returned
@@ -121,9 +211,17 @@ _UNSUPPORTED_NOTES = {
         "ORCA reports each reading in the unit its source publishes, so this "
         "is in metres and km/h rather than the unit you asked for."
     ),
+    # {zone} is substituted with the real zone name. It used to read
+    # "...so this covers only the first one", and that phrase was the
+    # trigger for a live fabrication: asked "Is Kanyakumari safer than
+    # Rameswaram?", the composer answered "Kanyakumari appears later in
+    # the list than Rameswaram, so it's considered safer." There is no
+    # list anywhere in its context -- it confabulated one from the words
+    # "the first one", then drew a SAFETY CONCLUSION from the invented
+    # ordering. Naming the zone removes the ordinal, and so the invitation.
     "second_zone": (
         "You asked about more than one place. ORCA answers one place at a "
-        "time, so this covers only the first one."
+        "time, so this covers {zone} only."
     ),
     "species": "ORCA has no fish-species or catch data, only sea and weather conditions.",
     "tide_or_time": "ORCA has no tide tables or timings.",
@@ -159,6 +257,24 @@ def _post(payload: dict, timeout: float | None = None) -> dict:
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise AgenticUnavailable("GROQ_API_KEY not set")
+
+    key = _cache_key(payload)
+    hit = _response_cache.get(key)
+    if hit is not None:
+        _response_cache.move_to_end(key)
+        logger.info("Groq response cache hit for %s", payload.get("model", "?"))
+        return hit
+
+    # Still inside a cool-down this model asked for: do not spend a
+    # request to be told "no" again. Failing here is the same
+    # AgenticUnavailable the caller already handles, just instantly.
+    model = payload.get("model", "?")
+    remaining = _cooldown_remaining(model)
+    if remaining > 0:
+        raise AgenticUnavailable(
+            f"Groq rate limit: {model} is in cool-down for another {remaining:.0f}s"
+        )
+
     try:
         resp = requests.post(
             GROQ_API_URL,
@@ -166,15 +282,30 @@ def _post(payload: dict, timeout: float | None = None) -> dict:
             json=payload,
             timeout=REQUEST_TIMEOUT_S if timeout is None else timeout,
         )
+        if resp.status_code == RATE_LIMIT_STATUS:
+            held = _begin_cooldown(model, resp.headers.get("Retry-After"))
+            logger.warning(
+                "Groq rate limit (429) on %s -- holding off for %.0fs. Free tier is "
+                "8,000 tokens/min per model; ORCA sends ~1,700 per question across two "
+                "models. Answers stay correct but become deterministic-only until then.",
+                model, held,
+            )
+            raise AgenticUnavailable(f"Groq rate limited: {model} (cooling down {held:.0f}s)")
         resp.raise_for_status()
     except requests.RequestException as exc:
         raise AgenticUnavailable(f"Groq request failed: {exc}") from exc
     try:
         body = resp.json()
         content = body["choices"][0]["message"]["content"]
-        return json.loads(content)
+        parsed = json.loads(content)
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
         raise AgenticUnavailable(f"Groq response malformed: {exc}") from exc
+
+    _response_cache[key] = parsed
+    _response_cache.move_to_end(key)
+    while len(_response_cache) > RESPONSE_CACHE_MAX:
+        _response_cache.popitem(last=False)
+    return parsed
 
 
 def extract_query_intent(
@@ -530,7 +661,23 @@ def compose_grounded_answer(
                 "NOT answer with the zone named in the Decision block "
                 "below unless the list itself puts it there -- that zone is "
                 "just where the question was anchored, not the answer to a "
-                "comparison."
+                "comparison. "
+                # The ordering is now real, so conclusions drawn from it
+                # are sound -- but SAYING "X appears later in the ranking"
+                # is both poor advice and indistinguishable, to a reader,
+                # from the fabrication this replaced. State the finding,
+                # not the mechanism, exactly as the opening rule already
+                # requires for the JSON's other fields.
+                "USE the order to work out the answer -- of two places, "
+                "the one nearer the END of the list is the calmer and "
+                "safer of them, and you should say so plainly. But never "
+                "DESCRIBE the list: do not say 'appears later', 'is "
+                "listed after', 'in the ranking', or mention positions, "
+                "ordering or the list at all. State what is true of the "
+                "places the way a fisherman would say it, and where the "
+                "list gives a value with a unit, use that value. Two "
+                "places sharing the same verdict word are still not "
+                "equally safe if the list orders them differently."
             )
         else:
             parts.append(
@@ -539,7 +686,17 @@ def compose_grounded_answer(
                 "roughest compared with anywhere else, and never rank or "
                 "order places -- you have not been shown any other place's "
                 "readings. If they asked for a comparison, say you can "
-                "only speak for this one place."
+                "only speak for this one place. "
+                # Added after a live fabrication: the model invented a
+                # "list" that appears nowhere in its context and reasoned
+                # from position in it to a safety conclusion. Ordering of
+                # any kind is not evidence, and saying so explicitly is
+                # cheaper than hoping the general rule covers it.
+                "There is no list, ranking or ordering of places anywhere "
+                "in what you have been given. Do not refer to one, and "
+                "never infer that a place is safer, rougher or better from "
+                "the order in which anything is mentioned. Position is not "
+                "a measurement."
             )
 
         if coverage_note:
@@ -801,6 +958,27 @@ def answer_question(
     recommendation.time_frame = time_frame
     recommendation.answer_kind = "off_topic" if not on_topic else intent
 
+    # A comparison question gets the real ordering or nothing at all.
+    #
+    # "second_zone" belongs here too, and treating it as an unsupported
+    # capability was the bug. ORCA holds all ten zones' readings, so "Is
+    # Kanyakumari safer than Rameswaram?" is perfectly answerable -- it
+    # was being declined, and the composer then invented an answer anyway:
+    # "Kanyakumari appears later in the list than Rameswaram, so it's
+    # considered safer" (measured live 2026-08-29; there is no list in its
+    # context). Hardening the prompt against that did NOT stop it -- the
+    # model reproduced the same fabrication three times out of three.
+    #
+    # This is the lesson _rank_zones() already records for the identical
+    # failure one scope over: hand it the real ordering, do not ask it
+    # more firmly not to guess. A rule the model can talk itself out of
+    # is not a rule.
+    ranking = None
+    comparison = scope == "all_zones" or unsupported == "second_zone"
+    if on_topic and comparison:
+        ranking = _rank_zones(variable, verdict_observations, zones, recommendation)
+    recommendation.ranking = ranking
+
     # Tier 4 (zone_match still "fallback"): nothing in the question,
     # nothing in memory. build_recommendation() fell back to the
     # geographically nearest zone -- which is a reasonable default, but
@@ -817,19 +995,24 @@ def answer_question(
             )
     if beyond_note and on_topic:
         notes.append(beyond_note)
+    # ...and once it is answered as a comparison, the "one place at a
+    # time" caveat is simply false, so it must not be attached.
+    if on_topic and unsupported == "second_zone" and ranking:
+        unsupported = "none"
     if on_topic and unsupported in _UNSUPPORTED_NOTES:
-        notes.append(_UNSUPPORTED_NOTES[unsupported])
+        note = _UNSUPPORTED_NOTES[unsupported]
+        if "{zone}" in note:
+            covered = recommendation.chosen_zone or resolved_zone or {}
+            covered_name = covered.get("name") if isinstance(covered, dict) else None
+            if covered_name is None and recommendation.zone_summaries:
+                covered_name = recommendation.zone_summaries[0].get("zone")
+            note = note.format(zone=covered_name or "the one place it could resolve")
+        notes.append(note)
     if stale_forecast_note:
         notes.append(stale_forecast_note)
 
     coverage_note = " ".join(notes) if notes else None
     recommendation.coverage_note = coverage_note
-
-    # A comparison question gets the real ordering or nothing at all.
-    ranking = None
-    if on_topic and scope == "all_zones":
-        ranking = _rank_zones(variable, verdict_observations, zones, recommendation)
-    recommendation.ranking = ranking
 
     lookup = None
     if on_topic and intent == "data_lookup":

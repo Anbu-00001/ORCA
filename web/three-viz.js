@@ -13,6 +13,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { colormap, COLORMAP_GLSL, CMOCEAN_META } from "./colormaps.js";
 
 // Reuses the app's existing palette (see index.html's :root custom
 // properties) so the 3D views read as part of the same product, not a
@@ -232,6 +233,35 @@ const L0_MAX_M = 200.0;
 // sea is the subject and land is a boundary. IHO S-52 draws land as flat
 // buff with a hard coastline and no shading, which is already the visual
 // language of index.html's Day/Dusk/Night palette switch.
+// One 256x1 RGB texture per cmocean map, built once and shared. Nearest
+// filtering on purpose: the table already has 256 stops, and linear
+// filtering between them would resample published values into ones
+// cmocean never published.
+const _lutCache = new Map();
+function colormapTexture(name) {
+  if (_lutCache.has(name)) return _lutCache.get(name);
+  // RGBA, not RGB: THREE.RGBFormat was removed in r137 and this project
+  // pins r180, where it is undefined -- which silently yields a black
+  // texture rather than an error.
+  const rgb = colormap(name);
+  const rgba = new Uint8Array(256 * 4);
+  for (let i = 0; i < 256; i++) {
+    rgba[i * 4 + 0] = rgb[i * 3 + 0];
+    rgba[i * 4 + 1] = rgb[i * 3 + 1];
+    rgba[i * 4 + 2] = rgb[i * 3 + 2];
+    rgba[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(rgba, 256, 1, THREE.RGBAFormat);
+  // The LUT holds sRGB values straight from cmocean's published table.
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  _lutCache.set(name, tex);
+  return tex;
+}
+
 const LAND_PLATE_UNITS = 0.11;
 
 // Isobaths, in metres of depth. Real values read off the cached ETOPO
@@ -324,18 +354,32 @@ const TERRAIN_VERTEX_SHADER = /* glsl */ `
 `;
 
 const TERRAIN_FRAGMENT_SHADER = /* glsl */ `
-  uniform vec3 uSunDir;
+  uniform vec3  uSunDir;
+  uniform float uDepthMin;
+  uniform float uDepthMax;
   varying float vElev;
   varying vec3  vN;
   varying vec3  vW;
 
   ${SKY_GLSL}
+  ${COLORMAP_GLSL}
 
-  // Seabed tint. sqrt so the shelf, where every zone sits, gets most of
-  // the colour range instead of it all being spent on the abyssal plain.
+  // Seabed colour is cmocean 'deep', sampled from the published 256-stop
+  // table (see web/colormaps.js). It replaced a hand-mixed teal->navy
+  // ramp under a sqrt(): that ramp spent most of its range on the shelf
+  // because the shelf is the interesting part, which is a defensible
+  // DESIGN choice and an indefensible SCIENTIFIC one -- it made equal
+  // depth steps look unequal, so the eye read fronts and terraces that
+  // the bathymetry does not contain.
+  //
+  // The normalisation is linear and runs over the ACTUAL min/max of the
+  // loaded grid (uDepthMin/uDepthMax), not a hardcoded 3500 m. Two
+  // reasons: the constant was wrong for this bbox, and a colour bar can
+  // only be labelled with real numbers if the shader and the legend
+  // agree on the same range.
   vec3 seabedTint(float e) {
-    return mix(vec3(0.247, 0.612, 0.604), vec3(0.039, 0.125, 0.212),
-               clamp(sqrt(-e / 3500.0), 0.0, 1.0));
+    float t = (-e - uDepthMin) / max(uDepthMax - uDepthMin, 1.0);
+    return cmocean(t);
   }
 
   // One isobath. fwidth() keeps the line a constant width on screen
@@ -1118,6 +1162,8 @@ export class OceanDiorama extends ThreeVizBase {
     this.renderer.toneMappingExposure = 1.05;
 
     this._sunDir = SUN_DIRECTION.clone();
+    // Replaced with the real grid range by setBathymetry().
+    this._depthRange = { min: 0, max: 1 };
 
     // Sky dome, drawn from the same orcaSky() the water reflects.
     const sky = new THREE.Mesh(
@@ -1223,6 +1269,13 @@ export class OceanDiorama extends ThreeVizBase {
     return free;
   }
 
+  // The real depth range of the loaded grid, for the legend. Exposed so
+  // the colour bar's end labels are the same numbers the shader
+  // normalises by -- not a second, independently-maintained guess.
+  get depthRange() {
+    return this._grid ? { ...this._depthRange } : null;
+  }
+
   get cameraMode() {
     return this._freeFly.enabled ? "free" : "orbit";
   }
@@ -1282,6 +1335,21 @@ export class OceanDiorama extends ThreeVizBase {
   setBathymetry(bathymetryResponse) {
     this._bbox = bathymetryResponse.bbox;
     this._grid = buildElevationGrid(bathymetryResponse.points);
+    // The colour bar is only honest if its end labels are the real
+    // extremes of the grid on screen, so the range comes from the data
+    // rather than from a constant. Depths are positive metres down.
+    let min = Infinity, max = -Infinity;
+    for (const row of this._grid.grid) {
+      for (const e of row) {
+        if (e > 0) continue;            // land is not on the depth ramp
+        const d = -e;
+        if (d < min) min = d;
+        if (d > max) max = d;
+      }
+    }
+    this._depthRange = Number.isFinite(min) && max > min
+      ? { min, max }
+      : { min: 0, max: 1 };
     this._buildTerrainMesh();
     this.start();
   }
@@ -1352,7 +1420,14 @@ export class OceanDiorama extends ThreeVizBase {
       new THREE.ShaderMaterial({
         vertexShader: TERRAIN_VERTEX_SHADER,
         fragmentShader: TERRAIN_FRAGMENT_SHADER,
-        uniforms: { uSunDir: { value: this._sunDir } },
+        uniforms: {
+          uSunDir: { value: this._sunDir },
+          uColormap: { value: colormapTexture("deep") },
+          // Real range of THIS grid, so the colour bar's end labels are
+          // measurements rather than round numbers.
+          uDepthMin: { value: this._depthRange.min },
+          uDepthMax: { value: this._depthRange.max },
+        },
       })
     );
     mesh.userData.tooltip = null;

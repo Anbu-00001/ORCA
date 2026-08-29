@@ -12,6 +12,7 @@
 // the buffered property first closes that race without depending on
 // script load order.
 import { ReasoningGraph, OceanDiorama } from "./three-viz.js";
+import { colormapCss, CMOCEAN_META } from "./colormaps.js";
 
 const params = new URLSearchParams(window.location.search);
 const MOCK_MODE = params.get("mock") === "1";
@@ -35,6 +36,33 @@ window.addEventListener("orca:recommendation", (event) => {
   }
 });
 
+
+// Draw the depth colour bar from the same cmocean table and the same
+// grid range the terrain shader samples. Reading both from one place is
+// the point: a legend that is maintained separately from the picture
+// eventually disagrees with it, and a colour bar that disagrees with its
+// data is worse than no colour bar -- it is a wrong measurement rendered
+// authoritatively.
+function renderDepthColorbar(diorama) {
+  const ramp = document.getElementById("depth-colorbar-ramp");
+  if (!ramp) return;
+  const range = diorama?.depthRange;
+  ramp.style.background = colormapCss("deep");
+  const meta = CMOCEAN_META.deep;
+  const unitEl = document.getElementById("depth-colorbar-unit");
+  if (unitEl) unitEl.textContent = meta.unit + " below sea level";
+  const minEl = document.getElementById("depth-colorbar-min");
+  const maxEl = document.getElementById("depth-colorbar-max");
+  if (!range) {
+    // No grid loaded: say so rather than printing a plausible 0-3000.
+    if (minEl) minEl.textContent = "–";
+    if (maxEl) maxEl.textContent = "–";
+    return;
+  }
+  if (minEl) minEl.textContent = Math.round(range.min).toLocaleString();
+  if (maxEl) maxEl.textContent = Math.round(range.max).toLocaleString();
+}
+
 async function loadBathymetry() {
   const container = document.getElementById("ocean3d-container");
   try {
@@ -44,6 +72,7 @@ async function loadBathymetry() {
     container?.classList.remove("awaiting");
     if (oceanDiorama) {
       oceanDiorama.setBathymetry(latestBathymetry);
+      renderDepthColorbar(oceanDiorama);
       if (latestRecommendation) oceanDiorama.setZoneSummaries(latestRecommendation.zone_summaries || []);
     }
   } catch (err) {
@@ -74,6 +103,7 @@ function ensureOceanDiorama() {
       oceanDiorama.onWaveChange(renderSandbox);
       if (latestBathymetry) {
         oceanDiorama.setBathymetry(latestBathymetry);
+        renderDepthColorbar(oceanDiorama);
         if (latestRecommendation) oceanDiorama.setZoneSummaries(latestRecommendation.zone_summaries || []);
       }
       seedSandbox();

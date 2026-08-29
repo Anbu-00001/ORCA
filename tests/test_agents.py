@@ -287,3 +287,54 @@ def test_geofence_mpa_and_imbl_risk_combine_as_the_worse_of_the_two():
 def test_all_agents_handle_empty_input_without_raising(agent):
     finding = agent([])
     assert 0.0 <= finding.risk_level <= 1.0
+
+
+# --- R-36: an agent's position must not depend on which observations exist ---
+# geofence_agent answers a question about GEOMETRY. Deriving its position
+# from observations[0] meant a point with no cached readings could not be
+# geofence-checked at all, and meant the check silently moved to whichever
+# observation happened to sort first. `position` is keyword-only, so R-5's
+# uniform `agent(observations)` call still works for all five agents.
+_INSIDE_MPA = (9.20, 79.17)      # Krusadai I., Gulf of Mannar Marine National Park
+_OPEN_WATER = (13.08, 80.29)     # Chennai
+
+
+def test_r36_geofence_checks_the_given_position_with_no_observations_at_all():
+    finding = geofence_agent([], position=_INSIDE_MPA)
+    assert finding.hard_deny is True
+    assert "restricted marine zone" in finding.reason
+    # Geometry is not evidence: there is no reading to cite, and the empty
+    # list is what keeps R-39's "no evidence at this zone" guard truthful.
+    assert finding.observations == []
+
+
+def test_r36_geofence_position_wins_over_the_observations_coordinate():
+    """The bug this closes: the check ran wherever observations[0] happened
+    to be, not where the question was about."""
+    far_away = _obs("wave_height_m", 1.0, lat=_OPEN_WATER[0], lon=_OPEN_WATER[1])
+    assert geofence_agent([far_away]).hard_deny is False
+    assert geofence_agent([far_away], position=_INSIDE_MPA).hard_deny is True
+
+
+def test_r36_geofence_without_position_still_falls_back_to_observations():
+    inside = _obs("wave_height_m", 1.0, lat=_INSIDE_MPA[0], lon=_INSIDE_MPA[1])
+    assert geofence_agent([inside]).hard_deny is True
+
+
+def test_r36_geofence_with_neither_position_nor_observations_is_neutral():
+    finding = geofence_agent([])
+    assert finding.hard_deny is False and finding.risk_level == 0.0
+    assert "No location data" in finding.reason
+
+
+def test_r5_uniform_signature_survives_the_position_argument():
+    """R-5: exactly five agents, each list[MarineObservation] -> Finding.
+    `position` is keyword-only and optional, so the uniform call still
+    works for every agent -- that is what made Open Decision 9 resolvable
+    without a synthetic position-carrying observation (CLAUDE.md rule 1).
+    """
+    from orca.planner import AGENTS
+    assert len(AGENTS) == 5
+    for agent in AGENTS:
+        finding = agent([])
+        assert finding.agent_name

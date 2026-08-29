@@ -32,16 +32,25 @@
   href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,75,400;0,75,600;0,75,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Hind+Madurai:wght@400;500;600&family=Noto+Sans+Tamil+UI:wght@400;500&display=swap"
   rel="stylesheet"
 />
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<!-- Vendored, not CDN-loaded. CLAUDE.md rule 8 says the demo must run with
+     NO network access. The ANSWER path always did; the MAP and the 3D VIEW
+     did not, because both libraries were fetched from unpkg at page load.
+     Measured 2026-08-29 with every non-localhost request blocked: nine
+     resources failed and the 3D canvas was never created, so the 3D Ocean
+     tab rendered empty. The wifi-off e2e test passed throughout -- it
+     asserted that a question still got an answer, which was true, and
+     nothing asserted that the things a judge looks at still draw.
+     Refresh with scripts/vendor_web_deps.py. -->
+<link href="vendor/maplibre-gl.css" rel="stylesheet" />
+<script src="vendor/maplibre-gl.js"></script>
 <!-- three.js: pinned version (not "latest"), same convention as maplibre-gl
      above. Only build/build/three.module.js is published from r150+, so
      this has to be an import map + module scripts, not a plain global. -->
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
   }
 }
 </script>
@@ -474,6 +483,19 @@
      own dark chrome rather than the palette's panel. Hidden entirely
      until the 3D view is open -- there is nothing to perturb on a flat
      basemap. */
+  .legend-row-bar { align-items: flex-start; }
+  .colorbar { display: block; margin: 6px 0 5px; }
+  .colorbar-ramp {
+    display: block; height: 9px; border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.22);
+  }
+  .colorbar-ticks {
+    display: flex; justify-content: space-between; gap: 6px;
+    font: 500 9.5px/1.4 "IBM Plex Mono", ui-monospace, monospace;
+    letter-spacing: 0.02em; opacity: 0.78; margin-top: 3px;
+  }
+  #depth-colorbar-unit { opacity: 0.62; }
+
   #sandbox-panel {
     position: absolute; right: 14px; bottom: 14px; z-index: 10;
     display: none; width: 268px; padding: 0.85rem 0.95rem 0.75rem;
@@ -1135,10 +1157,30 @@
           <span class="legend-text"><b>2.5 m limit</b>The Douglas 4/5 boundary, drawn in
             the world. The sea rises through it.</span>
         </div>
-        <div class="legend-row">
-          <span class="legend-swatch depth-ramp"></span>
-          <span class="legend-text"><b>Seafloor</b>Real ETOPO 2022 relief, shelf to
-            abyssal plain, seen through the water.</span>
+        <!-- A real colour bar, not a swatch. The gradient, the end
+             labels and the unit are all written by web/three-viz-app.js
+             from the SAME cmocean table and the SAME grid range the
+             shader samples, so the legend cannot drift from the picture.
+             A colormap with no stated variable, no range and no units is
+             decoration; with them it is a measurement. -->
+        <div class="legend-row legend-row-bar">
+          <span class="legend-text">
+            <b>Seafloor depth</b>
+            <span class="colorbar" data-testid="depth-colorbar">
+              <span class="colorbar-ramp" id="depth-colorbar-ramp"></span>
+              <span class="colorbar-ticks">
+                <span id="depth-colorbar-min">–</span>
+                <span id="depth-colorbar-unit">m below sea level</span>
+                <span id="depth-colorbar-max">–</span>
+              </span>
+            </span>
+            NOAA ETOPO 2022 relief. Colour is cmocean <i>deep</i>
+            (Thyng et&nbsp;al. 2016) — perceptually uniform, so equal
+            steps in depth are equal steps in colour. The range is that
+            of the <i>rendered</i> surface, which is smoothed across the
+            7.4&nbsp;km ETOPO postings; the source grid reaches
+            2&nbsp;737&nbsp;m.
+          </span>
         </div>
         <div class="legend-row">
           <span class="legend-swatch isobath"></span>
