@@ -77,27 +77,49 @@ def detect_language(query: str) -> str:
 
 
 # --- keyword tables -----------------------------------------------------
-# Tamil terms are limited to ones ORCA's own Tamil output already uses
-# (காற்று, இன்று) or that are unambiguous. The list is deliberately short:
-# a missing Tamil keyword degrades to the English-matched default, which
-# is the same behaviour as before this module existed. An INVENTED one
-# would silently mis-answer, which is worse. Extend from real user
-# questions, not from a dictionary.
+# The Tamil lists were once deliberately minimal -- a handful of terms
+# ORCA's own output already used. That was the right call while Tamil
+# OUTPUT did not exist, and the wrong one afterwards: a Tamil speaker can
+# now be answered in Tamil, so the thing that limits them is whether the
+# question was UNDERSTOOD. Input coverage is the binding constraint, and
+# it is the half a fisherman actually feels.
+#
+# So these are now broad, and include the colloquial and spoken forms a
+# voice question produces -- "காத்து" as well as "காற்று", "இன்னைக்கு" as well
+# as "இன்று". Speech recognition returns what someone SAID, not the
+# dictionary form.
+#
+# The failure mode of a wrong keyword here is bounded and mild: a wrong
+# `intent` produces a less useful ANSWER, never a wrong VERDICT. The
+# verdict is computed by the deterministic core from cached observations
+# and is completely unaffected by anything in this file. A MISSING
+# keyword is the worse error, because it silently downgrades a specific
+# question to a generic one.
+#
+# Every Tamil term below is listed in docs/TAMIL_REVIEW.md for a native
+# speaker to confirm, add to, or strike out.
 
 _VARIABLE_TERMS: list[tuple[str, tuple[str, ...]]] = [
     # Order matters: the most specific phrasing wins. "wave period" must
     # be tested before "wave", "wind gust" before "wind".
-    ("wave_period_s", ("wave period", "period of the wave", "swell period")),
-    ("wave_direction_deg", ("wave direction", "which way are the waves", "swell direction")),
-    ("wave_height_m", ("wave", "waves", "swell", "sea state", "how rough", "அலை")),
-    ("wind_gusts_kmh", ("gust", "gusts", "gusting")),
-    ("wind_speed_kmh", ("wind", "breeze", "காற்று")),
-    ("sst_c", ("sea temperature", "water temperature", "sst", "how warm", "வெப்பநிலை")),
-    ("ocean_current_velocity_kmh", ("current speed", "how fast is the current", "current")),
-    ("ocean_current_direction_deg", ("current direction",)),
-    ("rain_mm", ("rain", "raining", "மழை")),
-    ("precipitation_mm", ("precipitation",)),
-    ("chlorophyll_mg_m3", ("chlorophyll", "plankton", "fish aggregation", "productivity")),
+    ("wave_period_s", ("wave period", "period of the wave", "swell period",
+                       "அலை கால", "அலை இடைவெளி")),
+    ("wave_direction_deg", ("wave direction", "which way are the waves", "swell direction",
+                            "அலை திசை", "அலை எந்த பக்கம்")),
+    ("wave_height_m", ("wave", "waves", "swell", "sea state", "how rough",
+                       "அலை", "அலைகள்", "அலை உயரம்", "கடல் நிலை", "சீற்றம்",
+                       "கொந்தளிப்பு")),          # sea roughness / turbulence
+    ("wind_gusts_kmh", ("gust", "gusts", "gusting", "சுழற்காற்று", "பலத்த காற்று")),
+    ("wind_speed_kmh", ("wind", "breeze", "காற்று", "காத்து", "காற்றின்")),
+    ("sst_c", ("sea temperature", "water temperature", "sst", "how warm",
+               "வெப்பநிலை", "நீர் வெப்பம்", "கடல் சூடு", "தண்ணி சூடு")),
+    ("ocean_current_velocity_kmh", ("current speed", "how fast is the current", "current",
+                                    "நீரோட்டம்", "ஓட்டம்", "நீரோட்ட")),
+    ("ocean_current_direction_deg", ("current direction", "நீரோட்ட திசை")),
+    ("rain_mm", ("rain", "raining", "மழை", "மழை பெய்")),
+    ("precipitation_mm", ("precipitation", "மழைப்பொழிவு")),
+    ("chlorophyll_mg_m3", ("chlorophyll", "plankton", "fish aggregation", "productivity",
+                           "பச்சையம்", "மீன் கூட்டம்", "மீன் இருக்கா")),
 ]
 
 # Phrasings that ask for a NUMBER rather than a decision. Paired with a
@@ -106,7 +128,8 @@ _LOOKUP_PHRASES = (
     "how high", "how strong", "how fast", "how warm", "how cold", "how rough",
     "how much", "how many", "what is", "what's", "whats", "what are",
     "tell me the", "give me the", "show me the", "reading", "value",
-    "எவ்வளவு", "என்ன",
+    "எவ்வளவு", "என்ன", "எத்தனை", "எப்படி", "சொல்லு", "சொல்லுங்க",
+    "காட்டு", "அளவு", "எவ்ளோ",              # எவ்ளோ: spoken form of எவ்வளவு
 )
 
 # Phrasings that want a JUDGEMENT, not a number. These win over a bare
@@ -115,13 +138,19 @@ _VERDICT_PHRASES = (
     "safe", "safety", "should i", "should we", "can i", "can we", "may i",
     "is it ok", "ok to", "alright to", "advisable", "risky", "danger",
     "dangerous", "go out", "head out", "set out", "take my boat",
-    "பாதுகாப்ப", "போகலாமா",
+    "பாதுகாப்ப", "போகலாமா", "போகலாம", "செல்லலாமா", "போக முடியுமா",
+    "ஆபத்து", "ஆபத்தான", "நல்லதா", "சரியா", "பரவாயில்லையா",
+    "கடலுக்கு போ", "வெளியே போ",
 )
 
-_TOMORROW = ("tomorrow", "நாளை")
+# Order matters at the call site: _BEYOND is tested BEFORE _TOMORROW, so
+# "நாளை மறுநாள்" (day after tomorrow) must not be swallowed by "நாளை".
+_TOMORROW = ("tomorrow", "நாளை", "நாளைக்கு")
 _BEYOND = (
     "day after tomorrow", "next week", "this weekend", "in three days",
     "in 3 days", "next month", "day after",
+    "நாளை மறுநாள்", "மறுநாள்", "அடுத்த வாரம்", "அடுத்த மாதம்",
+    "வரும் வாரம்",
 )
 
 # Questions that need every zone, not the one they are standing in.
@@ -130,17 +159,24 @@ _COMPARISON = (
     "where is the", "where should", "where can", "safest", "calmest",
     "roughest", "worst", "best", "compare", "better than", "safer than",
     "rougher than", "calmer than", "most dangerous", "least",
-    "எங்கே", "எது",
+    "எங்கே", "எது", "எந்த இடம்", "எந்த ஊர்", "நல்ல இடம்",
+    "பாதுகாப்பான இடம்", "அதிக", "குறைவ", "விட",   # விட: the comparative marker
+    "எங்க போகலாம்",
 )
 
 # Things ORCA genuinely cannot do. Saying so is a feature; the composer
 # turns each into an explicit caveat (_UNSUPPORTED_NOTES in agentic.py).
 _UNSUPPORTED_TERMS: list[tuple[str, tuple[str, ...]]] = [
-    ("route", ("route", "navigate", "navigation", "how do i get", "directions", "waypoint")),
-    ("tide_or_time", ("tide", "tides", "high tide", "low tide", "what time", "sunrise", "sunset")),
+    ("route", ("route", "navigate", "navigation", "how do i get", "directions", "waypoint",
+               "வழி", "எப்படி போவது", "எந்த வழி")),
+    ("tide_or_time", ("tide", "tides", "high tide", "low tide", "what time", "sunrise", "sunset",
+                      "ஓதம்", "அலை நேரம்", "எத்தனை மணி", "சூரிய உதயம்", "சூரிய அஸ்தமனம்")),
     ("species", ("species", "which fish", "what fish", "catch", "prawn", "shrimp",
-                 "tuna", "sardine", "mackerel", "seer fish")),
-    ("unit_conversion", ("in feet", "in knots", "in miles", "in fahrenheit", "in ft", "in kt")),
+                 "tuna", "sardine", "mackerel", "seer fish",
+                 "மீன் வகை", "என்ன மீன்", "இறால்", "வஞ்சிரம்", "சூரை",
+                 "கானாங்கெளுத்தி", "நெத்திலி")),
+    ("unit_conversion", ("in feet", "in knots", "in miles", "in fahrenheit", "in ft", "in kt",
+                         "அடியில்", "நாட்டிகல்")),
 ]
 
 # Anything that is not about the sea, the weather or going out on it.
@@ -152,7 +188,8 @@ _OFF_TOPIC = (
 _MARINE = (
     "sea", "ocean", "wave", "wind", "fish", "boat", "sail", "coast", "water",
     "weather", "rain", "storm", "safe", "go out", "current", "tide", "swell",
-    "கடல்", "மீன்", "அலை", "காற்று", "படகு",
+    "கடல்", "மீன்", "அலை", "காற்று", "காத்து", "படகு", "வலை",
+    "மீனவ", "துறைமுகம்", "கரை", "மீன்பிடி", "வள்ளம்",   # வள்ளம்: small boat
 )
 
 

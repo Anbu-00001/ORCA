@@ -125,6 +125,14 @@ test.describe('offline at sea', () => {
     // is correct; an invented one is not, and a GO-coloured badge here
     // would be the worst possible failure.
     await page.goto(`/index.html?api=${encodeURIComponent(API)}`);
+    // Wait for the background refresh to FINISH before clearing, or it
+    // lands after the clear and re-stores the bundle. That race made this
+    // test pass alone and fail in a full run -- a flaky test is worth
+    // nothing, and the flake was in the test, not the product.
+    await page.waitForFunction(
+      () => window.ORCAOffline && window.ORCAOffline.bundleStatus().present,
+      null, { timeout: 20000 }
+    );
     await page.evaluate(() => localStorage.clear());
     await context.setOffline(true);
     await page.locator('#query-input, textarea, input[type=text]').first()

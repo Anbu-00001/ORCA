@@ -1,0 +1,240 @@
+"""Plan and verify ORCA's recorded Tamil audio.
+
+    python scripts/tamil_audio_plan.py            # write the recording script + manifest
+    python scripts/tamil_audio_plan.py --check    # report what is still missing
+
+WHY RECORDINGS
+--------------
+ORCA's spoken output is a CLOSED set: four verdicts, ten zones, three
+boundary bands, one connector. Eighteen clips. Because it is closed, it
+can be recorded once by a native speaker from the coast instead of
+synthesised at runtime -- which removes the ta-IN voice-pack dependency,
+removes network synthesis (useless at sea), and makes the audio reviewed
+by definition, because a person said it.
+
+This script produces two things:
+
+  docs/TAMIL_AUDIO_SCRIPT.md   what to record, in order, with the English
+                               meaning beside each line
+  web/audio/ta/manifest.json   which clips actually exist on disk, which
+                               is what web/voice.js reads
+
+The manifest is generated FROM THE FILESYSTEM, never from this list. A
+clip named in the script but not recorded simply does not appear, and
+web/voice.js then falls back rather than requesting a 404. That ordering
+matters: the app must never announce half a verdict.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from data.fetch import ZONES          # noqa: E402
+from orca import phrase_ta            # noqa: E402
+
+ROOT = Path(__file__).resolve().parent.parent
+AUDIO_DIR = ROOT / "web" / "audio" / "ta"
+MANIFEST = AUDIO_DIR / "manifest.json"
+SCRIPT_DOC = ROOT / "docs" / "TAMIL_AUDIO_SCRIPT.md"
+
+# Accepted in priority order. Ogg Vorbis first: small, and supported by
+# Android WebView and every current browser.
+EXTENSIONS = (".ogg", ".m4a", ".mp3", ".wav")
+
+
+def clips() -> list[tuple[str, str, str]]:
+    """(key, Tamil to say, English meaning), in recording order."""
+    out: list[tuple[str, str, str]] = []
+
+    # Verdicts first: these are the ones that carry safety.
+    out.append(("action_GO", "மீன்பிடிக்கப் போகலாம்.",
+                "You may go fishing."))
+    out.append(("action_DO_NOT_GO", "போக வேண்டாம். அருகில் பாதுகாப்பான இடம் இல்லை.",
+                "Do not go. There is no safer place nearby."))
+    out.append(("action_SAFER_ALTERNATIVE", "இங்கே போக வேண்டாம். வேறு இடம் பாதுகாப்பானது.",
+                "Do not go here. Another place is safer."))
+    out.append(("action_CANNOT_ASSESS",
+                "அளவீடுகள் இல்லை. பாதுகாப்பானது என்று பொருள் அல்ல.",
+                "There are no readings. This does NOT mean it is safe. "
+                "**Read this one carefully -- it must not sound reassuring.**"))
+    out.append(("connector_instead", "அதற்குப் பதிலாக,",
+                "Instead, ... (played before the alternative harbour's name)"))
+
+    # The boundary warnings. Spoken while the app is closed.
+    for band in ("urgent", "warning", "advisory"):
+        # The recorded line drops the "{km}" placeholder: a number cannot
+        # be pre-recorded per value, and the notification carries the exact
+        # distance in text alongside.
+        text = phrase_ta.IMBL[band].replace("{km} கிலோமீட்டர் தொலைவில் உள்ளது",
+                                            "அருகில் உள்ளது")
+        out.append((f"boundary_{band}", text,
+                    phrase_ta.IMBL_EN[band]
+                        .replace("is {km} km away", "is nearby")
+                        .replace("{km} km", "nearby")
+                    + "  (URGENT: spoken while the app is closed)"))
+    out.append(("boundary_mpa", phrase_ta.IMBL["mpa"], phrase_ta.IMBL_EN["mpa"]))
+
+    # Harbour names, said as an announcement would say them.
+    for zone in ZONES:
+        tamil = TAMIL_ZONE_NAMES.get(zone["name"], zone["name"])
+        out.append((f"zone_{zone['name']}", tamil + ".",
+                    f"The harbour name {zone['name']}, said on its own."))
+    return out
+
+
+# Spoken forms of the ten harbour names. These are what the RECORDING
+# says; the on-screen text keeps the Latin spelling, because that is what
+# charts and boat registrations use.
+TAMIL_ZONE_NAMES = {
+    "Chennai": "சென்னை",
+    "Cuddalore": "கடலூர்",
+    "Karaikal": "காரைக்கால்",
+    "Nagapattinam": "நாகப்பட்டினம்",
+    "Point Calimere": "கோடியக்கரை",
+    "Mandapam": "மண்டபம்",
+    "Rameswaram": "ராமேஸ்வரம்",
+    "Thoothukudi": "தூத்துக்குடி",
+    "Kanyakumari": "கன்னியாகுமரி",
+    "Colachel": "கொளச்சல்",
+}
+
+
+def existing() -> dict[str, str]:
+    """Clip key -> filename, for every clip actually on disk."""
+    found: dict[str, str] = {}
+    if not AUDIO_DIR.exists():
+        return found
+    for key, _, _ in clips():
+        for ext in EXTENSIONS:
+            path = AUDIO_DIR / (key + ext)
+            if path.is_file() and path.stat().st_size > 0:
+                found[key] = path.name
+                break
+    return found
+
+
+HEADER = """# Tamil recording script
+
+**Generated by `scripts/tamil_audio_plan.py`. Do not edit by hand.**
+
+---
+
+## Why we are recording instead of synthesising
+
+ORCA's spoken output is a **closed set** — four verdicts, ten harbour
+names, four boundary lines, one connector. Eighteen clips total. Because
+it is closed, one person can record all of it in about fifteen minutes,
+and then every phone says exactly what that person said: offline, in a
+real coastal accent, and reviewed by definition because a human spoke it.
+
+Text-to-speech was tried first and was worse. The `ta-IN` voice is not
+installed on every handset; where it is, it often synthesises over the
+network, which is exactly what fails at sea; and it sounds like a form
+being read back at you.
+
+## Who should record this
+
+A **native Tamil speaker from the coast** — Nagapattinam, Rameswaram,
+Thoothukudi. Not a Chennai newsreader accent. The people who will hear
+this are fishermen, and it should sound like someone from their harbour.
+
+## How to record
+
+- A quiet room, a phone voice recorder is fine. Aim for the same distance
+  from the mic on every clip so the volume matches.
+- **One clip per file.** Name each file exactly as the `file` column says.
+- Save into `web/audio/ta/`. `.ogg` preferred, `.m4a` and `.mp3` work.
+- Leave about half a second of silence at the start and end. Clips are
+  played back to back, and a hard cut sounds like a mistake.
+- Speak the way you would **call a warning across a boat**: clear, a
+  little slower than conversation, no drama. Someone will hear this over
+  an engine.
+- Say the line as written. If a line is wrong or unnatural, do not fix it
+  in the recording — change it in `orca/phrase_ta.py`, regenerate, and
+  re-record. The screen text and the audio must say the same thing.
+
+Then run `python scripts/tamil_audio_plan.py` again to rebuild the
+manifest. Anything not recorded is simply skipped by the app; nothing
+breaks, and no clip is ever substituted for another.
+
+---
+"""
+
+
+def render_doc(found: dict[str, str]) -> str:
+    parts = [HEADER]
+    parts.append(f"\n## Clips ({len(found)} of {len(clips())} recorded)\n")
+    parts.append("| ✓ | file | say this | meaning |")
+    parts.append("|---|---|---|---|")
+    for key, tamil, english in clips():
+        tick = "☑" if key in found else "☐"
+        parts.append(f"| {tick} | `{key}.ogg` | {tamil} | {english} |")
+
+    missing = [k for k, _, _ in clips() if k not in found]
+    if missing:
+        parts.append(f"\n**Still to record ({len(missing)}):** "
+                     + ", ".join(f"`{m}`" for m in missing))
+    else:
+        parts.append("\n**All clips recorded.** ORCA speaks Tamil offline, "
+                     "with no TTS engine and no network.")
+    parts.append("""
+---
+
+## What happens with clips missing
+
+Nothing breaks. `web/voice.js` reads the manifest, and:
+
+1. If every clip an announcement needs is present, it plays them.
+2. If any is missing, it plays **none of them** — a half announcement
+   ("Mandapam…" with no verdict) is worse than silence — and falls back
+   to the device TTS **only if that device really has a Tamil voice**.
+3. If there is no Tamil voice either, it stays silent and the UI says so.
+
+It never substitutes a different clip. Announcing the wrong verdict aloud
+is the worst thing this system could do, so it is the one thing it is
+built to be incapable of.
+""")
+    return "\n".join(parts) + "\n"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--check", action="store_true",
+                    help="report what is missing; write nothing")
+    args = ap.parse_args()
+
+    found = existing()
+    total = len(clips())
+
+    if args.check:
+        missing = [k for k, _, _ in clips() if k not in found]
+        print(f"Recorded {len(found)}/{total} Tamil clips in web/audio/ta/")
+        for key in missing:
+            print(f"  MISSING: {key}.ogg", file=sys.stderr)
+        # Missing clips are NOT a build failure -- the app degrades
+        # honestly without them. This reports; it does not gate.
+        return 0
+
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    MANIFEST.write_text(json.dumps({
+        "language": "ta",
+        # Generated from the filesystem, never from the wanted list, so a
+        # clip named here but never recorded cannot 404 at sea.
+        "clips": found,
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    SCRIPT_DOC.write_text(render_doc(found), encoding="utf-8")
+
+    print(f"Wrote {MANIFEST.relative_to(ROOT)} ({len(found)}/{total} clips present)")
+    print(f"Wrote {SCRIPT_DOC.relative_to(ROOT)}")
+    if not found:
+        print("\nNo clips recorded yet. ORCA will stay silent rather than "
+              "synthesise -- see docs/TAMIL_AUDIO_SCRIPT.md for what to record.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

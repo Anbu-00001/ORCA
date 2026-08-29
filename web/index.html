@@ -60,6 +60,16 @@
      because submitQuery()'s failure path calls into it. It decides
      nothing -- see the file header and docs/MOBILE_APP.md §2. -->
 <script src="offline.js"></script>
+<!-- The native bridge. Inert in a browser: it returns immediately unless
+     window.OrcaNative is present, which only the Android shell injects.
+     Everything it adds is something a browser tab cannot do -- Tamil
+     speech in and out, the background maritime-boundary watch, and an SMS
+     position. See web/native.js. -->
+<!-- Recorded Tamil output. Works in the BROWSER too, not just the APK:
+     an <audio> element needs no TTS engine and no permission. Silent
+     until clips are recorded -- see docs/TAMIL_AUDIO_SCRIPT.md. -->
+<script src="voice.js"></script>
+<script src="native.js"></script>
 <!-- three.js: pinned version (not "latest"), same convention as maplibre-gl
      above. Only build/build/three.module.js is published from r150+, so
      this has to be an import map + module scripts, not a plain global. -->
@@ -914,6 +924,40 @@
   /* Seeded from the APK, never refreshed on this device. Same brass as
      "stored", dimmer, because it is real but unverified-here data. */
   #cache-status[data-state="seed"] { color: var(--brass); opacity: 0.8; }
+
+  /* ---------- native-only controls -----------------------------
+     Present only inside the Android shell (web/native.js sets
+     data-native on <html>). Sized for a wet thumb on a moving boat:
+     56px targets, well above the 48px Material minimum. */
+  #native-bar { display: none; }
+  html[data-native="1"] #native-bar {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;
+    padding: 0.7rem 1.15rem 0.2rem;
+  }
+  .native-btn {
+    min-height: 56px; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 0.15rem;
+    background: transparent; color: var(--brass);
+    border: 1px solid var(--line); border-radius: 2px;
+    font-size: 1.15rem; cursor: pointer;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  .native-btn span {
+    font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .native-btn:active { background: rgba(184, 145, 47, 0.16); }
+  /* Active = this control is doing something right now (boundary watch
+     running, automatic read-out on). Brass fill, not green: it is a state,
+     not a verdict. */
+  .native-btn.active { background: var(--brass); color: var(--hull); border-color: var(--brass); }
+  .native-btn.active span { color: var(--hull); }
+  #native-status {
+    display: none; margin: 0; padding: 0.3rem 1.15rem 0.7rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.68rem; line-height: 1.5; color: var(--muted);
+  }
+  html[data-native="1"] #native-status:not([hidden]) { display: block; }
   .evidence-detail {
     display: none; margin-top: 0.6rem; padding: 0.6rem 0 0.1rem 0.75rem;
     border-left: 2px solid var(--brass);

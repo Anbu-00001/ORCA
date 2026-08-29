@@ -8,10 +8,45 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- No location permission. ORCA asks for lat/lon in the form and
-         docs/MOBILE_APP.md §5 is explicit that boat tracks are personally
-         identifying and commercially sensitive. A permission that is not
-         requested cannot be misused. -->
+    <!-- LOCATION, for the maritime boundary watch (BoundaryWatchService).
+         This is the one feature that justifies an APK at all: a background
+         service comparing GPS against the real India-Sri Lanka IMBL and
+         warning aloud, in Tamil, while the app is closed and the screen is
+         off. No web page can do any part of that.
+
+         It stays OFF until the crew turns it on. docs/MOBILE_APP.md §5 is
+         explicit that boat tracks are personally identifying and
+         commercially sensitive, and nothing here is uploaded anywhere —
+         the position is compared against boundary geometry on the device
+         and then discarded. ACCESS_BACKGROUND_LOCATION is deliberately
+         NOT requested: a foreground service with a permanent notification
+         does the job, and the crew can always see that it is running. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- No SEND_SMS. The distress message is handed to the phone's own
+         messaging app via ACTION_SENDTO, which needs no permission and
+         puts the crew in the loop before anything is sent. Android 15
+         hard-restricts SEND_SMS for sideloaded apps anyway, so a
+         permission-based path would simply not work here. -->
+
+    <!-- Speech recognition lives in another app; this declares that we
+         intend to talk to it (Android 11+ package visibility). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -36,5 +71,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".BoundaryWatchService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 </manifest>

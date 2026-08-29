@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from data.fetch import ZONES
+from orca import agents, observations
 from orca.agentic import answer_question, is_configured, quota_snapshot
 from orca.planner import (
     build_recommendation,
@@ -245,6 +246,95 @@ def bundle(zones: str | None = None) -> dict:
         "latest_reading_time": latest_reading.isoformat(),
         "zone_count": len(entries),
         "zones": entries,
+        # The India-Sri Lanka maritime boundary, so the phone can warn a
+        # crew approaching it with no signal. This is the ONE thing the
+        # mobile app does that the web client cannot: a background service
+        # watching GPS against this geometry (see mobile/README.md).
+        #
+        # SHIPPED FROM THE SERVER, NOT HARDCODED IN THE APP, and that is
+        # the important part. docs/MOBILE_APP.md §2 forbids the client
+        # owning a threshold, because a second copy of a safety constant
+        # is a second thing that can disagree with orca/agents.py. Here
+        # the client executes geometry and constants it was GIVEN: change
+        # IMBL_URGENT_KM in one place and every phone follows.
+        #
+        # Note what this is not: a verdict. The phone reports a DISTANCE
+        # and a warning band. It never says GO or DO NOT GO -- that stays
+        # orca/policy.py's, and reaches the phone only inside `zones`.
+        "boundary": _boundary_payload(),
+    }
+
+
+def _boundary_payload() -> dict | None:
+    """The IMBL geometry plus the distance bands orca/agents.py uses.
+
+    Returns None rather than a guess if the cache was never populated --
+    a phone with no boundary data must show no boundary warning, not a
+    wrong one (CLAUDE.md rule 1).
+    """
+    path = agents.IMBL_CACHE_PATH
+    if not path.exists():
+        logger.warning(
+            "IMBL cache absent at %s -- /bundle will carry no boundary geometry "
+            "and the mobile boundary watch will stay silent. Run `python -m data.fetch`.",
+            path,
+        )
+        return None
+    raw = json.loads(path.read_text())
+    return {
+        "source": raw.get("source"),
+        "provenance": raw.get("provenance"),
+        "fetched_at": raw.get("fetched_at"),
+        "segments": raw.get("segments", []),
+        # Read from orca/agents.py, never restated. If these ever drift
+        # from what the geofence agent uses, the phone and the advisory
+        # would disagree about the same boundary.
+        "bands_km": {
+            "urgent": agents.IMBL_URGENT_KM,
+            "warning": agents.IMBL_WARNING_KM,
+            "advisory": agents.IMBL_ADVISORY_KM,
+        },
+    }
+
+
+@app.post("/observations")
+def post_observation(payload: dict) -> dict:
+    """The uplink: a boat reports a reading it measured itself.
+
+    This endpoint is the ONLY way data enters ORCA from outside
+    data/fetch.py, and everything it accepts is quarantined --
+    data/observations/, never data/cache/. Nothing here can influence any
+    advisory, now or later, and tests/test_observations.py asserts that
+    load_cached_observations() provably cannot see what this writes.
+
+    See orca/observations.py for why that separation is the whole design:
+    published in-situ Bay of Bengal work calibrates its sensors in a lab
+    against an ice-water reference, and an uncalibrated hull transducer is
+    a different kind of data entirely. Useful, and only useful if nothing
+    ever presents it as the other thing.
+
+    Typed as a bare dict on purpose. orca/observations.py is the SINGLE
+    validation gate (same argument as AskRequest.history above): a
+    Pydantic model here would reject with a 422 carrying a schema dump,
+    where observations.py rejects with a sentence a fisherman can act on
+    ("check the unit and the sensor").
+    """
+    try:
+        record = observations.store(payload)
+    except observations.ObservationRejected as exc:
+        # 422, not 500: the upload was understood and refused on its
+        # merits. Refusing loudly is the point (CLAUDE.md rule 2).
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "stored": True,
+        "id": record["id"],
+        "record": record,
+        # Restated in the RESPONSE, not just in the record. Whoever wires
+        # a client to this should not be able to miss it.
+        "note": (
+            "Stored for research export only. This reading is quarantined: it "
+            "does not affect any ORCA advisory, and never will."
+        ),
     }
 
 

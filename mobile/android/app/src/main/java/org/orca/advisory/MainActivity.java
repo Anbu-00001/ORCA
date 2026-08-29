@@ -2,6 +2,10 @@ package org.orca.advisory;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
+import android.speech.RecognizerIntent;
+
+import java.util.ArrayList;
 import android.os.Bundle;
 import android.graphics.Color;
 import android.view.View;
@@ -72,6 +76,7 @@ public class MainActivity extends Activity {
     private static final String API_BASE = "http://127.0.0.1:8000";
 
     private WebView webView;
+    private OrcaBridge bridge;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -143,6 +148,14 @@ public class MainActivity extends Activity {
             }
         });
 
+        // The native capabilities, handed to the page. Everything the
+        // WebView can now do that a browser tab cannot -- Tamil speech in
+        // and out, an SMS distress message, and the background maritime
+        // boundary watch -- goes through this one object. See
+        // OrcaBridge and BoundaryWatchService.
+        bridge = new OrcaBridge(this, webView);
+        webView.addJavascriptInterface(bridge, "OrcaNative");
+
         applySystemBarInsets(webView);
 
         if (savedInstanceState == null) {
@@ -181,6 +194,32 @@ public class MainActivity extends Activity {
         view.setFitsSystemWindows(true);
         view.setBackgroundColor(Color.parseColor("#071c26"));
         view.requestApplyInsets();
+    }
+
+    /** Hands a recognised Tamil (or English) question back to the page. */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != OrcaBridge.REQ_SPEECH) return;
+        if (resultCode != RESULT_OK || data == null) {
+            // No result is a real outcome: the recogniser was cancelled,
+            // or it needed a network it did not have. The typed input is
+            // left exactly as it was -- inventing a question the crew did
+            // not ask would be the worst possible recovery.
+            android.util.Log.i("ORCA", "Speech recognition returned no result");
+            return;
+        }
+        ArrayList<String> results =
+                data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if (results != null && !results.isEmpty()) {
+            bridge.deliverSpeechResult(results.get(0));
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (bridge != null) bridge.shutdown();
+        super.onDestroy();
     }
 
     /** Back navigates the page before it leaves the app. */

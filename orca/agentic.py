@@ -50,6 +50,7 @@ from data.fetch import ZONES
 from orca import memory
 from orca.extract import extract as deterministic_extract
 from orca import phrase
+from orca import phrase_ta
 from orca.planner import (
     Recommendation,
     _zone_by_substring,
@@ -1053,6 +1054,14 @@ def answer_question(
     # name a real zone? A deterministic hit is never second-guessed by
     # the model.
     resolved_zone = _zone_by_substring(query, zones)
+    if resolved_zone is None:
+        # Tier 1b, still deterministic and still zero-network: the same
+        # question asked in Tamil script. _zone_by_substring() only knows
+        # the Latin names, so "நாகப்பட்டினத்தில் இருந்து..." matched nothing and
+        # silently became a nearest-by-coordinates answer -- correct only
+        # when the phone happened to be in the right place. See
+        # phrase_ta.ZONE_STEMS_TA for why stems rather than full names.
+        resolved_zone = phrase_ta.zone_by_tamil_name(query, zones)
     zone_match = "exact" if resolved_zone is not None else "fallback"
 
     # THE FLOOR. Deterministic, instant, free, and it always runs -- so
@@ -1198,18 +1207,25 @@ def answer_question(
         chosen = recommendation.chosen_zone or (resolved_zone or {})
         name = chosen.get("name") if isinstance(chosen, dict) else None
         if name:
+            # Answered in the language of the question. A Tamil verdict
+            # followed by an English caveat is a caveat that does not get
+            # read, and this one changes what the answer MEANS -- it says
+            # the answer is about somewhere other than what was asked.
             notes.append(
+                phrase_ta.NOTES["fallback"].format(zone=name)
+                if detected_language == "ta" else
                 f"You didn't name a place ORCA covers, so this is for {name}, "
                 "the nearest of the 10 Tamil Nadu coastal zones it has real data for."
             )
     if beyond_note and on_topic:
-        notes.append(beyond_note)
+        notes.append(phrase_ta.NOTES["beyond"] if detected_language == "ta" else beyond_note)
     # ...and once it is answered as a comparison, the "one place at a
     # time" caveat is simply false, so it must not be attached.
     if on_topic and unsupported == "second_zone" and ranking:
         unsupported = "none"
     if on_topic and unsupported in _UNSUPPORTED_NOTES:
-        note = _UNSUPPORTED_NOTES[unsupported]
+        note = (phrase_ta.NOTES.get(unsupported) or _UNSUPPORTED_NOTES[unsupported]
+                if detected_language == "ta" else _UNSUPPORTED_NOTES[unsupported])
         if "{zone}" in note:
             covered = recommendation.chosen_zone or resolved_zone or {}
             covered_name = covered.get("name") if isinstance(covered, dict) else None
@@ -1218,7 +1234,8 @@ def answer_question(
             note = note.format(zone=covered_name or "the one place it could resolve")
         notes.append(note)
     if stale_forecast_note:
-        notes.append(stale_forecast_note)
+        notes.append(phrase_ta.NOTES["stale_forecast"]
+                     if detected_language == "ta" else stale_forecast_note)
 
     coverage_note = " ".join(notes) if notes else None
     recommendation.coverage_note = coverage_note
@@ -1264,16 +1281,37 @@ def answer_question(
     # The old fallback answered one question ("is it safe here?") no
     # matter what was asked, so losing the model lost the product, and
     # the fix for a rate limit looked like it had to be a second API key.
-    recommendation.recommendation = phrase.render(
-        recommendation,
-        query=query,
-        intent=intent,
-        variable=variable,
-        lookup=lookup,
-        ranking=ranking,
-        coverage_note=coverage_note,
-        on_topic=on_topic,
-    )
+    if detected_language == "ta":
+        # A Tamil question gets a Tamil answer even with no model. Until
+        # orca/phrase_ta.py existed this line was the gap: the extractor
+        # correctly detected Tamil, the font rendered Tamil, and the
+        # answer came back in English -- so at sea, which is the only
+        # place this product is needed, a Tamil speaker got a safety
+        # verdict in a language they may not read.
+        #
+        # Same values, same ordering, same verdict-last rule as the
+        # English path. The composer below still overrides this when a
+        # model is reachable; this is the floor beneath it.
+        recommendation.recommendation = phrase_ta.render(
+            recommendation,
+            variable=variable,
+            lookup=lookup,
+            ranking=ranking,
+            wants_highest=any(w in query.lower() for w in phrase._SUPERLATIVE_IS_FIRST),
+            coverage_notes=[coverage_note] if coverage_note else None,
+            on_topic=on_topic,
+        )
+    else:
+        recommendation.recommendation = phrase.render(
+            recommendation,
+            query=query,
+            intent=intent,
+            variable=variable,
+            lookup=lookup,
+            ranking=ranking,
+            coverage_note=coverage_note,
+            on_topic=on_topic,
+        )
 
     if is_configured():
         elapsed = time.monotonic() - started_at

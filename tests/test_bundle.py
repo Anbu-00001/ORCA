@@ -118,3 +118,38 @@ def test_the_bundle_is_reproducible_from_the_same_cache(bundle):
     assert again["cache_fetched_at"] == bundle["cache_fetched_at"]
     assert again["latest_reading_time"] == bundle["latest_reading_time"]
     assert [z["action"] for z in again["zones"]] == [z["action"] for z in bundle["zones"]]
+
+
+# --- the maritime boundary, for the mobile boundary watch ---------------
+
+def test_the_bundle_carries_the_real_maritime_boundary(bundle):
+    """The mobile app's background boundary watch runs on this geometry.
+    Without it the phone cannot warn anyone, and it must never fall back
+    to a hardcoded line."""
+    boundary = bundle["boundary"]
+    assert boundary is not None, "no IMBL geometry -- run `python -m data.fetch`"
+    assert boundary["segments"], "boundary carried no segments"
+    assert "Marine Regions" in boundary["source"]
+    assert boundary["provenance"].startswith("http")
+    # Real coordinates, bracketing the India-Sri Lanka boundary from the
+    # Palk Strait down past Kanyakumari. Bounds are INCLUSIVE: the
+    # southern terminus sits at exactly 5.0 N, and an exclusive `5.0 <`
+    # failed on the real published geometry. A round number is what a
+    # negotiated maritime boundary looks like, not a sign of bad data.
+    for segment in boundary["segments"]:
+        for lat, lon in segment:
+            assert 4.0 <= lat <= 15.0 and 75.0 <= lon <= 85.0, (lat, lon)
+
+
+def test_the_boundary_bands_come_from_the_geofence_agent_not_a_second_copy(bundle):
+    """THE reason the bands are shipped rather than hardcoded in Java: a
+    second copy of a safety constant is a second thing that can disagree
+    with orca/agents.py. If these ever diverge, the phone and the advisory
+    warn at different distances about the same boundary."""
+    from orca import agents
+    bands = bundle["boundary"]["bands_km"]
+    assert bands["urgent"] == agents.IMBL_URGENT_KM
+    assert bands["warning"] == agents.IMBL_WARNING_KM
+    assert bands["advisory"] == agents.IMBL_ADVISORY_KM
+    # Ordering the client relies on when picking a band.
+    assert bands["urgent"] < bands["warning"] < bands["advisory"]

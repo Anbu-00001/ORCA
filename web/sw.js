@@ -32,7 +32,7 @@
 // Bump on any change to SHELL or to the fetch strategy. activate below
 // deletes every cache whose name does not start with the current VERSION,
 // so a bump is what actually evicts a stale shell from a phone.
-var VERSION = "orca-v5";
+var VERSION = "orca-v6";
 var SHELL_CACHE = VERSION + "-shell";
 var RUNTIME_CACHE = VERSION + "-runtime";
 
@@ -45,6 +45,9 @@ var SHELL = [
   "./index.html",
   "./manifest.json",
   "./offline.js",
+  "./voice.js",
+  "./native.js",
+  "./audio/ta/manifest.json",
   "./colormaps.js",
   "./three-viz.js",
   "./three-viz-app.js",

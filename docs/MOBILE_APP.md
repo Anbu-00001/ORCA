@@ -258,18 +258,38 @@ ORCA/
 
 ## 8. Build order
 
-| Step | Deliverable | Gate |
-|---|---|---|
-| 1 | `GET /bundle` + contract test | For every zone, `/bundle`'s verdict is byte-identical to `/ask`'s |
-| 2 | PWA manifest + service worker | Airplane mode: app opens, shows last bundle, states its real age |
-| 3 | Dual-age display (§4.3) | A 3-day-old bundle reads "downloaded 3 days ago", not "14 h old" |
-| 4 | Sunlight/thumb pass | Legible at arm's length in direct sun; every control reachable one-handed |
-| 5 | Tamil parity | Every screen renders in Tamil with the bundled font, no clipping |
-| 6 | `POST /observations` → quarantine | `load_cached_observations()` provably cannot see an uploaded reading |
-| 7 | Consent + coarse position | Nothing uploads without explicit per-upload opt-in |
-| 8 | Native shell | Only on a hard requirement from §6 |
+| Step | Deliverable | Gate | Status |
+|---|---|---|---|
+| 1 | `GET /bundle` + contract test | For every zone, `/bundle`'s verdict is byte-identical to `/ask`'s | **DONE** — `tests/test_bundle.py`, 16 tests |
+| 2 | PWA manifest + service worker | Airplane mode: app opens, shows last bundle, states its real age | **DONE** — `e2e/offline.spec.js`, 8 tests |
+| 3 | Dual-age display (§4.3) | A 3-day-old bundle reads "downloaded 3 days ago", not "14 h old" | **DONE** — `downloadSuffix()` in index.html |
+| 4 | Sunlight/thumb pass | Legible at arm's length in direct sun; every control reachable one-handed | partial — `cooperativeGestures` + auto-scroll to verdict fixed on device; no sunlight-contrast audit yet |
+| 5 | Tamil parity | Every screen renders in Tamil with the bundled font, no clipping | **font DONE, TEXT NOT** — see below |
+| 6 | `POST /observations` → quarantine | `load_cached_observations()` provably cannot see an uploaded reading | **DONE** — `orca/observations.py`, `tests/test_observations.py`, 20 tests |
+| 7 | Consent + coarse position | Nothing uploads without explicit per-upload opt-in | **DONE** — consent checked first, position rounded to ~11 km by default, device id hashed |
+| 8 | Native shell | Only on a hard requirement from §6 | **DONE EARLY** — `mobile/android/`, 2.3 MB APK, see mobile/README.md |
 
-Steps 1–5 are the demo. 6–7 are the research contribution. 8 is next year.
+Step 8 came early because an APK was asked for directly. It did not need a
+Flutter rewrite: the shell is a single Activity hosting a WebView over the
+same `web/`, with one dependency. §6's reasoning stands — the *native*
+capabilities (NMEA/Bluetooth, background location, NavIC) are still
+unbuilt, and that is still where a real Flutter case would begin.
+
+### The open gap: Tamil offline
+
+Step 5 is half done and the half that is missing is the important one.
+The Tamil **font** is vendored and precached, so Tamil renders correctly
+on any handset. The Tamil **text** is not there offline: Tamil answers are
+written by the LLM composer in `orca/agentic.py`, and `orca/phrase.py` has
+English templates only. A Tamil question at sea currently gets an English
+verdict.
+
+This is the largest remaining gap for ORCA's actual users, and it is not a
+patch. `phrase.py`'s sentence forms would need Tamil equivalents, and so
+would the verdict text `orca/planner.py` composes — which is where the
+work actually lives. Doing it badly (machine-translating strings at build
+time, or letting the client translate) would put unreviewed Tamil in front
+of a fisherman making a safety decision, which is worse than English.
 
 ---
 

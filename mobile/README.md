@@ -7,6 +7,71 @@ This file is only how to build it and what to expect.
 
 ## What this is
 
+**A wrapper around web/ would add nothing, so it does more than wrap.**
+Four capabilities here are ones a browser tab genuinely cannot have:
+
+| Feature | Why a web app can never do it |
+|---|---|
+| **Maritime boundary watch** | A foreground service compares GPS against the real India-Sri Lanka IMBL and warns aloud in Tamil **while the app is closed and the screen is off**. A page that is not open cannot run, cannot hold a wakelock, and cannot post a notification. |
+| **Tamil speech out** | Android's on-device TTS keeps working with the radio off. The Web Speech API in an Android WebView commonly synthesises over the network, so it is exactly what dies at sea. |
+| **Tamil speech in** | A crew steering in spray, at night, with wet hands, is not typing. |
+| **SMS position** | GSM reaches far further offshore than mobile data. A browser cannot compose an SMS. |
+
+### The boundary watch, in detail
+
+This is the feature that justifies an APK existing. Tamil Nadu fishermen
+are detained, and have been shot at, for drifting across an invisible,
+unmarked line in the Palk Strait. ORCA already knows exactly where it
+runs. The problem was never answering a question about it -- nobody opens
+an app while their net is out. The problem is a boat drifting north-east
+for two hours with the phone in someone's pocket.
+
+`BoundaryWatchService` samples GPS every 30 s / 100 m, computes distance
+to the boundary, and speaks a Tamil warning when the band changes. It
+announces on a band CHANGE only: a warning repeated every thirty seconds
+is a warning that gets ignored.
+
+**It owns no safety constant.** Both the geometry and the 2 / 5 / 10 km
+bands arrive in `GET /bundle`, read out of `orca/agents.py`
+(`IMBL_URGENT_KM` and friends). Hardcoding them in Java would be a second
+copy of a safety threshold, and the day the two disagree ORCA has no
+defensible answer about which was right — `tests/test_bundle.py` asserts
+they match. And note what it never does: it reports a **distance and a
+band**, never GO or DO NOT GO. That verdict stays `orca/policy.py`'s.
+
+### Permissions, and what is deliberately not requested
+
+- `ACCESS_FINE_LOCATION` — the boundary watch only, off until the crew
+  turns it on. The position is compared on-device and discarded; nothing
+  is uploaded.
+- **No `ACCESS_BACKGROUND_LOCATION`** — a foreground service with a
+  permanent notification does the job, and the crew can always see it is
+  running.
+- **No `SEND_SMS`** — the distress message goes out through
+  `ACTION_SENDTO`, which needs no permission, and puts the crew in the
+  loop before anything sends. Android 15 hard-restricts `SEND_SMS` for
+  sideloaded apps anyway, so a permission-based path would not work here.
+
+### Tamil voice: what to check on a real phone
+
+The `ta-IN` TTS voice is **not** installed by default on every handset. On
+first launch the app logs which it got:
+
+```
+ORCA: Tamil TTS ready (on-device, works with no signal)
+ORCA: Tamil TTS ready (WARNING: this voice synthesises over the network and will fail offline)
+ORCA: Tamil (ta-IN) TTS voice is not installed on this device...
+```
+
+The middle line matters: a network-synthesised voice is exactly as useless
+at sea as no voice, and you would only find out there. Install the offline
+voice via **Settings › Accessibility › Text-to-speech › Install voice
+data › Tamil**.
+
+---
+
+## What this is (the shell)
+
 A **2.3 MB Android app** that is one Activity hosting a WebView over `web/`
 — the same client the browser serves. No Capacitor, no Cordova, no npm, no
 React Native. One dependency (`androidx.webkit`).

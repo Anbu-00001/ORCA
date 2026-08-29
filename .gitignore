@@ -27,3 +27,10 @@ mobile/android/local.properties
 mobile/android/**/*.iml
 *.apk
 *.aab
+
+# Fleet-reported readings (orca/observations.py). Runtime-collected data,
+# not source. Quarantined from data/cache/ by design; see
+# docs/MOBILE_APP.md §5. A real deployment needs a durable store and a
+# named person running QC -- that is open question 4 in that document, and
+# gitignoring this is NOT an answer to it.
+data/observations/
