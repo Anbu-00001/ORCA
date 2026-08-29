@@ -1,4 +1,4 @@
-"""FastAPI surface: POST /ask, GET /evidence/{id}, GET /health.
+"""FastAPI surface: POST /ask, GET /bundle, GET /evidence/{id}, GET /health.
 
 Matches API_CONTRACT.md. Every number in every response traces to a
 MarineObservation id via /evidence/{id} (CLAUDE.md rule 3). This module
@@ -26,8 +26,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from data.fetch import ZONES
 from orca.agentic import answer_question, is_configured, quota_snapshot
-from orca.planner import load_cached_observations, load_forecast_observations, observation_id
+from orca.planner import (
+    build_recommendation,
+    load_cached_observations,
+    load_forecast_observations,
+    observation_id,
+)
 
 logger = logging.getLogger("orca.api")
 
@@ -154,6 +160,92 @@ def ask(request: AskRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return recommendation.to_dict()
+
+
+@app.get("/bundle")
+def bundle(zones: str | None = None) -> dict:
+    """The offline downlink: every zone's verdict in ONE request.
+
+    A boat leaves harbour, loses signal a few km out, and needs the whole
+    advisory already on the phone. Ten separate POST /ask calls over a
+    marginal harbour link is the wrong shape for that -- one request that
+    either wholly succeeds or wholly fails is the right one.
+
+    THE CONTRACT (docs/MOBILE_APP.md §4.2): this is a pure fan-out over
+    the same build_recommendation() /ask runs. No new reasoning, no new
+    thresholds, no second code path. If /bundle could ever produce a
+    verdict /ask would not have produced for the same zone, it would be
+    wrong -- so tests/test_bundle.py asserts exactly that, zone by zone.
+
+    WHY THE MODEL IS NOT CALLED HERE. /ask routes through
+    answer_question(), which may make up to two LLM calls. Ten zones
+    would be up to twenty, which exhausts a free tier in a single tap --
+    and would buy nothing, because every zone is named explicitly, so
+    there is no description to resolve and no free-text question to
+    interpret. What the crew carries to sea is the deterministic answer,
+    which is the only kind that is reproducible without a network anyway.
+    The verdict is identical either way; that is the whole point of
+    orca/policy.py being where it is.
+
+    THERE IS NO `valid_until`, DELIBERATELY. docs/MOBILE_APP.md §4.2
+    sketched one and it cannot honestly be filled in. These are NOWCAST
+    observations: every valid_time is in the past (measured here --
+    latest reading 18:15, fetched 18:23), so the latest valid_time is the
+    moment the readings DESCRIBE, not a moment they stop being usable. A
+    field named valid_until would assert a shelf life no source publishes,
+    and picking a round 12 h would be inventing one (CLAUDE.md rule 1).
+
+    So the bundle reports two facts and lets the client age them:
+      cache_fetched_at      when ORCA collected the newest reading
+      latest_reading_time   the moment the newest reading describes
+    The device supplies the third -- now -- which is the only clock that
+    knows how long the bundle has been at sea. See docs/MOBILE_APP.md §4.3.
+    """
+    observations = load_cached_observations()
+    if not observations:
+        raise HTTPException(
+            status_code=503,
+            detail="No cached observations -- run `python -m data.fetch` first",
+        )
+
+    if zones is None:
+        selected = list(ZONES)
+    else:
+        wanted = [name.strip().lower() for name in zones.split(",") if name.strip()]
+        selected = [z for z in ZONES if z["name"].lower() in wanted]
+        unknown = sorted(set(wanted) - {z["name"].lower() for z in selected})
+        if unknown:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unknown zone(s): {', '.join(unknown)}. "
+                    f"ORCA covers: {', '.join(z['name'] for z in ZONES)}"
+                ),
+            )
+
+    entries = []
+    for zone in selected:
+        recommendation = build_recommendation(
+            zone["name"],
+            zone["lat"],
+            zone["lon"],
+            observations=observations,
+            offline_mode=True,
+            resolved_zone=zone,
+        )
+        entries.append(recommendation.to_dict())
+
+    # Both timestamps are read off real observations, not the clock, so a
+    # bundle built twice from the same cache is identical.
+    fetched_at = max(o.fetched_at for o in observations)
+    latest_reading = max(o.valid_time for o in observations)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "cache_fetched_at": fetched_at.isoformat(),
+        "latest_reading_time": latest_reading.isoformat(),
+        "zone_count": len(entries),
+        "zones": entries,
+    }
 
 
 @app.get("/evidence/{observation_id_}")

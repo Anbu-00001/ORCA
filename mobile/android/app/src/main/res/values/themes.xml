@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A PLATFORM theme, not an AppCompat one. See app/build.gradle:
+         appcompat existed here only to supply a parent style and brought
+         a Kotlin stdlib conflict with it.
+
+         Colours are the "hull" tone from web/index.html, so launch does
+         not flash white before the WebView paints the app's dark header. -->
+    <style name="Theme.ORCA" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#071c26</item>
+        <item name="android:navigationBarColor">#071c26</item>
+        <item name="android:windowBackground">#071c26</item>
+    </style>
+</resources>

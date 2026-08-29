@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- INTERNET is requested so the app can REFRESH its advisory in
+         harbour. It is not required for the app to work: the shell is in
+         the APK and the advisory is in assets/localStorage, so with the
+         permission denied or the radio off ORCA still answers. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- No location permission. ORCA asks for lat/lon in the form and
+         docs/MOBILE_APP.md §5 is explicit that boat tracks are personally
+         identifying and commercially sensitive. A permission that is not
+         requested cannot be misused. -->
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ORCA"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic is for the http://127.0.0.1:8000 dev
+             backend reached over `adb reverse` only. The bundled assets
+             themselves are served over https://appassets.androidplatform.net
+             by WebViewAssetLoader. A real deployment pointing at a real
+             backend should drop this and use https. -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:screenOrientation="unspecified">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

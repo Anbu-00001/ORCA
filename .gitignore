@@ -14,3 +14,16 @@ test-results/
 .env
 .env.*
 !.env.example
+
+# Mobile build artifacts. docs/MOBILE_APP.md §7 is explicit that these
+# must be ignored BEFORE the first mobile commit, not after -- Gradle
+# caches and build outputs are large, binary, and regenerated on every
+# build. The APK itself is a build output too: it is produced by
+# `gradle assembleRelease`, not committed.
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/**/*.iml
+*.apk
+*.aab

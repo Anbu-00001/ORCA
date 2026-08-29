@@ -1,0 +1,13 @@
+// ORCA Android shell. Deliberately a plain Gradle/AGP project with no
+// Capacitor, no Cordova, no npm -- CLAUDE.md rule 7. The whole app is one
+// Activity hosting a WebView over web/, which is already a complete
+// offline client.
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = "ORCA"
+include(":app")

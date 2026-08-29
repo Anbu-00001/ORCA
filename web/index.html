@@ -18,8 +18,16 @@
     document.documentElement.setAttribute("data-palette", "day");
   }
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Installable as an app. See docs/MOBILE_APP.md: the phone client is a
+     PWA first, because web/ is already a complete offline-capable client
+     and a Flutter rewrite before there is a validated uplink spends the
+     team's scarcest resource on a UI that already exists. -->
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#071c26" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
 <!-- Archivo (condensed width axis): instrument/signage labelling, not an
      editorial display face -- used for the verdict and section heads.
      Public Sans: US federal government interface face, plain and civic --
@@ -27,11 +35,15 @@
      is a transmissible safety message" (coordinates, evidence values,
      the NavIC-style ticket) and nothing else uses it. Hind Madurai /
      Noto Sans Tamil UI: Tamil UI text, both verified real Google Fonts
-     families (not assumed -- see SCRATCH.md). -->
-<link
-  href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,75,400;0,75,600;0,75,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Hind+Madurai:wght@400;500;600&family=Noto+Sans+Tamil+UI:wght@400;500&display=swap"
-  rel="stylesheet"
-/>
+     families (not assumed -- see SCRATCH.md).
+
+     VENDORED, not loaded from fonts.googleapis.com. This was the last
+     remote request the page made, and one of these faces is load-bearing
+     rather than decorative: Noto Sans Tamil UI renders the Tamil answers,
+     and device Tamil fonts vary badly across Android OEMs. A boat with no
+     signal must not fall back to whatever the handset happens to ship.
+     Regenerate with `python scripts/vendor_web_deps.py`. -->
+<link href="./vendor/fonts.css" rel="stylesheet" />
 <!-- Vendored, not CDN-loaded. CLAUDE.md rule 8 says the demo must run with
      NO network access. The ANSWER path always did; the MAP and the 3D VIEW
      did not, because both libraries were fetched from unpkg at page load.
@@ -43,6 +55,11 @@
      Refresh with scripts/vendor_web_deps.py. -->
 <link href="vendor/maplibre-gl.css" rel="stylesheet" />
 <script src="vendor/maplibre-gl.js"></script>
+<!-- The offline store: one GET /bundle kept on the device, plus the two
+     honest-age helpers a phone at sea needs. Loads before the main script
+     because submitQuery()'s failure path calls into it. It decides
+     nothing -- see the file header and docs/MOBILE_APP.md §2. -->
+<script src="offline.js"></script>
 <!-- three.js: pinned version (not "latest"), same convention as maplibre-gl
      above. Only build/build/three.module.js is published from r150+, so
      this has to be an import map + module scripts, not a plain global. -->
@@ -880,6 +897,23 @@
      so the value stays right-aligned. nowrap because a stale cache
      can make this "29 d 4 h old" and it must not wrap the row. */
   .evidence-summary .var-age { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72em; margin-left: 0.6rem; white-space: nowrap; opacity: 0.8; }
+  /* The second, device-clock age (see downloadSuffix()). Dimmer than the
+     source's own freshness because it is context, not the reading -- but
+     present, because at sea it is the one that matters. */
+  .evidence-summary .var-age-collected { opacity: 0.72; }
+  /* Offline-bundle status. Brass when something is stored and its age is
+     known, muted when nothing is -- never green, because "you are
+     carrying an advisory" is a statement of fact, not a verdict. */
+  #cache-status {
+    margin: 0.9rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.72rem; line-height: 1.5; color: var(--muted);
+  }
+  #cache-status[data-state="ready"] { color: var(--brass); }
+  #cache-status[data-state="unknown-age"] { color: var(--brass); opacity: 0.85; }
+  /* Seeded from the APK, never refreshed on this device. Same brass as
+     "stored", dimmer, because it is real but unverified-here data. */
+  #cache-status[data-state="seed"] { color: var(--brass); opacity: 0.8; }
   .evidence-detail {
     display: none; margin-top: 0.6rem; padding: 0.6rem 0 0.1rem 0.75rem;
     border-left: 2px solid var(--brass);
@@ -1257,6 +1291,13 @@
       <h3>Evidence behind this answer</h3>
       <span class="panel-sub">Tap any reading to see its source, timestamp and confidence.</span>
       <ul id="evidence-list"></ul>
+      <!-- What this device is actually carrying. docs/MOBILE_APP.md §3
+           lists this screen third and calls it non-optional: a crew about
+           to lose signal needs to know whether they hold an advisory at
+           all, and how old it is. Written by renderCacheStatus(). -->
+      <p id="cache-status" data-testid="cache-status" data-state="absent">
+        Checking for a stored offline advisory…
+      </p>
     </div>
 
     <div id="reasoning3d-panel">
@@ -1440,6 +1481,40 @@
     return remHours ? days + " d " + remHours + " h old" : days + " d old";
   }
 
+  // THE STALENESS TRAP (docs/MOBILE_APP.md §4.3).
+  //
+  // formatAge() above renders freshness_min, which is computed at FETCH
+  // time as (fetched_at - valid_time) and therefore DOES NOT GROW while
+  // the page or a bundle sits on a device. Measured 2026-08-29: with a
+  // cache two days old, this panel still read "14 h old". A phone three
+  // days at sea would confidently show minutes-old ages for three-day-old
+  // data -- the exact confident-gap failure the evidence panel exists to
+  // prevent.
+  //
+  // So the second age is appended: how long ago ORCA actually COLLECTED
+  // the reading, from the device clock against the observation's own
+  // fetched_at. Only the two together are honest -- "measured 14 h before
+  // download, downloaded 3 days ago".
+  //
+  // Returns "" rather than a guess when the clock cannot support the
+  // claim (unset, unparseable, or reading before the fetch). Same
+  // position formatAge() already takes for a missing freshness_min.
+  function downloadSuffix(obs) {
+    if (!obs || !obs.fetched_at || !window.ORCAOffline) return "";
+    const then = Date.parse(obs.fetched_at);
+    if (!isFinite(then)) return "";
+    const deltaMin = (Date.now() - then) / 60000;
+    // Under an hour the two ages are indistinguishable at this precision
+    // and the extra clause is noise on a small screen.
+    if (deltaMin < 60) return "";
+    // Deliberately a SIBLING of .var-age, not nested inside it. R-33b
+    // asserts that #evidence-age matches /^...old$/ exactly, and that
+    // check is worth keeping intact -- the second age is additional
+    // information, not a change to the first.
+    return '<span class="var-age-collected" data-testid="evidence-collected"> · collected ' +
+      window.ORCAOffline.humanDuration(deltaMin) + " ago</span>";
+  }
+
   function renderEvidence(evidence) {
     evidenceList.innerHTML = "";
     (evidence || []).forEach((obs) => {
@@ -1451,7 +1526,8 @@
       summary.className = "evidence-summary";
       summary.innerHTML =
         '<span class="var-label"><span class="var-name">' + obs.variable + '</span>' +
-        '<span class="var-age" data-testid="evidence-age">' + formatAge(obs.freshness_min) + '</span></span>' +
+        '<span class="var-age" data-testid="evidence-age">' + formatAge(obs.freshness_min) +
+        '</span>' + downloadSuffix(obs) + '</span>' +
         '<span class="var-value">' + formatNumber(obs.value) + " " + (obs.unit || "") + "</span>";
 
       const detail = document.createElement("dl");
@@ -1542,9 +1618,33 @@
   }
   window.__ORCA_SELECT_ZONE__ = selectZone;
 
+  /* On a phone the answer column sits ABOVE the map and the question bar
+   * is pinned at the bottom, so a fresh verdict renders off-screen: you
+   * ask, something happens somewhere, and you have to hunt for it.
+   * Measured on an OPPO CPH2591 2026-08-29 -- the SAFER ALTERNATIVE
+   * banner was a 4 mm magenta sliver at the top of the viewport.
+   *
+   * Desktop is unaffected: there the answer column is already fully
+   * visible beside the map, and scrolling it would be a jolt for nothing.
+   * 900px matches the layout's own breakpoint in the media query above.
+   */
+  function revealAnswer() {
+    if (window.innerWidth > 900) return;
+    const card = document.getElementById("answer-card");
+    if (!card) return;
+    // Behaviour "smooth" is deliberate: an instant jump on a small screen
+    // reads as the page having reloaded.
+    try {
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (err) {
+      card.scrollIntoView(true); // older WebViews take no options object
+    }
+  }
+
   function renderRecommendation(data) {
     window.__ORCA_LAST_RECOMMENDATION__ = data;
     window.dispatchEvent(new CustomEvent("orca:recommendation", { detail: data }));
+    revealAnswer();
 
     answerAction.textContent = data.action;
     answerAction.className = actionClass(data.action);
@@ -1659,19 +1759,63 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, lat, lon, history: conversationHistory }),
       });
-      if (!resp.ok) throw new Error("ORCA API error " + resp.status);
+      if (!resp.ok) {
+        // A SERVER THAT ANSWERED IS NOT AN OFFLINE SERVER. Marking this
+        // so the catch below does not reach for the cached bundle: a 503
+        // means ORCA is up and telling us it has no observations, and
+        // showing a stored advisory in its place would present old data
+        // as an answer to a question the live system just declined --
+        // CLAUDE.md rule 1 with extra steps. Only a genuine network
+        // failure (fetch itself rejecting) means "at sea".
+        const err = new Error("ORCA API error " + resp.status);
+        err.serverResponded = true;
+        throw err;
+      }
       const data = await resp.json();
       rememberTurn(data);
       renderRecommendation(data);
     } catch (err) {
-      answerAction.textContent = "ERROR";
-      answerAction.className = "action-do-not-go";
-      answerText.textContent = "Could not reach ORCA: " + err.message;
-      // This path reuses the answer area, so the previous answer's
-      // qualifiers must not be left standing beside an error.
-      renderSeverity(null);
-      renderBlindAgents(null);
-      console.error(err);
+      // THE POINT OF THE WHOLE OFFLINE STORE.
+      //
+      // Signal ends a few km out of harbour, which is exactly where the
+      // question "is it safe?" starts mattering. Before this, that was a
+      // red ERROR card -- the app was useless at sea, which is the only
+      // place it is needed. Now the advisory downloaded in harbour
+      // answers, labelled with its real age.
+      //
+      // Nothing here is computed: every field rendered was decided by
+      // orca/policy.py on shore and travelled inside the bundle. If there
+      // is no bundle we say so plainly rather than improvising, because
+      // an absent answer is correct and an invented one is not.
+      const cached = (window.ORCAOffline && !err.serverResponded)
+        ? window.ORCAOffline.offlineAnswer(query, lat, lon)
+        : null;
+      if (cached) {
+        setOfflineBadge(true);
+        renderRecommendation(cached);
+        console.warn("ORCA offline: served the stored bundle —", err.message);
+      } else {
+        // Two different failures, told apart because they mean different
+        // things to a crew. ERROR: ORCA answered and the answer was a
+        // failure -- a bug or an empty cache on the server, fixable by
+        // someone on shore. NO DATA: nothing was reachable and this
+        // device is carrying nothing, which is the one the fisherman can
+        // actually act on ("connect before you sail").
+        answerAction.textContent = err.serverResponded ? "ERROR" : "NO DATA";
+        // action-unknown, not action-do-not-go: this is the absence of a
+        // judgement, not a judgement. The non-permissive neutral state is
+        // the same one CANNOT ASSESS uses (see actionClass()).
+        answerAction.className = "action-unknown";
+        answerText.textContent = err.serverResponded
+          ? "Could not reach ORCA: " + err.message
+          : "Could not reach ORCA (" + err.message + ") and this device has no " +
+            "stored advisory. Connect once in harbour to download one.";
+        // This path reuses the answer area, so the previous answer's
+        // qualifiers must not be left standing beside an error.
+        renderSeverity(null);
+        renderBlindAgents(null);
+        console.error(err);
+      }
     } finally {
       askButton.disabled = false;
     }
@@ -1724,6 +1868,17 @@
         style: "https://tiles.openfreemap.org/styles/liberty",
         center: [78.85, 10.6],
         zoom: 6.3,
+        // On a phone the map is a block in the middle of a scrolling
+        // page, and a one-finger drag on it USED to pan the map instead
+        // of scrolling the page -- so the answer below could not be
+        // reached at all. Measured on an OPPO CPH2591 (Android 15,
+        // 412x915 CSS px) 2026-08-29: swiping up to read the verdict
+        // panned the map to Andhra Pradesh and the page did not move.
+        //
+        // cooperativeGestures makes one finger scroll the page and two
+        // fingers pan the map, which is the behaviour every embedded map
+        // on a phone should have. No effect with a mouse.
+        cooperativeGestures: true,
       });
       map.on("error", () => {
         document.getElementById("map-fallback").classList.add("visible");
@@ -1759,6 +1914,82 @@
       const data = await resp.json();
       renderRecommendation(data);
     }
+    registerServiceWorker();
+    refreshBundleQuietly();
+  }
+
+  /* Makes the app shell survive having no network at all. Without it a
+   * browser offline cannot load index.html, so nothing downstream --
+   * vendored three.js, the stored bundle, any of it -- gets the chance
+   * to work. See web/sw.js.
+   *
+   * Skipped under ?mock=1: a cached shell during frontend iteration is a
+   * debugging trap, and mock mode exists precisely to iterate. Also
+   * skipped where the API is unavailable (file:// or a browser with
+   * service workers disabled) -- the page is exactly the page it was.
+   */
+  function registerServiceWorker() {
+    if (MOCK_MODE || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("./sw.js").catch((err) => {
+      // Never swallowed: a shell that silently failed to cache looks
+      // identical to one that cached, right up until the boat is at sea.
+      console.warn("ORCA: service worker registration failed:", err && err.message);
+    });
+  }
+
+  /* Pull the ten-zone advisory while there is still a link, so the
+   * failure path in submitQuery() has something real to serve. ~127 KB,
+   * measured -- small enough for a marginal harbour connection.
+   *
+   * Quiet on purpose: this is a background convenience, and a boat with
+   * no signal must not be shown an error for something it did not ask
+   * for. The cache-status line reports what is actually stored.
+   */
+  async function refreshBundleQuietly() {
+    if (MOCK_MODE || !window.ORCAOffline) return;
+    // SEED FIRST, so a phone that has never had signal still answers.
+    // The Android shell passes ?seed=./bundle.json, pointing at the
+    // advisory packaged inside the APK (mobile/seed/bundle.json). It is
+    // only adopted when nothing is stored -- a real download is always
+    // newer and always wins -- and it is labelled as shipped rather than
+    // downloaded, because claiming otherwise would be inventing a moment
+    // this device does not know.
+    const seed = params.get("seed");
+    if (seed) {
+      try {
+        await window.ORCAOffline.loadSeed(seed);
+      } catch (err) {
+        console.warn("ORCA: no seed advisory available:", err && err.message);
+      }
+    }
+    try {
+      await window.ORCAOffline.refreshBundle(API_BASE);
+    } catch (err) {
+      console.warn("ORCA: could not refresh offline bundle:", err && err.message);
+    }
+    renderCacheStatus();
+  }
+
+  /* What is actually on this device, in the user's terms. The screen
+   * docs/MOBILE_APP.md §3 lists third and calls non-optional: a crew
+   * about to lose signal needs to know whether they are carrying an
+   * advisory at all, and how old it is. */
+  function renderCacheStatus() {
+    const el = document.getElementById("cache-status");
+    if (!el || !window.ORCAOffline) return;
+    const status = window.ORCAOffline.bundleStatus();
+    if (!status.present) {
+      el.textContent = "No offline advisory stored. Connect once to download one.";
+      el.setAttribute("data-state", "absent");
+      return;
+    }
+    const provenance = status.fromSeed
+      ? " · shipped with the app, never refreshed here"
+      : (status.downloadedAgo ? " · downloaded " + status.downloadedAgo + " ago" : " · age unknown");
+    el.textContent = status.zoneCount + " zones stored" + provenance +
+      ". Available with no signal.";
+    el.setAttribute("data-state",
+      status.fromSeed ? "seed" : (status.downloadedAgo ? "ready" : "unknown-age"));
   }
 
   init();

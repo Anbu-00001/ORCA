@@ -1,0 +1,82 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'org.orca.advisory'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "org.orca.advisory"
+        minSdk 24          // Android 7.0 -- covers the mid-range Android
+                           // phones ORCA's users actually own
+        // targetSdk 34, NOT 35, and deliberately.
+        //
+        // Android 15 FORCES edge-to-edge for targetSdk 35: the window
+        // draws under the status and navigation bars, and the app has to
+        // apply the insets itself. Two attempts at that on the device --
+        // a setOnApplyWindowInsetsListener and then setFitsSystemWindows
+        // -- both left the ORCA wordmark behind the clock and the Tamil
+        // button behind the navigation bar. At 34 the platform insets the
+        // window normally and the page gets its own usable area.
+        //
+        // This is a sideloaded prototype APK, not a Play Store release
+        // (Play requires a current targetSdk). Revisit when it ships, and
+        // do the edge-to-edge work properly then rather than guessing at
+        // it the night before a demo.
+        targetSdk 34
+        versionCode 1
+        versionName "1.0-prototype"
+    }
+
+    sourceSets {
+        main {
+            // THE WEB CLIENT IS NOT COPIED, IT IS REFERENCED.
+            //
+            // ../../../web is the same web/ the browser and the PWA serve.
+            // A copy under mobile/ would be a second frontend that drifts
+            // from the first, and the two would eventually disagree about
+            // what ORCA says -- the same argument docs/MOBILE_APP.md §2
+            // makes for never re-implementing the verdict.
+            //
+            // mobile/seed carries bundle.json, the advisory the APK ships
+            // with so it answers on first launch having never seen a
+            // network. See MainActivity's seed comment.
+            assets.srcDirs += ['../../../web', '../../seed']
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false        // one Activity; nothing to shrink
+            // Signed with the debug key on purpose: this is a prototype
+            // APK for sideloading and demo, not a Play Store artifact.
+            // mobile/README.md says so out loud rather than implying a
+            // production release.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // The ONLY dependency, and it is the one that makes this work at all:
+    // WebViewAssetLoader serves the bundled assets over
+    // https://appassets.androidplatform.net/ instead of file://.
+    //
+    // That is not cosmetic. file:// has an opaque origin, so localStorage
+    // is unreliable and service workers are unavailable entirely --
+    // web/offline.js stores the advisory in localStorage and web/sw.js is
+    // a service worker, so a file:// WebView would silently lose BOTH
+    // halves of the offline story. WebViewAssetLoader's origin is treated
+    // as a secure context by WebView, which restores both.
+    implementation 'androidx.webkit:webkit:1.12.1'
+    // NO appcompat. It was here only to supply a theme parent, and it
+    // drags in kotlin-stdlib-jdk7/jdk8 1.6.21, which collides with the
+    // kotlin-stdlib 1.8.22 webkit brings -- the build failed on ~20
+    // duplicate classes. A platform theme costs nothing and removes the
+    // conflict outright rather than pinning around it (CLAUDE.md rule 7:
+    // no frameworks for five functions).
+}

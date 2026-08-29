@@ -1,7 +1,22 @@
 # ORCA Mobile — the connector between shore and boat
 
-**Status:** design, not built. Written 2026-08-29.
+**Status:** phase 1 BUILT and verified on hardware. Written 2026-08-29,
+updated the same day once steps 1-3 of §8 shipped.
 **Audience:** whoever builds this, and any agent reading the repo cold.
+
+> **What exists now.** ORCA is an installable PWA that answers safety
+> questions with no network and no backend. Verified on an **OPPO CPH2591
+> (Android 15)** over `adb reverse` with both host servers killed: the
+> shell loaded from the service worker, the badge read OFFLINE, and
+> "Is it safe at Mandapam?" returned **SAFER ALTERNATIVE / SEVERITY
+> ADVISORY** from the stored bundle. Covered by `e2e/offline.spec.js`
+> (8 tests) and `tests/test_bundle.py` (16 tests).
+>
+> Files: `orca/api.py` (`GET /bundle`), `web/offline.js`, `web/sw.js`,
+> `web/manifest.json`, `web/icons/`, `web/vendor/fonts.css`.
+>
+> **Not yet built:** §5's uplink (steps 6-7), and Tamil offline text --
+> see §10.
 
 ---
 

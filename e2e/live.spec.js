@@ -384,8 +384,17 @@ test.describe('exceptional / error paths', () => {
     await page.getByTestId('lon-input').fill('79.8449');
     await page.getByTestId('ask-button').click();
 
-    await expect(page.getByTestId('answer-action')).toHaveText('ERROR', { timeout: 10000 });
+    // NO DATA, not ERROR. A dead port is a genuine network failure -- the
+    // "at sea" case -- and this context has never downloaded a bundle, so
+    // there is nothing stored to fall back to. The message names the one
+    // thing the crew can act on. (A server that DOES answer with an error
+    // still says ERROR; see the 503 test below. web/index.html tells the
+    // two apart via err.serverResponded.)
+    await expect(page.getByTestId('answer-action')).toHaveText('NO DATA', { timeout: 10000 });
     await expect(page.getByTestId('answer-text')).toContainText('Could not reach ORCA');
+    await expect(page.getByTestId('answer-text')).toContainText('no stored advisory');
+    // Non-permissive: the absence of a judgement must never look like GO.
+    await expect(page.getByTestId('answer-action')).toHaveClass(/action-unknown/);
     // The ask button must re-enable, not stay stuck disabled forever.
     await expect(page.getByTestId('ask-button')).toBeEnabled();
     expect(errors).toEqual([]);
