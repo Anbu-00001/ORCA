@@ -26,7 +26,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from orca.agentic import answer_question, is_configured
+from orca.agentic import answer_question, is_configured, quota_snapshot
 from orca.planner import load_cached_observations, load_forecast_observations, observation_id
 
 logger = logging.getLogger("orca.api")
@@ -189,4 +189,10 @@ def health() -> dict:
         "offline_mode": _is_reachable(),
         "cache_age_min": cache_age_min,
         "cache_observation_count": len(observations),
+        # What the LLM provider last said about remaining headroom. The
+        # free-tier token budget is what degraded a live demo, and it is
+        # knowable in advance -- every response carries x-ratelimit-*.
+        # Empty until a question has been asked: unknown, never "fine".
+        "agentic_configured": is_configured(),
+        "llm_quota": quota_snapshot(),
     }

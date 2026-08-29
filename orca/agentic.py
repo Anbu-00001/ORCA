@@ -48,6 +48,8 @@ import requests
 
 from data.fetch import ZONES
 from orca import memory
+from orca.extract import extract as deterministic_extract
+from orca import phrase
 from orca.planner import (
     Recommendation,
     _zone_by_substring,
@@ -58,12 +60,109 @@ from orca.planner import (
 
 logger = logging.getLogger("orca.agentic")
 
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+# --- Provider ---------------------------------------------------------
+#
+# Groq by default, but every value here is overridable by environment so
+# the provider can be changed without touching code. Groq, NVIDIA NIM,
+# Cerebras, Together and OpenRouter all expose the SAME OpenAI
+# /chat/completions shape, so a switch is a base URL, a key and two model
+# names -- not a rewrite.
+#
+# Why this is configuration and not a decision baked into the source: the
+# free-tier limit is what broke a live demo, and which provider has the
+# most headroom on any given day is not a fact about ORCA's design. It is
+# also the fastest possible mitigation if a key gets exhausted mid-event
+# -- export three variables and restart, no rebuild.
+#
+# One caveat worth stating: extraction asks for strict JSON-schema
+# structured output, and support for it varies by provider and model. It
+# is safe to vary. extract_query_intent() re-validates EVERY field
+# against the real closed sets afterwards, regardless of what strict mode
+# claims, so a provider with weaker enforcement produces more
+# AgenticUnavailable fallbacks -- never a zone, variable or capability
+# ORCA does not have.
+DEFAULT_LLM_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+# Kept for tests and docs that still name it. Same default, one source.
+GROQ_API_URL = DEFAULT_LLM_API_URL
+
+
+# EVERY provider setting is read at CALL time, never at import time.
+#
+# orca/api.py imports this module (line 29) BEFORE it loads the
+# git-ignored .env (line 70), so anything evaluated at module level here
+# sees the environment as it was before .env existed. A constant like
+#   LLM_API_URL = os.environ.get("ORCA_LLM_BASE_URL", ...)
+# would therefore silently ignore .env and keep talking to the default
+# provider while the operator believed they had switched.
+#
+# That exact failure -- configuration present, never read, behaviour
+# indistinguishable from working -- is the one that already cost this
+# project a day (see _load_env_file()'s docstring in orca/api.py). Once
+# is enough.
+def _api_url() -> str:
+    return os.environ.get("ORCA_LLM_BASE_URL") or DEFAULT_LLM_API_URL
+
+
+def _providers() -> list[dict]:
+    """Primary first, optional fallback second.
+
+    A second provider is the answer to the question "should we switch
+    keys?", which is the wrong question: every free tier has a ceiling,
+    and the one that matters is tokens-per-minute, which no amount of
+    choosing avoids. Configuring two removes the need to pick. When the
+    primary is rate-limited the fallback carries the request, and because
+    the quotas belong to different organisations they cannot exhaust
+    together.
+
+    The fallback is entirely optional. With ORCA_LLM_FALLBACK_API_KEY
+    unset this returns exactly one provider and behaviour is unchanged.
+    """
+    providers = [{
+        "name": "primary",
+        "url": _api_url(),
+        "key": _api_key(),
+        "extraction": _extraction_model(),
+        "composition": _composition_model(),
+    }]
+    fallback_key = os.environ.get("ORCA_LLM_FALLBACK_API_KEY")
+    if fallback_key:
+        providers.append({
+            "name": "fallback",
+            "url": os.environ.get("ORCA_LLM_FALLBACK_BASE_URL") or DEFAULT_LLM_API_URL,
+            "key": fallback_key,
+            # Model names differ between providers, so they are configured
+            # separately. Falling back to the primary's names is right when
+            # the fallback is a second KEY for the same provider, which is
+            # the simplest and most likely setup.
+            "extraction": os.environ.get("ORCA_LLM_FALLBACK_EXTRACTION_MODEL")
+                          or _extraction_model(),
+            "composition": os.environ.get("ORCA_LLM_FALLBACK_COMPOSITION_MODEL")
+                           or _composition_model(),
+        })
+    return providers
+
+
+def _extraction_model() -> str:
+    return os.environ.get("ORCA_EXTRACTION_MODEL") or EXTRACTION_MODEL
+
+
+def _composition_model() -> str:
+    return os.environ.get("ORCA_COMPOSITION_MODEL") or COMPOSITION_MODEL
+
+
+def _api_key() -> str | None:
+    """The provider key. ORCA_LLM_API_KEY wins; GROQ_API_KEY is still
+    honoured so an existing .env, the Playwright config and every test
+    that clears it keep working unchanged."""
+    return os.environ.get("ORCA_LLM_API_KEY") or os.environ.get("GROQ_API_KEY")
 # Both models are Groq-hosted, strict-JSON-schema-capable (verified against
 # Groq's docs before use, not assumed -- see SCRATCH.md). Same family,
 # split by task: extraction needs precision under a small, fixed schema;
 # composition gets the bigger model because prose quality (especially in
 # Tamil) is the part actually worth spending tokens on.
+# Defaults. Override per deployment with ORCA_EXTRACTION_MODEL /
+# ORCA_COMPOSITION_MODEL -- read through _extraction_model() and
+# _composition_model(), never here, for the import-order reason above.
 EXTRACTION_MODEL = "openai/gpt-oss-20b"
 COMPOSITION_MODEL = "openai/gpt-oss-120b"
 REQUEST_TIMEOUT_S = 8.0  # fail fast into the deterministic fallback -- never hang a live demo
@@ -135,10 +234,43 @@ def _begin_cooldown(model: str, retry_after: str | None) -> float:
     return seconds
 
 
+# Last quota reading the provider sent back, per model. Groq (and every
+# OpenAI-compatible provider) returns x-ratelimit-* on EVERY response,
+# not just on a 429 -- so the headroom is knowable at all times and there
+# is no reason to find out by running out on stage. Surfaced through
+# GET /health so a presenter can look before they demo.
+_last_quota: dict[str, dict] = {}
+
+
+def quota_snapshot() -> dict:
+    """What the provider last said about remaining headroom. Empty until
+    a call has been made -- reported as unknown, never as fine."""
+    return {model: dict(info) for model, info in _last_quota.items()}
+
+
+def _record_quota(model: str, headers) -> None:
+    def _get(name):
+        return headers.get(name) or headers.get(name.lower())
+    remaining_tokens = _get("x-ratelimit-remaining-tokens")
+    remaining_requests = _get("x-ratelimit-remaining-requests")
+    if remaining_tokens is None and remaining_requests is None:
+        return
+    _last_quota[model] = {
+        "remaining_tokens": remaining_tokens,
+        "limit_tokens": _get("x-ratelimit-limit-tokens"),
+        "remaining_requests": remaining_requests,
+        "limit_requests": _get("x-ratelimit-limit-requests"),
+        "reset_tokens": _get("x-ratelimit-reset-tokens"),
+        "reset_requests": _get("x-ratelimit-reset-requests"),
+        "cooling_down_s": round(_cooldown_remaining(model), 1),
+    }
+
+
 def reset_rate_limit_state() -> None:
     """Clear all cool-downs. For tests, and for an operator who has just
     switched to a key with its own quota."""
     _cooldown_until.clear()
+    _last_quota.clear()
 
 
 # --- Response cache -----------------------------------------------------
@@ -241,71 +373,115 @@ class AgenticUnavailable(Exception):
 
 
 def is_configured() -> bool:
-    return bool(os.environ.get("GROQ_API_KEY"))
+    return bool(_api_key())
 
 
-def _post(payload: dict, timeout: float | None = None) -> dict:
+def _post(payload: dict, timeout: float | None = None, slot: str | None = None) -> dict:
     """The only function in this file that makes a network call. Returns
-    the parsed JSON object the model produced (already schema-validated
-    server-side by Groq's strict mode); raises AgenticUnavailable for
-    every failure mode instead of letting any of them propagate as a
+    the parsed JSON object the model produced; raises AgenticUnavailable
+    for every failure mode instead of letting any of them propagate as a
     generic exception the caller might mishandle.
 
-    `timeout` defaults to the per-call REQUEST_TIMEOUT_S. answer_question()
-    passes a smaller value when less of the layer's LAYER_BUDGET_S remains,
-    which is what turns the budget into an actual bound (R-49)."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise AgenticUnavailable("GROQ_API_KEY not set")
+    Tries each configured provider in turn (primary, then an optional
+    fallback -- see _providers()). A provider already in cool-down is
+    skipped without spending a request, and a 429 moves straight on to
+    the next rather than failing the whole call. With one provider
+    configured, behaviour is exactly as before.
 
+    `slot` is "extraction" or "composition" and lets each provider
+    substitute its OWN model name, because model identifiers differ
+    between vendors. Omitted, the payload's model is used unchanged.
+
+    `timeout` defaults to REQUEST_TIMEOUT_S. answer_question() passes a
+    smaller value when less of the layer's LAYER_BUDGET_S remains, which
+    is what turns the budget into an actual bound (R-49). That budget is
+    shared across providers, not restarted per attempt -- otherwise a
+    fallback would be a way to spend more wall clock than R-49 allows.
+    """
+    providers = _providers()
+    if not any(p["key"] for p in providers):
+        raise AgenticUnavailable("no LLM API key set (ORCA_LLM_API_KEY or GROQ_API_KEY)")
+
+    # Cache lookup is provider-independent: the key is the payload, and a
+    # payload that names a model already distinguishes providers whose
+    # model names differ.
     key = _cache_key(payload)
     hit = _response_cache.get(key)
     if hit is not None:
         _response_cache.move_to_end(key)
-        logger.info("Groq response cache hit for %s", payload.get("model", "?"))
+        logger.info("LLM response cache hit for %s", payload.get("model", "?"))
         return hit
 
-    # Still inside a cool-down this model asked for: do not spend a
-    # request to be told "no" again. Failing here is the same
-    # AgenticUnavailable the caller already handles, just instantly.
-    model = payload.get("model", "?")
-    remaining = _cooldown_remaining(model)
-    if remaining > 0:
-        raise AgenticUnavailable(
-            f"Groq rate limit: {model} is in cool-down for another {remaining:.0f}s"
-        )
+    deadline = time.monotonic() + (REQUEST_TIMEOUT_S if timeout is None else timeout)
+    problems: list[str] = []
 
-    try:
-        resp = requests.post(
-            GROQ_API_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=REQUEST_TIMEOUT_S if timeout is None else timeout,
-        )
-        if resp.status_code == RATE_LIMIT_STATUS:
-            held = _begin_cooldown(model, resp.headers.get("Retry-After"))
-            logger.warning(
-                "Groq rate limit (429) on %s -- holding off for %.0fs. Free tier is "
-                "8,000 tokens/min per model; ORCA sends ~1,700 per question across two "
-                "models. Answers stay correct but become deterministic-only until then.",
-                model, held,
+    for provider in providers:
+        if not provider["key"]:
+            continue
+        body = dict(payload)
+        if slot:
+            body["model"] = provider[slot]
+        model = body.get("model", "?")
+        # Cool-downs are per provider AND per model: quotas belong to an
+        # organisation, so a second key is a second budget.
+        cool_key = f"{provider['name']}:{model}"
+
+        remaining_budget = deadline - time.monotonic()
+        if remaining_budget < MIN_CALL_BUDGET_S:
+            problems.append(f"{provider['name']}: no time left in the layer budget")
+            break
+
+        cooling = _cooldown_remaining(cool_key)
+        if cooling > 0:
+            problems.append(f"{provider['name']}/{model}: cooling down {cooling:.0f}s")
+            continue
+
+        try:
+            resp = requests.post(
+                provider["url"],
+                headers={"Authorization": f"Bearer {provider['key']}",
+                         "Content-Type": "application/json"},
+                json=body,
+                timeout=remaining_budget,
             )
-            raise AgenticUnavailable(f"Groq rate limited: {model} (cooling down {held:.0f}s)")
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise AgenticUnavailable(f"Groq request failed: {exc}") from exc
-    try:
-        body = resp.json()
-        content = body["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-        raise AgenticUnavailable(f"Groq response malformed: {exc}") from exc
+        except requests.RequestException as exc:
+            problems.append(f"{provider['name']}: request failed: {exc}")
+            continue
 
-    _response_cache[key] = parsed
-    _response_cache.move_to_end(key)
-    while len(_response_cache) > RESPONSE_CACHE_MAX:
-        _response_cache.popitem(last=False)
-    return parsed
+        _record_quota(cool_key, resp.headers)
+
+        if resp.status_code == RATE_LIMIT_STATUS:
+            held = _begin_cooldown(cool_key, resp.headers.get("Retry-After"))
+            logger.warning(
+                "Rate limit (429) from %s on %s -- holding off %.0fs. Free tiers bind on "
+                "TOKENS per minute, not requests; ORCA sends ~1,700 per question across "
+                "two models. %s",
+                provider["name"], model, held,
+                "Trying the fallback provider." if provider is not providers[-1]
+                else "Answers stay correct but become deterministic-only until this clears.",
+            )
+            problems.append(f"{provider['name']}/{model}: rate limited ({held:.0f}s)")
+            continue
+
+        try:
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            problems.append(f"{provider['name']}: {exc}")
+            continue
+
+        try:
+            parsed = json.loads(resp.json()["choices"][0]["message"]["content"])
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            problems.append(f"{provider['name']}: malformed response: {exc}")
+            continue
+
+        _response_cache[key] = parsed
+        _response_cache.move_to_end(key)
+        while len(_response_cache) > RESPONSE_CACHE_MAX:
+            _response_cache.popitem(last=False)
+        return parsed
+
+    raise AgenticUnavailable("; ".join(problems) or "no provider available")
 
 
 def extract_query_intent(
@@ -405,7 +581,7 @@ def extract_query_intent(
     messages.append({"role": "user", "content": query})
 
     payload = {
-        "model": EXTRACTION_MODEL,
+        "model": _extraction_model(),
         "messages": messages,
         "response_format": {
             "type": "json_schema",
@@ -413,7 +589,7 @@ def extract_query_intent(
         },
         "temperature": 0,
     }
-    result = _post(payload)
+    result = _post(payload, slot="extraction")
 
     # Re-validate everything. Strict mode is supposed to make each of
     # these impossible -- but a network response never gets to skip
@@ -733,7 +909,7 @@ def compose_grounded_answer(
         )
         system = " ".join(parts)
     payload = {
-        "model": COMPOSITION_MODEL,
+        "model": _composition_model(),
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": query},
@@ -744,7 +920,7 @@ def compose_grounded_answer(
         },
         "temperature": 0.3,
     }
-    result = _post(payload, timeout=timeout)
+    result = _post(payload, timeout=timeout, slot="composition")
     # Same principle as extract_query_intent: verify the citations
     # ourselves rather than trust that strict mode + the prompt were
     # enough. Citation hallucination is a documented failure mode even
@@ -879,7 +1055,40 @@ def answer_question(
     resolved_zone = _zone_by_substring(query, zones)
     zone_match = "exact" if resolved_zone is not None else "fallback"
 
-    if is_configured():
+    # THE FLOOR. Deterministic, instant, free, and it always runs -- so
+    # every field below now starts from a real reading of the question
+    # rather than from a constant.
+    #
+    # This is what makes the model optional. Before it existed, the
+    # "deterministic defaults" a few lines down were literally
+    # intent=verdict / time_frame=now / language=en for EVERY question,
+    # so a rate limit or an absent key turned ORCA into one sentence
+    # about one zone. The model was not enhancing a capability, it was
+    # the capability. See orca/extract.py's docstring for the measurement.
+    base = deterministic_extract(query, zones)
+    detected_language = base["language"]
+    intent = base["intent"]
+    variable = base["variable"]
+    time_frame = base["time_frame"]
+    on_topic = base["on_topic"]
+    scope = base["scope"]
+    unsupported = base["unsupported"]
+
+    # THE CEILING, and only where it can actually add something.
+    #
+    # The one job the keyword pass genuinely cannot do is map a
+    # description onto a zone -- "the southernmost tip of India" is
+    # Kanyakumari to a model and nothing to a substring match. So the
+    # model is consulted when tier 1 did NOT resolve a zone, and skipped
+    # when it did.
+    #
+    # That skip is not only a saving, though it is a large one: roughly
+    # half of all LLM calls disappear on the common case where the
+    # fisherman named their own harbour, which doubles how many questions
+    # the same free-tier token budget buys. It is also less surface --
+    # a call not made cannot rate-limit, time out, or return something
+    # that has to be re-validated.
+    if is_configured() and resolved_zone is None:
         try:
             extracted = extract_query_intent(query, zones, turns)
             detected_language = extracted["language"]
@@ -1043,6 +1252,28 @@ def answer_question(
             # would claim a kind of answer we did not deliver -- this is
             # a verdict, and saying so is the honest label.
             recommendation.answer_kind = "verdict"
+
+    # The deterministic answer, rendered from values the planner already
+    # computed. UNCONDITIONAL, and before the model is consulted: this is
+    # the text a user gets when there is no key, when the key is rate
+    # limited, when the venue wifi is down, and when the request runs out
+    # of budget. A successful composition below replaces it with better
+    # prose -- it never supplies the substance.
+    #
+    # That ordering is the whole point of orca/extract.py and this call.
+    # The old fallback answered one question ("is it safe here?") no
+    # matter what was asked, so losing the model lost the product, and
+    # the fix for a rate limit looked like it had to be a second API key.
+    recommendation.recommendation = phrase.render(
+        recommendation,
+        query=query,
+        intent=intent,
+        variable=variable,
+        lookup=lookup,
+        ranking=ranking,
+        coverage_note=coverage_note,
+        on_topic=on_topic,
+    )
 
     if is_configured():
         elapsed = time.monotonic() - started_at

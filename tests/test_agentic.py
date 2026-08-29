@@ -48,9 +48,13 @@ class _FakeResponse:
     """Mirrors tests/test_fetch.py's mocking style: a stand-in for
     requests.Response carrying only what orca.agentic._post() reads."""
 
-    def __init__(self, status_code=200, body=None):
+    def __init__(self, status_code=200, body=None, headers=None):
         self.status_code = status_code
         self._body = body or {}
+        # A real requests.Response always has .headers, and _post() reads
+        # the provider's x-ratelimit-* from it on every response. A stub
+        # without them is a stub of a shape that cannot occur.
+        self.headers = headers or {}
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -1002,8 +1006,10 @@ def test_composition_is_skipped_when_extraction_spent_the_budget(monkeypatch):
 
     calls = _wire_with_clock(monkeypatch, _FakeClock(0.0, LAYER_BUDGET_S))
 
+    # No zone named: extraction only runs when the substring pass found
+    # nothing, and this test needs extraction to run and spend the budget.
     rec = answer_question(
-        "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+        "is it safe at the southernmost tip?", ZONE_A["lat"], ZONE_A["lon"],
         observations=[_obs(ZONE_A)],
     )
 
@@ -1075,8 +1081,13 @@ def test_extraction_fallback_is_audible(monkeypatch, caplog):
     monkeypatch.setattr("orca.agentic.requests.post", _post)
 
     with caplog.at_level("WARNING", logger="orca.agentic"):
+        # No zone named, deliberately. The model is now consulted for
+        # extraction ONLY when the substring pass failed to resolve a
+        # zone, because inferring one from a description is the single
+        # thing orca/extract.py cannot do. Naming a zone here would skip
+        # the very call this test is about.
         rec = answer_question(
-            "is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+            "is it safe at the southernmost tip?", ZONE_A["lat"], ZONE_A["lon"],
             observations=[_obs(ZONE_A)],
         )
 
@@ -1234,7 +1245,7 @@ def test_a_429_starts_a_cooldown_and_the_next_call_does_not_hit_the_network(monk
     # Second call must be refused locally -- no request spent to be told
     # "no" again. This is the whole point: a rate-limited demo previously
     # burned a request per question, per model.
-    with pytest.raises(agentic.AgenticUnavailable, match="cool-down"):
+    with pytest.raises(agentic.AgenticUnavailable, match="cooling down"):
         agentic._post(_payload(q="different"))
     assert len(calls) == 1, "a second network call was made during the cool-down"
 
@@ -1245,7 +1256,7 @@ def test_the_cooldown_honours_retry_after(monkeypatch):
                         lambda url, **kw: _Resp(status=429, headers={"Retry-After": "12"}))
     with pytest.raises(agentic.AgenticUnavailable):
         agentic._post(_payload())
-    assert 10.0 < agentic._cooldown_remaining("openai/gpt-oss-20b") <= 12.0
+    assert 10.0 < agentic._cooldown_remaining("primary:openai/gpt-oss-20b") <= 12.0
 
 
 def test_a_malformed_retry_after_falls_back_to_the_default(monkeypatch):
@@ -1254,7 +1265,7 @@ def test_a_malformed_retry_after_falls_back_to_the_default(monkeypatch):
                         lambda url, **kw: _Resp(status=429, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}))
     with pytest.raises(agentic.AgenticUnavailable):
         agentic._post(_payload())
-    assert agentic._cooldown_remaining("openai/gpt-oss-20b") > 0
+    assert agentic._cooldown_remaining("primary:openai/gpt-oss-20b") > 0
 
 
 def test_the_cooldown_is_per_model_not_global(monkeypatch):
@@ -1265,8 +1276,8 @@ def test_the_cooldown_is_per_model_not_global(monkeypatch):
                         lambda url, **kw: _Resp(status=429, headers={"Retry-After": "30"}))
     with pytest.raises(agentic.AgenticUnavailable):
         agentic._post(_payload(model=agentic.EXTRACTION_MODEL))
-    assert agentic._cooldown_remaining(agentic.EXTRACTION_MODEL) > 0
-    assert agentic._cooldown_remaining(agentic.COMPOSITION_MODEL) == 0
+    assert agentic._cooldown_remaining(f"primary:{agentic.EXTRACTION_MODEL}") > 0
+    assert agentic._cooldown_remaining(f"primary:{agentic.COMPOSITION_MODEL}") == 0
 
 
 def test_an_identical_payload_is_served_from_cache_without_a_network_call(monkeypatch):
@@ -1312,3 +1323,232 @@ def test_a_rate_limited_response_is_never_cached(monkeypatch):
     with pytest.raises(agentic.AgenticUnavailable):
         agentic._post(_payload(q="q"))
     assert agentic._cache_key(_payload(q="q")) not in agentic._response_cache
+
+
+# --- provider portability ----------------------------------------------
+# Groq, NVIDIA NIM, Cerebras, Together and OpenRouter all speak the same
+# OpenAI /chat/completions shape, so switching is a base URL, a key and
+# two model names. Every one of those is read at CALL time, never at
+# import time: orca/api.py imports this module before it loads .env, so a
+# module-level os.environ.get() would silently ignore a configured
+# provider and keep using the default -- config present, never read,
+# behaviour indistinguishable from working. That is the failure mode that
+# already cost this project a day with GROQ_API_KEY.
+def test_provider_base_url_is_read_at_call_time(monkeypatch):
+    assert agentic._api_url() == agentic.DEFAULT_LLM_API_URL
+    monkeypatch.setenv("ORCA_LLM_BASE_URL", "https://example.invalid/v1/chat/completions")
+    assert agentic._api_url() == "https://example.invalid/v1/chat/completions"
+
+
+@pytest.mark.parametrize("env,fn,default", [
+    ("ORCA_EXTRACTION_MODEL", "_extraction_model", agentic.EXTRACTION_MODEL),
+    ("ORCA_COMPOSITION_MODEL", "_composition_model", agentic.COMPOSITION_MODEL),
+])
+def test_model_names_are_read_at_call_time(monkeypatch, env, fn, default):
+    assert getattr(agentic, fn)() == default
+    monkeypatch.setenv(env, "vendor/some-other-model")
+    assert getattr(agentic, fn)() == "vendor/some-other-model"
+
+
+def test_a_generic_key_is_honoured_and_groq_key_still_works(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("ORCA_LLM_API_KEY", raising=False)
+    assert not agentic.is_configured()
+
+    monkeypatch.setenv("GROQ_API_KEY", "legacy")
+    assert agentic.is_configured() and agentic._api_key() == "legacy"
+
+    # The generic name wins, so a switched provider does not silently
+    # keep authenticating with the old vendor's key.
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "current")
+    assert agentic._api_key() == "current"
+
+
+def test_the_request_goes_to_the_configured_url(monkeypatch):
+    seen = {}
+
+    def fake_post(url, **kw):
+        seen["url"] = url
+        return _Resp()
+
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "k")
+    monkeypatch.setenv("ORCA_LLM_BASE_URL", "https://example.invalid/v1/chat/completions")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+    agentic._post(_payload(q="routed"))
+    assert seen["url"] == "https://example.invalid/v1/chat/completions"
+
+
+# --- provider failover --------------------------------------------------
+# "Should we switch keys?" is the wrong question -- every free tier has a
+# tokens-per-minute ceiling and choosing does not avoid it. Configuring a
+# SECOND provider removes the need to choose: when the primary is rate
+# limited the fallback carries the request, and because the quotas belong
+# to different organisations they cannot exhaust together.
+def test_with_no_fallback_configured_there_is_exactly_one_provider(monkeypatch):
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "primary-key")
+    monkeypatch.delenv("ORCA_LLM_FALLBACK_API_KEY", raising=False)
+    assert [p["name"] for p in agentic._providers()] == ["primary"]
+
+
+def test_a_rate_limited_primary_falls_over_to_the_second_provider(monkeypatch):
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append(url)
+        if "primary.invalid" in url:
+            return _Resp(status=429, headers={"Retry-After": "60"})
+        return _Resp(payload={"choices": [{"message": {"content": '{"from": "fallback"}'}}]})
+
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "k1")
+    monkeypatch.setenv("ORCA_LLM_BASE_URL", "https://primary.invalid/v1/chat/completions")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_API_KEY", "k2")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_BASE_URL", "https://backup.invalid/v1/chat/completions")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+
+    assert agentic._post(_payload(q="q")) == {"from": "fallback"}
+    assert len(calls) == 2 and "backup.invalid" in calls[1]
+
+
+def test_after_the_primary_cools_down_the_fallback_is_used_directly(monkeypatch):
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append(url)
+        if "primary.invalid" in url:
+            return _Resp(status=429, headers={"Retry-After": "60"})
+        return _Resp(payload={"choices": [{"message": {"content": '{"n": 1}'}}]})
+
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "k1")
+    monkeypatch.setenv("ORCA_LLM_BASE_URL", "https://primary.invalid/v1/chat/completions")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_API_KEY", "k2")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_BASE_URL", "https://backup.invalid/v1/chat/completions")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+
+    agentic._post(_payload(q="one"))
+    agentic._post(_payload(q="two"))
+    # Four naive calls; the cooled-down primary must be skipped on the
+    # second question, so three.
+    assert len(calls) == 3
+    assert "primary.invalid" not in calls[2]
+
+
+def test_each_provider_may_use_its_own_model_name(monkeypatch):
+    seen = []
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "k1")
+    monkeypatch.setenv("ORCA_LLM_BASE_URL", "https://primary.invalid/v1/chat/completions")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_API_KEY", "k2")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_BASE_URL", "https://backup.invalid/v1/chat/completions")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_EXTRACTION_MODEL", "vendor-b/its-own-name")
+
+    def fake_post(url, **kw):
+        seen.append(kw["json"]["model"])
+        if "primary.invalid" in url:
+            return _Resp(status=429, headers={"Retry-After": "60"})
+        return _Resp(payload={"choices": [{"message": {"content": '{"ok": 1}'}}]})
+
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+    agentic._post(_payload(q="q"), slot="extraction")
+    assert seen == [agentic.EXTRACTION_MODEL, "vendor-b/its-own-name"]
+
+
+def test_failover_never_exceeds_the_layer_budget(monkeypatch):
+    """R-49: the agentic layer adds at most LAYER_BUDGET_S of network wait
+    to one /ask. A fallback must SHARE that budget, not restart it --
+    otherwise adding a provider is a way to spend more wall clock than
+    the bound allows.
+
+    The invariant is not "the timeouts sum to the budget" (they need not;
+    each call is simply given whatever is left). It is that time spent on
+    the primary is time the fallback no longer has.
+    """
+    timeouts = []
+    clock = [1000.0]
+    monkeypatch.setattr(agentic.time, "monotonic", lambda: clock[0])
+
+    def fake_post(url, **kw):
+        timeouts.append(kw["timeout"])
+        clock[0] += 3.0          # this attempt took 3 seconds
+        return _Resp(status=429, headers={"Retry-After": "60"})
+
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "k1")
+    monkeypatch.setenv("ORCA_LLM_BASE_URL", "https://primary.invalid/v1/chat/completions")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_API_KEY", "k2")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_BASE_URL", "https://backup.invalid/v1/chat/completions")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+
+    with pytest.raises(agentic.AgenticUnavailable):
+        agentic._post(_payload(q="q"), timeout=4.0)
+
+    assert len(timeouts) == 2
+    assert timeouts[0] == pytest.approx(4.0)
+    # 3 s went on the primary, so only 1 s may remain for the fallback.
+    assert timeouts[1] == pytest.approx(1.0)
+
+
+def test_a_spent_budget_stops_the_fallback_being_tried_at_all(monkeypatch):
+    """Below MIN_CALL_BUDGET_S a call cannot realistically complete, so
+    starting one only spends the rest of the budget in order to fail."""
+    attempts = []
+    clock = [1000.0]
+    monkeypatch.setattr(agentic.time, "monotonic", lambda: clock[0])
+
+    def fake_post(url, **kw):
+        attempts.append(url)
+        clock[0] += 3.9          # the primary eats nearly the whole budget
+        return _Resp(status=429, headers={"Retry-After": "60"})
+
+    monkeypatch.setenv("ORCA_LLM_API_KEY", "k1")
+    monkeypatch.setenv("ORCA_LLM_BASE_URL", "https://primary.invalid/v1/chat/completions")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_API_KEY", "k2")
+    monkeypatch.setenv("ORCA_LLM_FALLBACK_BASE_URL", "https://backup.invalid/v1/chat/completions")
+    monkeypatch.setattr(agentic.requests, "post", fake_post)
+
+    with pytest.raises(agentic.AgenticUnavailable):
+        agentic._post(_payload(q="q"), timeout=4.0)
+    assert len(attempts) == 1, "the fallback was tried with no budget left"
+
+
+# --- the deterministic floor -------------------------------------------
+# orca/extract.py reads the question without a model. Before it existed,
+# an absent or rate-limited key left intent=verdict / time_frame=now /
+# language=en for EVERY question, so ORCA became one sentence about one
+# zone -- which is what a Groq 429 looked like on stage, and why the fix
+# appeared to require a second API key. It does not.
+def test_the_model_is_not_consulted_when_the_question_names_a_zone(monkeypatch):
+    """Roughly half of all LLM calls disappear on the common case where
+    the fisherman named their own harbour -- which doubles how many
+    questions the same free-tier token budget buys. A call not made also
+    cannot rate-limit or time out."""
+    calls = []
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
+    monkeypatch.setattr(
+        "orca.agentic.requests.post",
+        lambda url, **kw: calls.append(kw["json"]) or _FakeResponse(
+            body={"choices": [{"message": {"content": json.dumps(
+                {"answer_text": "composed", "cited_evidence_ids": []})}}]}),
+    )
+
+    answer_question("is it safe at Nagapattinam?", ZONE_A["lat"], ZONE_A["lon"],
+                    observations=[_obs(ZONE_A)])
+
+    schemas = [c.get("response_format", {}).get("json_schema", {}).get("name") for c in calls]
+    assert "query_intent" not in schemas, "extraction was called although the zone was named"
+    assert "grounded_answer" in schemas, "composition should still run"
+
+
+@pytest.mark.parametrize("query,field,expected", [
+    ("How high are the waves at Chennai?", "answer_kind", "data_lookup"),
+    ("இன்று மீன்பிடிக்க பாதுகாப்பானதா?", "detected_language", "ta"),
+    ("What about tomorrow at Chennai?", "time_frame", "tomorrow"),
+])
+def test_capability_survives_with_no_key_at_all(monkeypatch, query, field, expected):
+    """Each of these returned the wrong value with the key removed, which
+    is the whole reason orca/extract.py exists. No key, no network, no
+    fallback provider -- the capability must still be there."""
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("ORCA_LLM_API_KEY", raising=False)
+
+    rec = answer_question(query, ZONE_A["lat"], ZONE_A["lon"], observations=[_obs(ZONE_A)])
+
+    assert getattr(rec, field) == expected
+    assert rec.agentic_used is False, "no model was available; this must say so"
