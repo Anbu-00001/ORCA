@@ -39,8 +39,18 @@ object PowerPressDetector {
     /** Presses required. */
     const val PRESSES = 5
 
-    /** They must all land inside this window. */
-    const val WINDOW_MS = 4_000L
+    /**
+     * They must all land inside this window.
+     *
+     * SIX seconds, not four. Four was measured against adb, which toggles
+     * the screen instantly; a person pressing a real power button is slower
+     * than that, because each press has to actually wake or sleep the
+     * display before the next one registers. At four seconds a natural
+     * five-press sequence kept ageing out at 3/5 or 4/5 and felt broken --
+     * "the response is pretty slow" was the honest description of a window
+     * that was simply too tight for a human thumb.
+     */
+    const val WINDOW_MS = 6_000L
 
     /**
      * Quiet period after firing.

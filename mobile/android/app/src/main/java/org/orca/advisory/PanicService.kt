@@ -413,6 +413,13 @@ class PanicService : Service() {
                     if (result.fire) {
                         Log.i(TAG, "PANIC: power button pressed ${PowerPressDetector.PRESSES} times")
                         fire()
+                    } else if (powerState.times.isNotEmpty()) {
+                        // A short buzz per counted press. Without it there is
+                        // no way to know the phone is listening -- the screen
+                        // is off, so the only channel left is touch. A crew
+                        // who feels nothing assumes it is broken and gives up
+                        // one press early.
+                        tick()
                     }
                 }
             }
@@ -425,6 +432,18 @@ class PanicService : Service() {
             Log.i(TAG, "Power-button watcher armed (${PowerPressDetector.PRESSES} presses)")
         } catch (e: Exception) {
             Log.w(TAG, "Screen watcher unavailable: ${e.message}")
+        }
+    }
+
+    /** One short buzz, to confirm a power press was counted. */
+    private fun tick() {
+        runCatching {
+            val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+            } else {
+                @Suppress("DEPRECATION") getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+            v.vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE))
         }
     }
 

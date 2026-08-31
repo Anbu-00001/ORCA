@@ -125,6 +125,11 @@ class MainActivity : ComponentActivity() {
         // work" -- that depends on installed packs, not on Android version.
         VoiceProbe.probeRecognition(this)
         VoiceProbe.probeTts(this)
+        // A killed process leaves the torch burning with nobody owning it,
+        // and the next launch has no idea. Observed: the camera service
+        // driving the light for a PID that no longer existed. Clearing it
+        // here is the only thing that can recover that state.
+        runCatching { TorchSos.forceOff(this) }
         askDistressPermissions()
         // Arm the volume-key watch at launch if the crew has it enabled --
         // which it is by default. The whole point of the feature is that

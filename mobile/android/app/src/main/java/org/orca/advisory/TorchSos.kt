@@ -133,6 +133,84 @@ object TorchSos {
 
     private var handler: Handler? = null
     private var cameraId: String? = null
+    private var torchCallback: CameraManager.TorchCallback? = null
+
+    /**
+     * Track what the HARDWARE is doing, not what we think we asked for.
+     *
+     * <h3>THE DESYNC THIS FIXES</h3>
+     * `running` is ORCA's own intention. The torch is a shared system
+     * resource, so intention and reality drift apart constantly: another
+     * app opens the camera and takes it, or ORCA's process is killed mid
+     * flash and the light is left on with nobody owning it. Observed on the
+     * test handset -- the camera service showed the torch being driven by a
+     * PID that no longer existed, while the freshly started app reported
+     * "SIGNALLING SOS" and produced no light at all. Both halves wrong, in
+     * opposite directions.
+     *
+     * <p>`CameraManager.registerTorchCallback` reports the real state, and
+     * it fires once on registration with the current value. So ORCA learns
+     * the truth at startup rather than assuming.
+     */
+    private fun watchHardware(app: Context) {
+        if (torchCallback != null) return
+        try {
+            val cm = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val cb = object : CameraManager.TorchCallback() {
+                override fun onTorchModeChanged(id: String, enabled: Boolean) {
+                    if (id != resolveCameraId(app)) return
+                    hardwareOn = enabled
+                }
+
+                override fun onTorchModeUnavailable(id: String) {
+                    if (id != resolveCameraId(app)) return
+                    // Another app has the camera. Stop claiming to signal.
+                    hardwareOn = false
+                    if (running) {
+                        problem = "Another app took the camera, so the light stopped."
+                        running = false
+                        handler?.removeCallbacksAndMessages(null)
+                        handler = null
+                        Log.w(TAG, "Torch became unavailable; signalling stopped")
+                    }
+                }
+            }
+            cm.registerTorchCallback(cb, Handler(Looper.getMainLooper()))
+            torchCallback = cb
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot watch the torch: ${e.message}")
+        }
+    }
+
+    /** The light as the system reports it, independent of [running]. */
+    var hardwareOn by mutableStateOf(false)
+        private set
+
+    /**
+     * Force the light off, whoever left it on.
+     *
+     * Called at startup because a killed process leaves the torch burning
+     * and the next launch has no idea it is on. `setTorchMode(false)` works
+     * regardless of which process turned it on, so this is the one call
+     * that can clear a zombie.
+     */
+    fun forceOff(context: Context) {
+        val app = context.applicationContext
+        watchHardware(app)
+        running = false
+        startedAtMs = 0L
+        handler?.removeCallbacksAndMessages(null)
+        handler = null
+        try {
+            resolveCameraId(app)?.let { id ->
+                val cm = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                cm.setTorchMode(id, false)
+                Log.i(TAG, "Torch forced off")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not force the torch off: ${e.message}")
+        }
+    }
 
     /** True if this phone has a flash ORCA can drive. Checked, never assumed. */
     fun isAvailable(context: Context): Boolean = resolveCameraId(context) != null
@@ -174,6 +252,7 @@ object TorchSos {
             return false
         }
         val cm = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        watchHardware(app)
         val h = Handler(Looper.getMainLooper())
         handler = h
         problem = null
