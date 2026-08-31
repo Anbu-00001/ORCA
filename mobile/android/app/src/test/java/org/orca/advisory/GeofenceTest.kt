@@ -172,4 +172,59 @@ class GeofenceTest {
     fun `the repeat interval is the fifteen minutes the UI promises`() {
         assertEquals(15 * 60 * 1000L, Geofence.REPEAT_MS)
     }
+
+    // --- the coverage fence must not fire on land -------------------------
+
+    private fun grid(vararg cells: Triple<Double, Double, Int>) = Bathymetry.Grid(
+        lat = cells.map { it.first }.toDoubleArray(),
+        lon = cells.map { it.second }.toDoubleArray(),
+        elevM = cells.map { it.third }.toIntArray(),
+        minLat = 0.0, maxLat = 20.0, minLon = 70.0, maxLon = 90.0,
+        strideDeg = 0.2, source = "test",
+    )
+
+    @Test
+    fun `a position over water is at sea`() {
+        assertTrue(Geofence.isAtSea(10.0, 80.0, grid(Triple(10.0, 80.0, -40)))!!)
+    }
+
+    @Test
+    fun `a position over land is NOT at sea`() {
+        // The bug this exists for: the coverage fence fired in the middle
+        // of Chennai, with five bars of signal, because everywhere inland
+        // is far from a harbour.
+        assertFalse(Geofence.isAtSea(13.0, 80.2, grid(Triple(13.0, 80.2, 12)))!!)
+    }
+
+    @Test
+    fun `no sounding near enough returns null, not a guess`() {
+        // Null makes the caller raise nothing. Defaulting either way would
+        // be inventing a fact about a place ORCA has never measured.
+        assertNull(Geofence.isAtSea(10.0, 80.0, grid(Triple(2.0, 60.0, -40))))
+        assertNull(Geofence.isAtSea(10.0, 80.0, null))
+    }
+
+    @Test
+    fun `coverage never outranks a real fence in the headline`() {
+        // "Download soon" must never be printed in red above "you are
+        // about to cross the line that gets boats seized".
+        val worst = Geofence.worst(
+            listOf(
+                Geofence.Hazard(Geofence.Kind.COVERAGE, Geofence.Band.INSIDE, 20.0),
+                Geofence.Hazard(Geofence.Kind.IMBL, Geofence.Band.ADVISORY, 9.0),
+            ),
+        )
+        assertEquals(Geofence.Kind.IMBL, worst!!.kind)
+    }
+
+    @Test
+    fun `coverage IS reported when it is the only thing raised`() {
+        val worst = Geofence.worst(
+            listOf(
+                Geofence.Hazard(Geofence.Kind.COVERAGE, Geofence.Band.WARNING, 16.0),
+                Geofence.Hazard(Geofence.Kind.IMBL, Geofence.Band.CLEAR, 90.0),
+            ),
+        )
+        assertEquals(Geofence.Kind.COVERAGE, worst!!.kind)
+    }
 }
