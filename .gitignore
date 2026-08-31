@@ -23,6 +23,7 @@ test-results/
 mobile/android/build/
 mobile/android/app/build/
 mobile/android/.gradle/
+mobile/android/.kotlin/
 mobile/android/local.properties
 mobile/android/**/*.iml
 *.apk

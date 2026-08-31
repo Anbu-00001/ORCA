@@ -4,6 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -49,55 +50,89 @@ data class Palette(
     val unknown: Color,
 )
 
-/** Daylight on deck: maximum contrast, because the competition is the sun. */
+/**
+ * DAY — sea blue, ivory, emerald. A LIGHT theme, deliberately.
+ *
+ * <p>The earlier day palette was dark, on the reasoning that a dark
+ * ground fights glare. That is backwards for an LCD in sunlight: a phone
+ * screen competes with the sun by being BRIGHT, and a light ground drives
+ * the backlight hardest. Dark text on ivory is also what every printed
+ * chart and every harbour noticeboard already looks like.
+ *
+ * <p>Ivory rather than pure white: #FFFFFF at full brightness on a deck
+ * is genuinely painful, and a warm off-white loses nothing in contrast.
+ * Panels are the pure white, so a card lifts off the page without a
+ * shadow -- shadows disappear in glare, tone does not.
+ */
 val DayPalette = Palette(
     name = "day",
-    hull = Color(0xFF071C26),
-    panel = Color(0xFF0E2A36),
-    ink = Color(0xFFF4F7F8),
-    muted = Color(0xFFA8BDC6),
-    line = Color(0xFF1E3E4C),
-    accent = Color(0xFFD9B048),
-    onAccent = Color(0xFF071C26),
-    go = Color(0xFF3FBF7F),
-    caution = Color(0xFFE8A33D),
-    deny = Color(0xFFE3564C),
-    unknown = Color(0xFF8FA3AD),
+    hull = Color(0xFFF7F4EC),        // ivory
+    panel = Color(0xFFFFFFFF),
+    ink = Color(0xFF0B2B3C),         // deep sea blue, near-black
+    muted = Color(0xFF5A7382),
+    line = Color(0xFFE2E7E4),
+    accent = Color(0xFF0E6E8C),      // sea blue
+    onAccent = Color(0xFFFFFFFF),
+    // Status colours are dark enough that WHITE sits on them at 4.5:1 --
+    // Headline paints `onAccent` over these, so a pale emerald would put
+    // white on white the one time the screen matters most.
+    go = Color(0xFF0B7D57),          // emerald
+    caution = Color(0xFFB26A00),
+    deny = Color(0xFFC62828),
+    unknown = Color(0xFF5F7482),
 )
 
-/** Dusk: the sun is down but the eye is not dark-adapted yet. Warmer,
- *  dimmer, still full colour. */
+/**
+ * DUSK — the same sea blue, after sunset.
+ *
+ * <p>The eye is not dark-adapted yet, so this is not the night palette
+ * dimmed: it is the day palette inverted, keeping full colour. Ivory
+ * becomes deep twilight blue, and the accent warms toward the horizon it
+ * is named for. Emerald and the warning colours brighten, because they
+ * now have to carry on a dark ground rather than a light one.
+ */
 val DuskPalette = Palette(
     name = "dusk",
-    hull = Color(0xFF120E1A),
-    panel = Color(0xFF1C1726),
-    ink = Color(0xFFE8E2F0),
-    muted = Color(0xFF9E93B0),
-    line = Color(0xFF2E2740),
-    accent = Color(0xFFC98A4B),
-    onAccent = Color(0xFF120E1A),
-    go = Color(0xFF4FA87A),
-    caution = Color(0xFFD1893C),
-    deny = Color(0xFFCF5347),
-    unknown = Color(0xFF847A94),
+    hull = Color(0xFF0C1E29),
+    panel = Color(0xFF14303E),
+    ink = Color(0xFFEAF1F4),
+    muted = Color(0xFF9BB3BF),
+    line = Color(0xFF1F4256),
+    accent = Color(0xFFE0A24A),      // low sun
+    onAccent = Color(0xFF0A1922),
+    go = Color(0xFF35B587),          // emerald, lifted for a dark ground
+    caution = Color(0xFFE09A42),
+    deny = Color(0xFFE06055),
+    unknown = Color(0xFF7E97A4),
 )
 
-/** Night: red-dominant, deliberately low luminance. Nothing here is
- *  bright, including the "good" state -- a green flash at 3 a.m. costs
- *  the helmsman their night vision just as surely as a white one. */
+/**
+ * NIGHT — red-dominant, and deliberately the dimmest thing on the boat.
+ *
+ * <p>This one breaks the sea-blue scheme on purpose. Rod cells barely
+ * respond to long wavelengths, so a red-shifted display costs a helmsman
+ * almost none of the twenty-odd minutes of dark adaptation that let them
+ * see an unlit hull. Every wheelhouse in the world dims to red for the
+ * same reason.
+ *
+ * <p>Nothing here is bright, INCLUDING the good state. A green flash at
+ * 3 a.m. destroys night vision exactly as thoroughly as a white one, so
+ * `go` is a desaturated sage rather than the emerald used by day. The
+ * verdict is still legible; it just does not shout.
+ */
 val NightPalette = Palette(
     name = "night",
-    hull = Color(0xFF0A0405),
-    panel = Color(0xFF160A0B),
-    ink = Color(0xFFE8B4B0),
-    muted = Color(0xFFA1706D),
-    line = Color(0xFF32191A),
-    accent = Color(0xFFC85A50),
-    onAccent = Color(0xFF0A0405),
-    go = Color(0xFFB5705E),
-    caution = Color(0xFFC46A4A),
-    deny = Color(0xFFE05A4A),
-    unknown = Color(0xFF8A5F5C),
+    hull = Color(0xFF07090B),
+    panel = Color(0xFF11161A),
+    ink = Color(0xFFD9B7B2),
+    muted = Color(0xFF94706C),
+    line = Color(0xFF221A1B),
+    accent = Color(0xFFC4584E),
+    onAccent = Color(0xFF07090B),
+    go = Color(0xFF7E9E8A),
+    caution = Color(0xFFB87A4A),
+    deny = Color(0xFFD9584A),
+    unknown = Color(0xFF6E7C82),
 )
 
 val Palettes = listOf(DayPalette, DuskPalette, NightPalette)
@@ -117,24 +152,42 @@ private val OrcaTypography = Typography(
 
 @Composable
 fun OrcaTheme(palette: Palette = DayPalette, content: @Composable () -> Unit) {
-    // darkColorScheme in every palette: all three grounds are dark, so the
-    // system's own light/dark guess is irrelevant here and following it
-    // would produce the exact inherited-token mess this file exists to
-    // prevent. isSystemInDarkTheme() is referenced only so the dependency
-    // is explicit rather than accidentally absent.
+    // The scheme follows the PALETTE, never the system setting. Day is now
+    // a light ground and dusk/night are dark, so handing Material a
+    // darkColorScheme for all three would have it derive ripples, scrims
+    // and disabled states for the wrong ground -- the inherited-token mess
+    // this file exists to prevent. isSystemInDarkTheme() is referenced so
+    // the dependency stays explicit rather than accidentally absent: ORCA
+    // deliberately does NOT follow it, because which palette a crew wants
+    // is about the sky outside, not a setting in Android.
     @Suppress("UNUSED_EXPRESSION") isSystemInDarkTheme()
-    val scheme = darkColorScheme(
-        primary = palette.accent,
-        onPrimary = palette.onAccent,
-        background = palette.hull,
-        onBackground = palette.ink,
-        surface = palette.panel,
-        onSurface = palette.ink,
-        surfaceVariant = palette.panel,
-        onSurfaceVariant = palette.muted,
-        outline = palette.line,
-        error = palette.deny,
-    )
+    val scheme = if (palette.name == "day") {
+        lightColorScheme(
+            primary = palette.accent,
+            onPrimary = palette.onAccent,
+            background = palette.hull,
+            onBackground = palette.ink,
+            surface = palette.panel,
+            onSurface = palette.ink,
+            surfaceVariant = palette.panel,
+            onSurfaceVariant = palette.muted,
+            outline = palette.line,
+            error = palette.deny,
+        )
+    } else {
+        darkColorScheme(
+            primary = palette.accent,
+            onPrimary = palette.onAccent,
+            background = palette.hull,
+            onBackground = palette.ink,
+            surface = palette.panel,
+            onSurface = palette.ink,
+            surfaceVariant = palette.panel,
+            onSurfaceVariant = palette.muted,
+            outline = palette.line,
+            error = palette.deny,
+        )
+    }
     androidx.compose.runtime.CompositionLocalProvider(LocalPalette provides palette) {
         MaterialTheme(colorScheme = scheme, typography = OrcaTypography, content = content)
     }

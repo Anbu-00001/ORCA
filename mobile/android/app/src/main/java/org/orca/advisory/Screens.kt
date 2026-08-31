@@ -313,6 +313,9 @@ fun SosScreen(
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+
+        // --- the volume-key watch --------------------------------------
+        PanicWatchCard()
         Text("அவசர உதவி", color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("Send my position for help", color = p.muted, fontSize = 14.sp)
         Spacer(Modifier.height(14.dp))
@@ -593,7 +596,7 @@ fun FleetScreen(advisory: OrcaRepository.Advisory?) {
         Text("Share the advisory with nearby boats", color = p.muted, fontSize = 14.sp)
         Spacer(Modifier.height(14.dp))
         Text(
-            "Mobile signal stops about 15 km from shore. But boats meet each other out " +
+            "Mobile signal stops about 8 NM (15 km) from shore. But boats meet each other out " +
             "there. Turn this on and your phone quietly offers what it is carrying to any " +
             "nearby boat running ORCA — and takes theirs if it is newer.\n\n" +
             "No tower. No satellite. No extra device.",
@@ -647,6 +650,92 @@ fun FleetScreen(advisory: OrcaRepository.Advisory?) {
             "ORCA never re-decides anything on the phone — the safety verdict inside a " +
             "shared advisory is the same one the shore system issued.",
             color = p.muted, fontSize = 13.sp, lineHeight = 20.sp,
+        )
+    }
+}
+
+
+// =====================================================================
+// The volume-key panic watch, armed from the SOS screen.
+// =====================================================================
+
+/**
+ * Arm or disarm the five-second volume-key hold.
+ *
+ * <p>Opt-in on purpose. It runs a foreground service with a permanent
+ * notification, and a crew that did not ask for it would reasonably read
+ * that as the app misbehaving. It also has real limits (below), and a
+ * safety feature nobody switched on knowingly is a safety feature nobody
+ * can rely on.
+ */
+@Composable
+fun PanicWatchCard() {
+    val p = LocalPalette.current
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(PanicService.running) }
+
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 12.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (on) p.deny.copy(alpha = 0.10f) else p.panel)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "ஒலி பொத்தான் அவசர அழைப்பு",
+                    color = p.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Volume-key SOS — works with the app closed",
+                    color = p.muted, fontSize = 13.sp,
+                )
+            }
+            Switch(
+                checked = on,
+                onCheckedChange = {
+                    on = it
+                    if (it) PanicService.start(context) else PanicService.stop(context)
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = p.onAccent,
+                    checkedTrackColor = p.deny,
+                ),
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Text(
+            if (on)
+                "ஒலி குறைப்பு பொத்தானை 5 விநாடி அழுத்திப் பிடியுங்கள். திரை அணைந்திருந்தாலும், செயலி மூடியிருந்தாலும் வேலை செய்யும்."
+            else
+                "இதை இயக்கினால், ஒலி பொத்தானை 5 விநாடி பிடித்தாலே அவசர அழைப்பு தொடங்கும்.",
+            color = p.ink, fontSize = 14.sp, lineHeight = 21.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (on)
+                "Hold volume-down for 5 seconds. Works with the screen off and the app closed. " +
+                    "Volume-UP cancels a hold in progress."
+            else
+                "Turn this on and holding volume-down for 5 seconds raises an SOS without " +
+                    "unlocking the phone or finding this screen.",
+            color = p.muted, fontSize = 13.sp, lineHeight = 19.sp,
+        )
+
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "What it does NOT do: it cannot send an SMS by itself — Android blocks that " +
+                "for a sideloaded app, and a message sent by a pocket would send a rescue " +
+                "to empty sea. It vibrates hard, speaks in Tamil, starts the SOS light and " +
+                "puts the message one tap from sending, over your lock screen.",
+            color = p.muted, fontSize = 12.sp, lineHeight = 18.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Limit: if another app is playing media AND your volume is already at zero, " +
+                "Android gives ORCA no key events and the hold will not be seen.",
+            color = p.caution, fontSize = 12.sp, lineHeight = 18.sp,
         )
     }
 }

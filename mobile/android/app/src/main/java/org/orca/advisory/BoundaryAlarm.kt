@@ -124,7 +124,7 @@ object BoundaryAlarm {
 
         if (band == "clear") {
             return Decision(band, false, closing, minutes,
-                "Boundary ${fmt1(current.distanceKm)} km away — outside every warning band.")
+                "Boundary ${Units.distance(current.distanceKm)} away — outside every warning band.")
         }
 
         // Rule 3: a band must hold before it speaks. GPS noise at a band
@@ -153,9 +153,9 @@ object BoundaryAlarm {
         if (closing <= CLOSING_FLOOR_KMH) {
             return Decision(band, false, closing, minutes,
                 if (closing < 0)
-                    "Boundary ${fmt1(current.distanceKm)} km away and opening — silent."
+                    "Boundary ${Units.distance(current.distanceKm)} away and opening — silent."
                 else
-                    "Boundary ${fmt1(current.distanceKm)} km away, holding station — silent.")
+                    "Boundary ${Units.distance(current.distanceKm)} away, holding station — silent.")
         }
 
         // Rule 4: re-speak inside the same band if the approach has become
@@ -169,7 +169,7 @@ object BoundaryAlarm {
             announce = newBand || becameUrgent,
             closingKmh = closing,
             minutesToBoundary = minutes,
-            why = "Closing at ${fmt1(closing)} km/h — " +
+            why = "Closing at ${Units.speed(closing)} — " +
                 (minutes?.let { "about ${it.toInt()} min to the line." } ?: "time unknown."),
         )
     }
@@ -183,7 +183,11 @@ object BoundaryAlarm {
      * duplicated only because a background service cannot reach Python.
      */
     fun message(d: Decision, distanceKm: Double, tamil: Boolean): String {
-        val km = distanceKm.toInt().toString()
+        // NAUTICAL MILES, not kilometres. This string is spoken aloud to a
+        // crew who are steering, and every chart, forecast and radio call
+        // they have ever heard uses miles. Making them convert in their
+        // head is the opposite of what a spoken warning is for.
+        val km = Units.distance(distanceKm)
         val mins = d.minutesToBoundary?.toInt()
         return when (d.band) {
             "urgent" ->
@@ -191,20 +195,20 @@ object BoundaryAlarm {
                 else "Danger. You are very close to the Sri Lanka maritime boundary. Turn back now."
             "warning" ->
                 if (tamil)
-                    "எச்சரிக்கை. கடல் எல்லை $km கிலோமீட்டர் தொலைவில் உள்ளது." +
+                    "எச்சரிக்கை. கடல் எல்லை $km தொலைவில் உள்ளது." +
                         (mins?.let { " இந்த வேகத்தில் $it நிமிடத்தில் எல்லையை அடைவீர்கள்." } ?: "") +
                         " மேற்கு நோக்கித் திரும்புங்கள்."
                 else
-                    "Warning. The maritime boundary is $km kilometres away." +
+                    "Warning. The maritime boundary is $km away." +
                         (mins?.let { " At this speed you reach it in $it minutes." } ?: "") +
                         " Turn west."
             else ->
                 if (tamil)
-                    "கடல் எல்லை $km கிலோமீட்டர் தொலைவில் உள்ளது." +
+                    "கடல் எல்லை $km தொலைவில் உள்ளது." +
                         (mins?.let { " இந்த வேகத்தில் $it நிமிடம்." } ?: "") +
                         " கவனமாக இருங்கள்."
                 else
-                    "The maritime boundary is $km kilometres away." +
+                    "The maritime boundary is $km away." +
                         (mins?.let { " About $it minutes at this speed." } ?: "") +
                         " Be careful."
         }

@@ -20,14 +20,21 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -52,6 +59,13 @@ import org.orca.advisory.ui.*
  *    comes from GET /bundle, decided by orca/policy.py on shore.
  */
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        /** Set when PanicService's full-screen alarm launches us: open
+         *  straight on SOS, because the crew has already asked for it with
+         *  a five-second hold and must not have to navigate. */
+        const val EXTRA_OPEN_SOS = "orca.open_sos"
+    }
 
     private lateinit var repo: OrcaRepository
     private var voiceResult by mutableStateOf<String?>(null)
@@ -78,7 +92,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = OrcaRepository(this)
-        setContent { OrcaApp(repo, ::listen, ::sendSms, ::ensureLocation, voiceResult) { voiceResult = null } }
+        val openSos = intent?.getBooleanExtra(EXTRA_OPEN_SOS, false) == true
+        setContent {
+            OrcaApp(repo, ::listen, ::sendSms, ::ensureLocation, voiceResult, openSos) {
+                voiceResult = null
+            }
+        }
     }
 
     private fun listen() {
@@ -130,7 +149,7 @@ class MainActivity : ComponentActivity() {
 // reachable directly from home and nothing nests.
 // ---------------------------------------------------------------------
 
-enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT, MAP, SIGNAL }
+enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT, MAP, SIGNAL, FENCE }
 
 @Composable
 fun OrcaApp(
@@ -139,10 +158,17 @@ fun OrcaApp(
     onSms: (String, String) -> Unit,
     onEnsureLocation: () -> Boolean,
     voiceResult: String?,
+    openSos: Boolean = false,
     onVoiceConsumed: () -> Unit,
 ) {
     var paletteIndex by remember { mutableIntStateOf(0) }
-    var screen by remember { mutableStateOf(Screen.HOME) }
+    // The language belongs to the PERSON holding the phone, not to the
+    // device: these handsets are bought set to English and are shared
+    // between an owner and crew who do not read the same script. So it is
+    // a control in the app, one tap, and it survives a restart.
+    val context = LocalContext.current
+    var lang by remember { mutableStateOf(Prefs.loadLang(context)) }
+    var screen by remember { mutableStateOf(if (openSos) Screen.SOS else Screen.HOME) }
     var advisory by remember { mutableStateOf<OrcaRepository.Advisory?>(null) }
     var selectedZone by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
@@ -193,7 +219,23 @@ fun OrcaApp(
     BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
 
     OrcaTheme(Palettes[paletteIndex]) {
+      CompositionLocalProvider(LocalLang provides lang) {
         val palette = LocalPalette.current
+
+        // The system's own status/nav icons are painted by Android, not by
+        // us, so they have to be told which ground they are sitting on.
+        // Day is a light palette and left the clock and battery white on
+        // ivory -- invisible in exactly the sunlight the light theme was
+        // chosen for.
+        val view = LocalView.current
+        val lightBars = palette.name == "day"
+        LaunchedEffect(lightBars) {
+            val window = (view.context as android.app.Activity).window
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = lightBars
+                isAppearanceLightNavigationBars = lightBars
+            }
+        }
         Surface(Modifier.fillMaxSize(), color = palette.hull) {
             // WINDOW INSETS. Measured on an OPPO CPH2591: without these the
             // "ORCA" title sat under the status clock and the last two
@@ -207,12 +249,17 @@ fun OrcaApp(
                 TopBar(
                     screen = screen,
                     paletteName = palette.name,
+                    lang = lang,
                     onBack = { screen = Screen.HOME },
                     onCyclePalette = { paletteIndex = (paletteIndex + 1) % Palettes.size },
+                    onCycleLang = { lang = lang.next().also { Prefs.saveLang(context, it) } },
                 )
-                Box(Modifier.weight(1f).navigationBarsPadding()) {
+                Box(Modifier.weight(1f)) {
                     when (screen) {
-                        Screen.HOME -> HomeScreen(advisory, refreshing, refreshNote) { screen = it }
+                        Screen.HOME -> HomeScreen(
+                            advisory, refreshing, refreshNote,
+                            onSos = { screen = Screen.SOS },
+                        ) { screen = it }
                         Screen.VERDICT -> VerdictScreen(advisory, selectedZone) { selectedZone = it }
                         Screen.FISH -> FishScreen(repo)
                         Screen.BOUNDARY -> BoundaryScreen(repo, onEnsureLocation)
@@ -225,217 +272,160 @@ fun OrcaApp(
                         Screen.DRIFT -> DriftScreen(advisory, onEnsureLocation, onSms)
                         Screen.MAP -> MapScreen(advisory, onEnsureLocation)
                         Screen.SIGNAL -> SignalScreen()
+                        Screen.FENCE -> GeofenceScreen(advisory, onEnsureLocation)
                     }
+                }
+                // The bar sits BELOW the content and carries the gesture-bar
+                // inset itself, so a scrolling screen runs to the true bottom
+                // edge and the bar is never behind the system pill.
+                Box(Modifier.navigationBarsPadding()) {
+                    BottomBar(screen) { screen = it }
                 }
             }
         }
+      }
     }
 }
 
 @Composable
-private fun TopBar(screen: Screen, paletteName: String, onBack: () -> Unit, onCyclePalette: () -> Unit) {
+private fun TopBar(
+    screen: Screen,
+    paletteName: String,
+    lang: Lang,
+    onBack: () -> Unit,
+    onCyclePalette: () -> Unit,
+    onCycleLang: () -> Unit,
+) {
     val p = LocalPalette.current
     Row(
         Modifier.fillMaxWidth().background(p.hull).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (screen != Screen.HOME) {
-            Text("←", color = p.accent, fontSize = 30.sp,
-                modifier = Modifier.clickable(onClick = onBack).padding(end = 16.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack, "back", tint = p.ink,
+                modifier = Modifier.size(26.dp).clickable(onClick = onBack).padding(end = 2.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            // weight + ellipsis, not a fixed width: a long Tamil title
+            // ("ஆபத்து விளக்கு") otherwise pushed the two chips off the row
+            // and wrapped "DAY" down three lines. The title yields; the
+            // controls keep their intrinsic size.
+            Text(
+                titleFor(screen, lang),
+                color = p.ink, fontWeight = FontWeight.Bold, fontSize = 19.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            Column(Modifier.weight(1f)) {
+                Text(str(S.GREETING, lang), color = p.ink, fontWeight = FontWeight.Black, fontSize = 22.sp)
+                Text(
+                    str(S.SUBTITLE, lang), color = p.muted, fontSize = 12.5.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        Text("ORCA", color = p.ink, fontWeight = FontWeight.Black, fontSize = 22.sp)
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+
+        // Language: one tap cycles Tamil -> English -> Hindi. The label is
+        // always written IN the language it selects, so it is readable by
+        // the person who needs it without knowing the current setting.
+        Row(
+            Modifier.clip(RoundedCornerShape(20.dp))
+                .background(p.accent.copy(alpha = 0.12f))
+                .clickable(onClick = onCycleLang)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Translate, "language", tint = p.accent, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(lang.label, color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(8.dp))
+
         // Day / dusk / night. One control, cycling, because a dropdown at
         // night is three taps you do not want to make.
-        Text(
-            paletteName.uppercase(),
-            color = p.accent,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
+        Row(
+            Modifier.clip(RoundedCornerShape(20.dp))
+                .background(p.accent.copy(alpha = 0.12f))
                 .clickable(onClick = onCyclePalette)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        )
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                when (paletteName) {
+                    "day" -> Icons.Filled.LightMode
+                    "dusk" -> Icons.Filled.WbTwilight
+                    else -> Icons.Filled.DarkMode
+                },
+                null, tint = p.accent, modifier = Modifier.size(15.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(paletteName.uppercase(), color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
     }
-    HorizontalDivider(color = p.accent, thickness = 2.dp)
 }
 
-// ---------------------------------------------------------------------
-// HOME — every feature, one tap, Tamil first.
-// ---------------------------------------------------------------------
-
-@Composable
-private fun HomeScreen(
-    advisory: OrcaRepository.Advisory?,
-    refreshing: Boolean,
-    refreshNote: String?,
-    go: (Screen) -> Unit,
-) {
-    val p = LocalPalette.current
-    val first = advisory?.zones?.firstOrNull()
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        DataAgeBanner(advisory, refreshing, refreshNote)
-
-        FeatureCard(
-            tamil = "இன்று போகலாமா?",
-            english = "Can I go out today?",
-            detail = first?.let { "${it.zone} — ${it.action}" } ?: "No advisory stored yet",
-            tint = first?.let { p.colorForAction(it.action) } ?: p.unknown,
-        ) { go(Screen.VERDICT) }
-
-        FeatureCard(
-            tamil = "கடல் வரைபடம்",
-            english = "Sea chart — works with no signal",
-            detail = "Seabed, boundary, warnings and your boat, drawn offline",
-            tint = p.accent,
-        ) { go(Screen.MAP) }
-
-        FeatureCard(
-            tamil = "மீன் எங்கே இருக்கும்?",
-            english = "Where are the fish likely to be?",
-            detail = "Potential Fishing Zones from satellite chlorophyll",
-            tint = p.accent,
-        ) { go(Screen.FISH) }
-
-        FeatureCard(
-            tamil = "கடல் எல்லை எச்சரிக்கை",
-            english = "Sea boundary warning",
-            detail = "Warns you before you cross, even with the app closed",
-            tint = p.deny,
-        ) { go(Screen.BOUNDARY) }
-
-        FeatureCard(
-            tamil = "புயல் வருகிறதா?",
-            english = "Is a storm coming here?",
-            detail = "India Meteorological Department warnings, checked offline",
-            tint = p.caution,
-        ) { go(Screen.STORM) }
-
-        FeatureCard(
-            tamil = "இயந்திரம் நின்றுவிட்டதா?",
-            english = "Engine dead — where will I drift?",
-            detail = "Works out your search box so rescuers know where to look",
-            tint = p.deny,
-        ) { go(Screen.DRIFT) }
-
-        FeatureCard(
-            tamil = "அவசர உதவி",
-            english = "Emergency — send my position",
-            detail = "By SMS. Works where mobile data does not.",
-            tint = p.deny,
-        ) { go(Screen.SOS) }
-
-        FeatureCard(
-            tamil = "ஆபத்து விளக்கு",
-            english = "Distress light — flash SOS",
-            detail = "Camera light blinks S-O-S. Seen a mile away, needs no signal",
-            tint = p.deny,
-        ) { go(Screen.SIGNAL) }
-
-        FeatureCard(
-            tamil = "பிற படகுகளுக்குச் சொல்",
-            english = "Warn another boat by SMS",
-            detail = "Most boats have no app, but every boat has SMS",
-            tint = p.caution,
-        ) { go(Screen.ALERTS) }
-
-        FeatureCard(
-            tamil = "அலை அளவு பார்",
-            english = "Measure the sea from your boat",
-            detail = "Your phone senses the boat's motion — no extra device",
-            tint = p.accent,
-        ) { go(Screen.WAVE) }
-
-        FeatureCard(
-            tamil = "படகுகள் இணைப்பு",
-            english = "Share with nearby boats",
-            detail = "Pass the advisory on beyond mobile range",
-            tint = p.go,
-        ) { go(Screen.FLEET) }
-
-        FeatureCard(
-            tamil = "தமிழில் கேளுங்கள்",
-            english = "Ask in Tamil, by voice",
-            detail = "Speak instead of typing",
-            tint = p.accent,
-        ) { go(Screen.ASK) }
-
-        Spacer(Modifier.height(8.dp))
-    }
+/** Screen titles for the bar. Tamil first, as everywhere. */
+private fun titleFor(s: Screen, lang: Lang) = when (s) {
+    Screen.VERDICT -> str(S.TODAYS_VERDICT, lang)
+    Screen.FISH -> str(S.T_FISH, lang)
+    Screen.BOUNDARY -> str(S.T_BOUNDARY, lang)
+    Screen.SOS -> str(S.NAV_SOS, lang)
+    Screen.ALERTS -> str(S.T_WARN, lang)
+    Screen.ASK -> str(S.T_ASK, lang)
+    Screen.WAVE -> str(S.T_WAVE, lang)
+    Screen.FLEET -> str(S.T_FLEET, lang)
+    Screen.STORM -> str(S.T_STORM, lang)
+    Screen.DRIFT -> str(S.T_DRIFT, lang)
+    Screen.MAP -> str(S.T_CHART, lang)
+    Screen.SIGNAL -> str(S.T_LIGHT, lang)
+    Screen.FENCE -> str(S.T_FENCE, lang)
+    Screen.HOME -> "ORCA"
 }
 
 /**
- * The two ages, always visible.
+ * The bottom bar.
  *
- * `freshness_min` inside the bundle is computed at FETCH time and does not
- * grow while the phone is at sea -- a two-day-old cache once displayed
- * "14 h old" on the web client. So this states, from the device clock,
- * how old the READINGS are, and separately whether the bundle was
- * downloaded or shipped with the app. Both, or neither is honest.
+ * <p>Four destinations, chosen because they are what a crew opens
+ * repeatedly on one trip: the verdict, the chart, the weather, and the
+ * emergency. Everything else lives in the grid on home -- a bar with ten
+ * items is a menu, and a menu is what this redesign was getting away
+ * from.
  */
 @Composable
-private fun DataAgeBanner(advisory: OrcaRepository.Advisory?, refreshing: Boolean, note: String?) {
+private fun BottomBar(current: Screen, go: (Screen) -> Unit) {
     val p = LocalPalette.current
-    val text = when {
-        refreshing -> "Checking for a newer advisory…"
-        advisory == null -> "No advisory on this phone. Connect once to download one."
-        else -> {
-            val age = advisory.readingAgeMinutes()
-            val readings = if (age == null) "age unknown" else "collected ${humanAge(age)} ago"
-            val origin = when {
-                advisory.fromSeed -> "shipped with the app"
-                advisory.downloadAgeMinutes() != null ->
-                    "downloaded ${humanAge(advisory.downloadAgeMinutes()!!)} ago"
-                else -> "downloaded — age unknown"
+    val lang = LocalLang.current
+    val items = listOf(
+        Triple(Screen.HOME, Icons.Filled.Home, str(S.NAV_HOME, lang)),
+        Triple(Screen.MAP, Icons.Filled.Map, str(S.NAV_CHART, lang)),
+        Triple(Screen.FENCE, Icons.Filled.Fence, str(S.NAV_FENCE, lang)),
+        Triple(Screen.SOS, Icons.Filled.Emergency, str(S.NAV_SOS, lang)),
+    )
+    Column {
+        HorizontalDivider(color = p.line)
+        Row(
+            Modifier.fillMaxWidth().background(p.panel).padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            items.forEach { (screen, icon, label) ->
+                val on = current == screen
+                val tint = if (on) p.accent else p.muted
+                Column(
+                    Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                        .clickable { go(screen) }.padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(icon, label, tint = tint, modifier = Modifier.size(23.dp))
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        label, color = tint, fontSize = 11.sp,
+                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    )
+                }
             }
-            "${advisory.zones.size} zones · $readings · $origin"
         }
     }
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp))
-            .background(p.panel).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(text, color = p.muted, fontSize = 13.sp, lineHeight = 19.sp)
-        if (note != null) Text(note, color = p.caution, fontSize = 13.sp, lineHeight = 19.sp)
-    }
-}
-
-@Composable
-private fun FeatureCard(
-    tamil: String,
-    english: String,
-    detail: String,
-    tint: Color,
-    onClick: () -> Unit,
-) {
-    val p = LocalPalette.current
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 96.dp)   // wet-thumb target
-            .clip(RoundedCornerShape(8.dp)).background(p.panel)
-            .clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // A colour bar rather than an icon: it reads at a glance in glare,
-        // carries the verdict colour where there is one, and needs no
-        // icon set to be shipped or understood.
-        Box(Modifier.width(8.dp).height(96.dp).background(tint))
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Text(tamil, color = p.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
-            Text(english, color = p.ink, fontSize = 14.sp)
-            Text(detail, color = p.muted, fontSize = 12.sp, lineHeight = 17.sp)
-        }
-    }
-}
-
-private fun humanAge(minutes: Long): String = when {
-    minutes < 1 -> "under a minute"
-    minutes < 60 -> "$minutes min"
-    minutes < 1440 -> "${minutes / 60} h"
-    else -> "${minutes / 1440} d"
 }

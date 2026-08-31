@@ -209,7 +209,7 @@ private fun AlertCard(alert: StormAlerts.Alert, covering: Boolean) {
             if (!covering && alert.polygon != null) {
                 // Approximate on purpose: nearest VERTEX, which over-states
                 // the distance. Safe direction to be wrong in.
-                Text("~${alert.distanceKm.toInt()} km away",
+                Text("~${Units.distance(alert.distanceKm)} away",
                     color = p.muted, fontSize = 12.sp)
             }
         }
@@ -333,8 +333,8 @@ fun DriftScreen(
 
         Headline(
             tamil = "${DriftModel.compassTamil(result.bearingDeg)} நோக்கி " +
-                "${fmt(result.distanceKm)} கி.மீ",
-            english = "${fmt(result.distanceKm)} km toward " +
+                "${Units.distance(result.distanceKm)}",
+            english = "${Units.distance(result.distanceKm)} toward " +
                 "${DriftModel.compass(result.bearingDeg)} in ${hours.toInt()} h",
             detail = result.confidenceNote,
             tint = p.caution,
@@ -367,7 +367,7 @@ fun DriftScreen(
             Spacer(Modifier.height(6.dp))
             Text(
                 "Centre of the search box after ${hours.toInt()} hours. The box " +
-                    "itself spans roughly ${fmt(boxSpanKm(result))} km — give the " +
+                    "itself spans roughly ${Units.distance(boxSpanKm(result))} — give the " +
                     "Coast Guard your CURRENT position too, not only this one.",
                 color = p.muted, fontSize = 13.sp, lineHeight = 19.sp,
             )
@@ -413,9 +413,9 @@ fun DriftScreen(
 
         // --- what it was computed from ---------------------------------------
         Section("எதிலிருந்து / WORKED OUT FROM") {
-            InputRow("காற்று / Wind", "${fmt(zone.windSpeedKmh!!)} km/h from " +
+            InputRow("காற்று / Wind", "${Units.speed(zone.windSpeedKmh!!)} from " +
                 "${zone.windDirectionDeg!!.toInt()}°")
-            InputRow("நீரோட்டம் / Current", "${fmt(zone.currentSpeedKmh!!)} km/h toward " +
+            InputRow("நீரோட்டம் / Current", "${Units.speed(zone.currentSpeedKmh!!)} toward " +
                 "${zone.currentDirectionDeg!!.toInt()}°")
             InputRow("இடம் / Readings from", zone.zone)
             InputRow("நேரம் / Measured", humanTime(zone.validTime))
@@ -450,7 +450,7 @@ fun driftSms(
     append("Now / இப்போது: ${coords(lat, lon)}\n")
     append("Adrift ${hours.toInt()} h -> ${coords(r.centreLat, r.centreLon)}\n")
     append("Drifting ${DriftModel.compass(r.bearingDeg)} " +
-        "(${r.bearingDeg.toInt()}deg) at ${fmt(r.distanceKm / hours)} km/h\n")
+        "(${r.bearingDeg.toInt()}deg) at ${Units.speed(r.distanceKm / hours)}\n")
     append("Search box:\n")
     r.box.forEach { append("  ${coords(it.first, it.second)}\n") }
     append("Leeway model, wind+current at last download. Estimate, not a fix.")

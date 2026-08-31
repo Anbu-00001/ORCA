@@ -25,6 +25,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- BOAT-TO-BOAT RELAY. Mobile signal stops ~15 km offshore, which is
@@ -101,6 +103,20 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_verdict_info" />
         </receiver>
+
+
+        <!-- The volume-key panic watch. specialUse, declared honestly:
+             this is not media playback and not location. It is a
+             hardware-key listener for an emergency, which Android has no
+             category for. -->
+        <service
+            android:name=".PanicService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Listens for a five-second volume-key hold to raise a maritime distress alert while the app is closed." />
+        </service>
 
     </application>
 </manifest>
