@@ -191,6 +191,10 @@ class OrcaRepository(private val context: Context) {
                 .putString(KEY_DOWNLOADED, now)
                 .putBoolean(KEY_FROM_SEED, false)
                 .apply()
+            // Push the new verdict to the home screen straight away. Without
+            // this the widget waits for its own 30-minute tick and can sit a
+            // whole half-hour behind the app it lives beside.
+            VerdictWidget.refreshAll(context)
             parse(text, downloadedAt = Instant.parse(now), fromSeed = false)
                 ?: throw IllegalStateException("bundle carried no zones")
         } finally {

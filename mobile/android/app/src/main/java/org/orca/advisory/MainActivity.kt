@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
 // reachable directly from home and nothing nests.
 // ---------------------------------------------------------------------
 
-enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT }
+enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT, MAP, SIGNAL }
 
 @Composable
 fun OrcaApp(
@@ -223,6 +223,8 @@ fun OrcaApp(
                         Screen.FLEET -> FleetScreen(advisory)
                         Screen.STORM -> StormScreen(advisory, onEnsureLocation)
                         Screen.DRIFT -> DriftScreen(advisory, onEnsureLocation, onSms)
+                        Screen.MAP -> MapScreen(advisory, onEnsureLocation)
+                        Screen.SIGNAL -> SignalScreen()
                     }
                 }
             }
@@ -287,6 +289,13 @@ private fun HomeScreen(
         ) { go(Screen.VERDICT) }
 
         FeatureCard(
+            tamil = "கடல் வரைபடம்",
+            english = "Sea chart — works with no signal",
+            detail = "Seabed, boundary, warnings and your boat, drawn offline",
+            tint = p.accent,
+        ) { go(Screen.MAP) }
+
+        FeatureCard(
             tamil = "மீன் எங்கே இருக்கும்?",
             english = "Where are the fish likely to be?",
             detail = "Potential Fishing Zones from satellite chlorophyll",
@@ -320,6 +329,13 @@ private fun HomeScreen(
             detail = "By SMS. Works where mobile data does not.",
             tint = p.deny,
         ) { go(Screen.SOS) }
+
+        FeatureCard(
+            tamil = "ஆபத்து விளக்கு",
+            english = "Distress light — flash SOS",
+            detail = "Camera light blinks S-O-S. Seen a mile away, needs no signal",
+            tint = p.deny,
+        ) { go(Screen.SIGNAL) }
 
         FeatureCard(
             tamil = "பிற படகுகளுக்குச் சொல்",

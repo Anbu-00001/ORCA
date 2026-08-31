@@ -87,5 +87,20 @@
             android:name=".BoundaryWatchService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Today's verdict on the home screen. The clearest thing in this
+             app that a web client cannot do: no browser API can render live
+             content on the Android launcher. A PWA shortcut is an icon. -->
+        <receiver
+            android:name=".VerdictWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_verdict_info" />
+        </receiver>
+
     </application>
 </manifest>

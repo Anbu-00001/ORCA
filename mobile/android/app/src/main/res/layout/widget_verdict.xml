@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Deliberately plain: one verdict, one zone, one age. A widget read at
+     4 a.m. on a dark quay has room for exactly one idea. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#1B5E20">
+
+    <TextView
+        android:id="@+id/widget_verdict"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#FFFFFF"
+        android:textSize="30sp"
+        android:textStyle="bold"
+        android:text="ORCA" />
+
+    <TextView
+        android:id="@+id/widget_zone"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="#E0E0E0"
+        android:textSize="14sp"
+        android:text="" />
+
+    <TextView
+        android:id="@+id/widget_age"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="#B0BEC5"
+        android:textSize="12sp"
+        android:text="" />
+</LinearLayout>

@@ -13,8 +13,8 @@ android {
         minSdk 24          // Android 7.0 -- covers the mid-range Android
                            // phones ORCA's users actually own
         targetSdk 35
-        versionCode 3
-        versionName "3.0-storm-drift"
+        versionCode 4
+        versionName "4.0-chart-signal"
     }
 
     sourceSets {
@@ -40,6 +40,20 @@ android {
     // radio. returnDefaultValues lets android.util.Log no-op instead of
     // throwing; nothing under test depends on its return value.
     testOptions { unitTests.returnDefaultValues = true }
+
+    // Skip NDK symbol-stripping. ORCA ships NO native code of its own -- the
+    // only .so in the APK is androidx.graphics.path, which arrives already
+    // stripped inside its AAR, so this task has nothing to remove.
+    //
+    // Kept because it is the first thing to break when the build machine is
+    // short of memory. Stripping forks an llvm-strip process per ABI, and on
+    // a 16 GB laptop already running an IDE and several Gradle daemons those
+    // forks fail with "Daemon startup failed" -- which reads like a broken
+    // NDK and is not one. The demo laptop is exactly that machine, so the
+    // build should not depend on there being spare memory to fork into.
+    packaging {
+        jniLibs { keepDebugSymbols += ['**/*.so'] }
+    }
 
     buildTypes {
         release {

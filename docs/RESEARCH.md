@@ -778,3 +778,45 @@ Stated plainly so nobody mistakes silence for verification:
 | `data/fetch.py` — wind **direction** added to the forecast fetcher | Drift is uncomputable without it |
 | `BoundaryAlarm.kt` — closing-speed alerting replaces distance-only | Gemini AND Grok, independently, on alarm fatigue |
 | `NewScreens.kt` — strip U+F000–U+F8FF from IMD text | Found on hardware: IMD ships Wingdings bullets that render as tofu |
+
+## 6.7 The "it looks barebones" diagnosis (31 Aug)
+
+A teammate said the mobile app felt lightweight next to the web client.
+That was correct, and the reason was specific and checkable:
+
+```
+$ grep -rl 'Canvas\|drawLine\|drawPath' mobile/android/.../org/orca/advisory/
+(nothing)
+```
+
+**Every mobile screen was text and cards. Zero graphics.** The web client
+has MapLibre and a 3D ocean view. Side by side the phone looked thin even
+though it did strictly more.
+
+The fix was not to copy the web client's map. It was to notice that the
+web client's map is the weaker one where it matters: MapLibre fetches
+tiles over the network, so at sea it is a grey rectangle. ORCA already
+ships the geometry — 4,760 NOAA ETOPO soundings, the four real IMBL
+segments, IMD's CAP polygons — so the phone can draw a chart that is
+exactly as good 60 km offshore as it is alongside.
+
+Three features were added on that reasoning, all verified on an OPPO
+CPH2591:
+
+| Feature | Verified how |
+|---|---|
+| `OfflineMap.kt` — Canvas sea chart | Coast, shelf and deep water render from real soundings; white ring is the GPS fix; IMBL dashed. 15 `MapProjectionTest` cases cover the maths |
+| `TorchSos.kt` — Morse SOS from the camera light | `dumpsys media.camera` shows the torch cycling on/off, and off cleanly on stop |
+| `VerdictWidget.kt` — home-screen widget | Registered provider confirmed via `cmd package query-receivers` |
+
+Two real bugs surfaced by running it rather than reading it:
+
+1. **Compose does not clip a Canvas to its own layout.** Zone markers and
+   the IMBL were painting straight over the layer toggles and the key
+   below. Fixed with `clipToBounds()`.
+2. **The release build failed only on a clean build**, with what looked
+   like a broken NDK (`llvm-strip … Daemon startup failed`). It was
+   memory: stripping forks a process per ABI and there was 600 MB free
+   with five Gradle daemons up. Stripping is now skipped — ORCA ships no
+   native code of its own, so it removes nothing, and the demo laptop is
+   exactly the machine that cannot spare the fork.

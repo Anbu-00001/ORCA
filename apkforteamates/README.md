@@ -1,7 +1,7 @@
 # ORCA for your phone — read this before you install
 
-**File:** `orca-3.0-storm-drift.apk` (10.7 MB, versionCode 3)
-**Built:** 30 August 2026 · **Tested on:** OPPO CPH2591, Android 15
+**File:** `orca-4.0-chart-signal.apk` (10.8 MB, versionCode 4)
+**Built:** 31 August 2026 · **Tested on:** OPPO CPH2591, Android 15
 
 ---
 
@@ -41,12 +41,30 @@ with the backend switched off:
 | Warn another boat by SMS | yes | |
 | Measure the sea | yes | Accelerometer |
 | Share with nearby boats | **untested** | Needs two phones. See below. |
+| **Sea chart** | yes | Real soundings + boundary + warnings, drawn with no tiles |
+| **Distress light** | yes | Camera flash blinks Morse SOS — needs no signal at all |
 | Ask in Tamil, by voice | partly | Recogniser may want a language pack |
+
+Plus a **home-screen widget**: long-press the home screen → Widgets → ORCA.
+Today's verdict, its zone and its real age, without opening anything.
 
 The advisory shipped inside the APK was collected **30 Aug 2026, 00:45**.
 The app always shows its real age on the home screen. It never hides it.
 
 ---
+
+## The five things a web app cannot do
+
+If anyone says the mobile app is thin, this is the answer. None of these
+are possible in a browser, at any effort:
+
+| Feature | Why a browser cannot |
+|---|---|
+| **Sea chart offline** | Every web map fetches tiles from a server. Out of coverage MapLibre is a grey rectangle. This draws 4,760 NOAA soundings and the treaty boundary that live *in the APK* — as good 60 km out as alongside |
+| **Home-screen widget** | No browser API renders live content on the Android launcher. A PWA shortcut is an icon that opens a browser |
+| **Distress light** | Torch needs HTTPS, a camera permission, an open MediaStream, and stops dead when the tab is backgrounded. Safari has no support at all. Here it keeps flashing with the screen off |
+| **Boundary watch with the app closed** | A killed tab gets no GPS. A foreground service does |
+| **SMS** | A browser cannot pre-fill and hand off an SMS |
 
 ## The two things you must not misread
 
@@ -99,12 +117,29 @@ PY
 ANDROID_HOME=$HOME/Android/Sdk gradle -p mobile/android assembleRelease
 
 # the tests that matter, none of which need a phone
-ANDROID_HOME=$HOME/Android/Sdk gradle -p mobile/android testDebugUnitTest   # 73 tests
+ANDROID_HOME=$HOME/Android/Sdk gradle -p mobile/android testDebugUnitTest   # 88 tests
 python -m pytest -q                                                          # 477 tests
 ```
 
 Output lands at
 `mobile/android/app/build/outputs/apk/release/app-release.apk`.
+
+---
+
+## Pick up a task
+
+Three work packages, hardest first. Take one, do not split one.
+
+| File | What | Effort |
+|---|---|---|
+| `TASK-1.md` | Route planning (the last SIH capability we lack) **and** a live High-severity safety bug where a two-zone question answers for one zone and shows green | 2–3 days |
+| `TASK-2.md` | Make the storm warning speak with the app closed; apply for an IMD API key; field-test the boat-to-boat relay | 1–2 days |
+| `TASK-3.md` | Get the Tamil reviewed by a native speaker, record the 18 audio clips, verify the demo end to end, fix three small real bugs | half a day |
+
+**If you only do one thing, do TASK-3 Part 3A.** Every Tamil sentence in
+this app — including the ones that say *do not go out* — was written
+without a native speaker checking it. A negation that reads the wrong way
+is the only bug here that could actually hurt somebody.
 
 ---
 

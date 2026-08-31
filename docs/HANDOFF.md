@@ -121,6 +121,21 @@ happen to fill:
 - **IMD warnings matched to YOUR position, offline.** Not "there is a
   cyclone somewhere" — the phone runs point-in-polygon against IMD's own
   signed CAP geometry using its own GPS fix, with no network.
+- **A sea chart that works with the radio off.** Every web map — ours
+  included — fetches tiles from a server and is a grey rectangle out of
+  coverage. The phone draws 4,760 NOAA ETOPO soundings, the India–Sri
+  Lanka treaty line and IMD's warning outlines from geometry shipped
+  inside the APK. Every pixel is a number with a source; nothing is a
+  basemap picture. This is the single clearest answer to "why not just
+  use the website".
+- **The camera light flashing Morse SOS.** COLREGS lists flashes among
+  the recognised signals of distress. A browser cannot drive the torch
+  without HTTPS, a camera permission and an open MediaStream, and stops
+  the moment the tab is backgrounded; Safari cannot at all. ORCA's keeps
+  flashing with the screen off.
+- **Today's verdict on the home screen.** A widget is zero actions at
+  4 a.m. on a dark quay. No browser API can render live content on the
+  Android launcher — a PWA shortcut is an icon.
 - **Boundary alerts that use closing speed, not distance.** A boat
   working a net parallel to the IMBL at 4.9 km is not warned. A boat
   running at the line from 11 km is. This is the difference between an

@@ -1,11 +1,11 @@
 {
- "generated_at": "2026-08-29T19:29:43.414203+00:00",
+ "generated_at": "2026-08-31T11:12:47.740319+00:00",
  "cache_fetched_at": "2026-08-29T19:17:39.894327+00:00",
  "latest_reading_time": "2026-08-29T19:15:00+00:00",
  "zone_count": 10,
  "zones": [
   {
-   "id": "rec_649c4d17",
+   "id": "rec_f124136e",
    "action": "GO",
    "reason": "SST 30.2°C within productive range, current 0.6 km/h",
    "recommendation": "Go to Chennai. SST 30.2°C within productive range, current 0.6 km/h.",
@@ -242,7 +242,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_a330a3b6",
+   "id": "rec_33ad0ae0",
    "action": "GO",
    "reason": "SST 30.1°C within productive range, current 0.4 km/h",
    "recommendation": "Go to Cuddalore. SST 30.1°C within productive range, current 0.4 km/h.",
@@ -479,7 +479,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_5d040c25",
+   "id": "rec_e0227712",
    "action": "GO",
    "reason": "SST 29.7°C within productive range, current 0.3 km/h",
    "recommendation": "Go to Karaikal. SST 29.7°C within productive range, current 0.3 km/h.",
@@ -716,7 +716,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_e6676b1a",
+   "id": "rec_3d9e0def",
    "action": "GO",
    "reason": "Elevated chlorophyll (1.75 mg/m³) and warm SST (30.3°C) suggest fish aggregation",
    "recommendation": "Go to Nagapattinam. Elevated chlorophyll (1.75 mg/m³) and warm SST (30.3°C) suggest fish aggregation.",
@@ -968,7 +968,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_c73b53f8",
+   "id": "rec_02fd48fc",
    "action": "GO",
    "reason": "Elevated chlorophyll (3.98 mg/m³) and warm SST (30.2°C) suggest fish aggregation",
    "recommendation": "Go to Point Calimere. Elevated chlorophyll (3.98 mg/m³) and warm SST (30.2°C) suggest fish aggregation.",
@@ -1220,7 +1220,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_480ab155",
+   "id": "rec_ddbc674e",
    "action": "SAFER ALTERNATIVE",
    "reason": "Wind 32.9 km/h, rain 0.0mm",
    "recommendation": "Conditions at Mandapam are borderline — Wind 32.9 km/h, rain 0.0mm. No clearly safer nearby zone found; proceed with caution or wait.",
@@ -1477,7 +1477,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_3580905b",
+   "id": "rec_1056fdb0",
    "action": "SAFER ALTERNATIVE",
    "reason": "Wind 36.6 km/h, rain 0.0mm",
    "recommendation": "Conditions at Rameswaram are borderline — Wind 36.6 km/h, rain 0.0mm. No clearly safer nearby zone found; proceed with caution or wait.",
@@ -1734,7 +1734,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_4acdea2b",
+   "id": "rec_44415424",
    "action": "GO",
    "reason": "Elevated chlorophyll (1.18 mg/m³) and warm SST (27.4°C) suggest fish aggregation",
    "recommendation": "Go to Thoothukudi. Elevated chlorophyll (1.18 mg/m³) and warm SST (27.4°C) suggest fish aggregation.",
@@ -1986,7 +1986,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_73f27e73",
+   "id": "rec_3b39fd54",
    "action": "SAFER ALTERNATIVE",
    "reason": "Wind 28.8 km/h, rain 0.0mm",
    "recommendation": "Do not go to Kanyakumari — Wind 28.8 km/h, rain 0.0mm. Go to Thoothukudi instead.",
@@ -2307,7 +2307,7 @@
    "blind_agents": []
   },
   {
-   "id": "rec_06481c67",
+   "id": "rec_9298ae2c",
    "action": "GO",
    "reason": "No hazards found; conditions acceptable",
    "recommendation": "Go to Colachel. No hazards found; conditions acceptable.",
@@ -2684,64 +2684,7 @@
   "source": "India Meteorological Department (CAP v1.2 public feed)",
   "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/rss.xml",
   "fetched_at": "2026-08-29T19:18:03.152039+00:00",
-  "alerts": [
-   {
-    "identifier": "urn:oid:2.49.0.1.356.0.2026.8.29.8.52.26",
-    "sender_name": "NWFC DIVISION, IMD, NEW DELHI",
-    "event": "Extremely heavy",
-    "headline": "Heavy to very heavy with extremely heavy rainfall",
-    "description": "Heavy to Very heavy rainfall at few places and extremely Heavy Rainfall at isolated places very likely over Odisha.",
-    "instruction": "Action suggested\n\n\tAvoid roadway underpasses, drainage ditches, low lying areas and areas where water collects – they can unexpectedly flood or overflow.\n\t      Stay away from power lines or electrical wires.\n\t      Don’t stay in kuchcha houses during heavy rainfall as it may collapse anytime soon.\n\t       Drive carefully.",
-    "severity": "Severe",
-    "urgency": "Expected",
-    "certainty": "Likely",
-    "onset": "2026-08-29T09:00:00+05:30",
-    "expires": "2026-08-31T09:00:00+05:30",
-    "sent": "2026-08-29T14:22:26+05:30",
-    "area_desc": "ODISHA",
-    "polygon": [
-     [
-      21.5348,
-      87.4072
-     ],
-     [
-      22.3501,
-      86.001
-     ],
-     [
-      22.3501,
-      83.9355
-     ],
-     [
-      20.715,
-      82.8809
-     ],
-     [
-      19.6012,
-      82.1777
-     ],
-     [
-      18.8127,
-      83.3203
-     ],
-     [
-      19.0621,
-      84.7705
-     ],
-     [
-      20.5917,
-      86.792
-     ],
-     [
-      21.5348,
-      87.4072
-     ]
-    ],
-    "web": "https://mausam.imd.gov.in/imd_latest/contents/subdivisionwise-warning.php",
-    "provenance": "https://cap-sources.s3.amazonaws.com/in-imd-en/2026-08-29-08-52-26.xml",
-    "signed": true
-   }
-  ]
+  "alerts": []
  },
  "drift_inputs": [
   {

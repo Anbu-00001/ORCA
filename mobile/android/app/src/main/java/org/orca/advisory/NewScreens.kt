@@ -114,6 +114,34 @@ fun StormScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Bool
 
         PositionRow(lat, lon, fix != null, usingZone?.zone, fixError)
 
+        // --- where the warnings actually are ------------------------------
+        val drawable = (match.covering + match.elsewhere)
+            .filter { (it.polygon?.size ?: 0) >= 3 }
+        if (drawable.isNotEmpty()) {
+            Section("வரைபடம் / WHERE THE WARNINGS ARE") {
+                OfflineMap(
+                    heightDp = 260,
+                    focusLat = lat,
+                    focusLon = lon,
+                    spanDeg = if (match.covering.isNotEmpty()) 6.0 else 16.0,
+                    polygons = drawable.map {
+                        MapPolygon(
+                            it.polygon!!,
+                            if (it.severity == "Extreme") p.deny else p.caution,
+                            label = it.areaDesc,
+                        )
+                    },
+                    markers = listOf(MapMarker(lat, lon, Color.White, radiusDp = 7f, ring = true)),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "White ring is this position. Shaded areas are IMD's own warning " +
+                        "outlines, drawn exactly as published. Pinch to zoom.",
+                    color = p.muted, fontSize = 13.sp, lineHeight = 19.sp,
+                )
+            }
+        }
+
         // --- warnings over the boat --------------------------------------
         if (match.covering.isNotEmpty()) {
             Section("இங்கே / OVER YOU") {
@@ -349,8 +377,31 @@ fun DriftScreen(
             }
         }
 
-        // --- the box --------------------------------------------------------
+        // --- the box, drawn ---------------------------------------------------
+        // Four lat/lon pairs are unreadable as a shape. A crew needs to see
+        // WHERE, relative to the coast and the boundary, and the whole point
+        // of this screen is that they need it with no signal.
         Section("தேடல் பெட்டி / SEARCH BOX") {
+            OfflineMap(
+                heightDp = 240,
+                focusLat = (originLat + result.centreLat) / 2,
+                focusLon = (originLon + result.centreLon) / 2,
+                spanDeg = maxOf(0.35, result.distanceKm / 45.0),
+                polygons = listOf(MapPolygon(result.box, p.caution, fillAlpha = 0.22f)),
+                lines = advisory?.boundary?.segments?.map { MapLine(it, p.deny, dashed = true) }
+                    ?: emptyList(),
+                markers = listOf(
+                    MapMarker(originLat, originLon, Color.White, radiusDp = 7f, ring = true),
+                    MapMarker(result.centreLat, result.centreLon, p.caution, radiusDp = 6f),
+                ),
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "White ring is where you are now. Amber is the centre of the box after " +
+                    "${hours.toInt()} hours. The red dashed line is the sea boundary.",
+                color = p.muted, fontSize = 13.sp, lineHeight = 19.sp,
+            )
+            Spacer(Modifier.height(12.dp))
             result.box.forEachIndexed { i, corner ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Text("${i + 1}", color = p.accent, fontSize = 14.sp,
