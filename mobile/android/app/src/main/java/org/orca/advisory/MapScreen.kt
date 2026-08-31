@@ -190,12 +190,15 @@ fun SignalScreen() {
     val lang = LocalLang.current
     val context = LocalContext.current
     val available = remember { TorchSos.isAvailable(context) }
-    var on by remember { mutableStateOf(TorchSos.isRunning()) }
-    var failed by remember { mutableStateOf(false) }
+    // Read straight from TorchSos rather than caching a copy. The SOS send
+    // and the volume-key watch can both start the light while this screen
+    // is open, and a local Boolean would sit here reading "off" beside a
+    // flashing torch with no way to stop it.
+    val on = TorchSos.running
 
     // If the screen is left while flashing, keep flashing -- that is the
-    // whole point. But if the app is destroyed, Android drops the torch,
-    // so nothing is left stuck on.
+    // whole point. A distress light that switches itself off when the crew
+    // navigates away is worse than no light.
     DisposableEffect(Unit) { onDispose { } }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -231,15 +234,20 @@ fun SignalScreen() {
                 if (on) bi("நிறுத்து  ·  Stop signalling", lang) else bi("SOS விளக்கை ஆரம்பி  ·  Start SOS light", lang),
                 if (on) p.panel else p.deny,
             ) {
-                if (on) { TorchSos.stop(context); on = false }
-                else { failed = !TorchSos.start(context); on = !failed }
+                TorchSos.toggle(context)
             }
-            if (failed) {
+            // The reason comes from TorchSos, which is the only thing that
+            // knows why -- no flash at all, or the camera taken mid-signal.
+            TorchSos.problem?.let { why ->
+                Spacer(Modifier.height(10.dp))
+                Text(why, color = p.caution, fontSize = 14.sp, lineHeight = 20.sp)
+            }
+            if (on) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "The torch could not be opened — another app may be using the camera. " +
-                        "Close it and try again.",
-                    color = p.caution, fontSize = 14.sp, lineHeight = 20.sp,
+                    "Flashing for ${TorchSos.runningSeconds()} s. It will not stop on its " +
+                        "own — that is deliberate, so press Stop when you no longer need it.",
+                    color = p.muted, fontSize = 13.sp, lineHeight = 19.sp,
                 )
             }
         }

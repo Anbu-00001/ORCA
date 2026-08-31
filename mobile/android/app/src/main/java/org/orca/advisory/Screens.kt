@@ -509,21 +509,18 @@ fun SosScreen(
             }
             // The send starts the torch. Without this the crew has no way
             // to stop it from the screen that started it.
-            if (TorchSos.isRunning) {
+            if (TorchSos.running) {
                 Spacer(Modifier.height(10.dp))
-                var lit by remember { mutableStateOf(true) }
-                if (lit) {
-                    Text(
-                        bi("விளக்கை நிறுத்து · SOS light is flashing — STOP IT", lang),
-                        color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(p.caution)
-                            .clickable { TorchSos.stop(context); lit = false }
-                            .padding(vertical = 16.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                }
+                Text(
+                    bi("விளக்கை நிறுத்து · SOS light is flashing — STOP IT", lang),
+                    color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(p.caution)
+                        .clickable { TorchSos.stop(context) }
+                        .padding(vertical = 16.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
             }
 
             if (update != null) {
