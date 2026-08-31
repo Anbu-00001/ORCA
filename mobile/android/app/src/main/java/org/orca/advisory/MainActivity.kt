@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.util.Log
@@ -101,12 +102,18 @@ class MainActivity : ComponentActivity() {
      * the Coast Guard call working.
      */
     private fun askDistressPermissions() {
-        val need = listOf(
-            Manifest.permission.SEND_SMS,
-            Manifest.permission.CALL_PHONE,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-        ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        val need = buildList {
+            add(Manifest.permission.SEND_SMS)
+            add(Manifest.permission.CALL_PHONE)
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
+            // Without this the lock-screen SOS action cannot be shown, and
+            // that notification is the ONLY way to raise an alarm once the
+            // screen is off -- no volume key reaches an app in that state.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (need.isNotEmpty()) permissionLauncher.launch(need.toTypedArray())
     }
 
@@ -119,6 +126,14 @@ class MainActivity : ComponentActivity() {
         VoiceProbe.probeRecognition(this)
         VoiceProbe.probeTts(this)
         askDistressPermissions()
+        // Arm the volume-key watch at launch if the crew has it enabled --
+        // which it is by default. The whole point of the feature is that
+        // it is already running when something goes wrong, not that it can
+        // be switched on once it has.
+        if (Settings.load(this).panicWatch) {
+            runCatching { PanicService.start(this) }
+                .onFailure { Log.w("ORCA", "Could not arm the panic watch: ${it.message}") }
+        }
         val openSos = intent?.getBooleanExtra(EXTRA_OPEN_SOS, false) == true
         setContent {
             OrcaApp(repo, ::listen, ::sendSms, ::ensureLocation, voiceResult, openSos) {

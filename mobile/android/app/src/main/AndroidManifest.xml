@@ -27,6 +27,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- The panic watch has to survive a reboot. A crew relying on a
+         volume-key SOS that quietly died three weeks ago at a restart is
+         worse off than one who never had it. See BootReceiver.kt. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- BOAT-TO-BOAT RELAY. Mobile signal stops ~15 km offshore, which is
@@ -85,11 +90,58 @@
              by WebViewAssetLoader. A real deployment pointing at a real
              backend should drop this and use https. -->
 
+        <!-- PORTRAIT ONLY, deliberately.
+
+             Landscape broke real screens: the verdict headline was clipped
+             behind the bottom navigation, so "Chennai" (the harbour the
+             verdict is ABOUT) was cut in half. On a 720x1612 handset
+             landscape leaves about 380dp of usable height, which is less
+             than the verdict block alone.
+
+             It is also how the app is actually held. A phone on a boat is
+             gripped one-handed or wedged upright in a console; nobody turns
+             it sideways to read whether it is safe to sail. Locking the
+             orientation removes a whole class of layout failure rather than
+             chasing each one. -->
+        <!-- THE VOLUME-KEY PANIC TRIGGER.
+
+             BIND_ACCESSIBILITY_SERVICE is required by the platform and can
+             only be held by a service the user has switched on by hand in
+             Settings, Accessibility. That deliberate step is the price of
+             seeing key events from a locked phone with the screen off, and
+             it is the only mechanism on stock Android that does.
+
+             The service reads no screen content: see res/xml for the
+             capability list it does NOT request. -->
+        <service
+            android:name=".PanicKeyService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/panic_key_service" />
+        </service>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
-            android:screenOrientation="unspecified">
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

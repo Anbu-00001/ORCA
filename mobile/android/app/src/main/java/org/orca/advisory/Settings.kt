@@ -119,6 +119,21 @@ object Settings {
         val hull: Hull = Hull.GENERAL,
         val speakAloud: Boolean = false,
         val keepScreenOn: Boolean = false,
+        /**
+         * The volume-key panic watch, ON by default.
+         *
+         * <p>It used to default OFF and had to be found and switched on
+         * inside the app. That inverts the whole point: the crew this is
+         * for is one who cannot reach the screen, and asking them to have
+         * prepared the phone correctly beforehand is asking them to have
+         * predicted the emergency. A safety device that is off until
+         * configured is off when it matters.
+         *
+         * <p>The cost is a foreground service and a silent audio track
+         * whenever ORCA is installed. That is a permanent notification the
+         * crew can see and stop, which is the honest trade.
+         */
+        val panicWatch: Boolean = true,
     )
 
     fun load(context: Context): Values {
@@ -132,6 +147,7 @@ object Settings {
             hull = enumOr(p.getString("hull", null), Hull.entries, Hull.GENERAL),
             speakAloud = p.getBoolean("speak_aloud", false),
             keepScreenOn = p.getBoolean("keep_screen_on", false),
+            panicWatch = p.getBoolean("panic_watch", true),
         )
     }
 
@@ -145,6 +161,7 @@ object Settings {
             .putString("hull", v.hull.name)
             .putBoolean("speak_aloud", v.speakAloud)
             .putBoolean("keep_screen_on", v.keepScreenOn)
+            .putBoolean("panic_watch", v.panicWatch)
             .apply()
     }
 

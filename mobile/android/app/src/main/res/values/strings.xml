@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ORCA</string>
+
+    <!-- Shown in Android's own Accessibility settings, so it has to
+         explain itself to somebody who is not in ORCA and is deciding
+         whether to trust it. Says exactly what is watched and what is
+         not. -->
+    <string name="panic_key_service_summary">Hold volume-down for 5 seconds to send an SOS</string>
+    <string name="panic_key_service_description">Lets ORCA notice when you hold the volume-down button for five seconds, so a distress message with your position goes out without unlocking the phone or opening the app.\n\nORCA watches for that one button only. It cannot read the screen or see what you do in other apps, and the volume buttons keep working normally.</string>
 </resources>

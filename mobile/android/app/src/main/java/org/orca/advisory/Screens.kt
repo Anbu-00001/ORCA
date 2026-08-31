@@ -106,8 +106,17 @@ private fun ReadingRow(r: OrcaRepository.Reading) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(readableTamil(r.variable, lang), color = p.ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Text("${trim(r.value)} ${r.unit}", color = p.ink,
-                fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            // Knots and nautical miles, like every other screen. This row
+            // still read "8.9 km/h" while the home card showed the SAME
+            // reading as "4.8 kn" -- one number, two units, one screen
+            // apart. Units.convertedValue returns null for anything that
+            // must stay as published (wave height in metres), so nothing
+            // is converted that should not be.
+            val shown = Units.convertedValue(r.variable, r.value)
+            Text(
+                shown?.let { (v, u) -> "$v $u" } ?: "${trim(r.value)} ${r.unit}",
+                color = p.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+            )
         }
         if (open) {
             Spacer(Modifier.height(6.dp))
@@ -321,8 +330,12 @@ fun SosScreen(
     var report by remember { mutableStateOf(SosDispatch.lastReport) }
     var update by remember { mutableStateOf<SosDispatch.Report?>(null) }
 
-    // Re-read on every entry: the crew may have just set their number.
-    LaunchedEffect(Unit) { settings = Settings.load(context) }
+    // Re-read on every entry: the crew may have just set their number, or
+    // just come back from Android's accessibility settings.
+    LaunchedEffect(Unit) {
+        settings = Settings.load(context)
+        PanicStatus.onAccessibilityConnected(PanicKeyService.isEnabled(context))
+    }
 
     // The nearest harbour is a NAME in the message, never a coordinate.
     val zoneHint = (advisory?.zones?.firstOrNull { it.zone == selected }
@@ -932,6 +945,126 @@ fun PanicWatchCard() {
                 "and your position goes to every number in your list.",
             color = p.muted, fontSize = 12.sp, lineHeight = 18.sp,
         )
+        // --- the screen-off trigger --------------------------------------
+        // Given top billing because it is the ONLY one that works with the
+        // display asleep, which is the state a phone in a pocket is in.
+        Spacer(Modifier.height(12.dp))
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .background(p.go.copy(alpha = 0.14f)).padding(14.dp),
+        ) {
+            Text(
+                bi("பவர் பொத்தானை ${PowerPressDetector.PRESSES} முறை அழுத்தவும் · PRESS POWER ${PowerPressDetector.PRESSES} TIMES", lang),
+                color = p.go, fontSize = 16.sp, fontWeight = FontWeight.Black, lineHeight = 22.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Works with the screen off, the phone locked and ORCA closed — " +
+                    "in a pocket, with wet hands, in the dark. Five quick presses, " +
+                    "then ${SosCountdown.SECONDS} seconds to cancel if it was a mistake.",
+                color = p.ink, fontSize = 13.sp, lineHeight = 19.sp,
+            )
+            if (PanicStatus.powerProgress > 0f) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "counting: ${(PanicStatus.powerProgress * PowerPressDetector.PRESSES).toInt()}/${PowerPressDetector.PRESSES}",
+                    color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+
+        // --- the setup that actually makes the volume key work -----------
+        // Led with, because without it the volume key does nothing at all
+        // when the phone is locked -- which is the only state that matters.
+        if (!PanicStatus.accessibilityOn) {
+            Spacer(Modifier.height(12.dp))
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                    .background(p.caution.copy(alpha = 0.16f))
+                    .clickable {
+                        runCatching {
+                            context.startActivity(
+                                Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    }
+                    .padding(14.dp),
+            ) {
+                Text(
+                    bi("ஒரு முறை அமைக்கவும் · ONE-TIME SETUP NEEDED", lang),
+                    color = p.caution, fontSize = 16.sp, fontWeight = FontWeight.Black,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Optional. This adds the volume-down hold, which works while the " +
+                        "screen is ON. Android will not give any app the volume key once " +
+                        "the display sleeps — that is what the power-button trigger above " +
+                        "is for. Switching this on must be done by hand.",
+                    color = p.ink, fontSize = 13.sp, lineHeight = 19.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "TAP HERE → Installed apps → ORCA → turn on",
+                    color = p.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                )
+            }
+        } else {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                bi("✓ ஒலி பொத்தான் தயார் · Volume key is live, even with the phone locked", lang),
+                color = p.go, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp,
+            )
+        }
+
+        // --- live proof, or live disproof --------------------------------
+        // The only instrument for a feature no script can test. Press the
+        // key once: if this counter does not move, the events are not
+        // reaching ORCA on this handset, and that is a real answer.
+        if (PanicStatus.armed || PanicStatus.accessibilityOn) {
+            Spacer(Modifier.height(12.dp))
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                    .background(p.hull).padding(12.dp),
+            ) {
+                Text("VOLUME KEYS SEEN", color = p.muted,
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        "${PanicStatus.keyEvents}",
+                        color = if (PanicStatus.keyEvents > 0) p.go else p.deny,
+                        fontSize = 40.sp, fontWeight = FontWeight.Black,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        if (PanicStatus.keyEvents == 0) {
+                            "press volume-down once — this must move"
+                        } else {
+                            "via ${PanicStatus.lastPath}"
+                        },
+                        color = p.muted, fontSize = 12.sp,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                if (PanicStatus.progress > 0f) {
+                    Text(
+                        "hold ${(PanicStatus.progress * 100).toInt()}% complete",
+                        color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    )
+                }
+                Text(
+                    if (PanicStatus.accessibilityOn) {
+                        "Reading the key directly, so a 5-second hold is measured exactly."
+                    } else {
+                        "Accessibility is OFF — with the phone locked this counter will " +
+                            "stay at zero no matter how long you hold."
+                    },
+                    color = if (PanicStatus.accessibilityOn) p.muted else p.caution,
+                    fontSize = 12.sp, lineHeight = 18.sp,
+                )
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
         Text(
             "Limits, honestly: if another app is playing media AND your volume is " +

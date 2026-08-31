@@ -7,9 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.database.ContentObserver
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.media.AudioManager
-import android.media.VolumeProvider
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -20,9 +20,6 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
-import android.media.MediaMetadata
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
 import android.util.Log
 import java.util.Locale
 
@@ -40,21 +37,23 @@ import java.util.Locale
  * volume keys, cannot run once its tab is closed, and is killed outright
  * when the screen locks.
  *
- * <p>HOW ANDROID LETS US SEE THE KEY. Two paths, because neither alone is
- * enough and they fail in different places:
+ * <p>HOW ANDROID LETS US SEE THE KEY. Two paths, because neither alone
+ * covers the whole job and they fail in different places:
  *
  * <ol>
- *  <li><b>MediaSession + VolumeProvider.</b> Registering a remote volume
- *      provider routes every volume key press to
- *      {@link VolumeProvider#onAdjustVolume} instead of the audio stream.
- *      This is the accurate path: it keeps delivering events even once
- *      the stream would have hit zero, so a genuine five-second hold is
- *      seen as five seconds.
- *  <li><b>A ContentObserver on the system volume.</b> The backstop for
- *      when another app owns the media session -- a crew playing music
- *      or a call in progress. It sees the volume VALUE change, which is
- *      a real signal, but it goes deaf once the volume reaches zero and
- *      there is nothing left to change.
+ *  <li><b>PanicKeyService, an accessibility service.</b> The accurate one.
+ *      It receives real key down/up events with timestamps, so a hold is
+ *      measured rather than inferred, and it works over other apps and on
+ *      the lock screen. It needs the crew to switch it on once in Android's
+ *      own settings, and it stops receiving anything once the screen is
+ *      genuinely off -- measured on an OPPO CPH2591: screen asleep, ORCA
+ *      backgrounded, a full five-second hold produced no callback at all.
+ *  <li><b>The system's volume-changed broadcast.</b> The only signal left
+ *      once the screen is off. It reports that a volume VALUE moved rather
+ *      than that a key was pressed, so it says nothing when the stream is
+ *      already at its floor -- which is what {@link #keepAlive} works
+ *      around, by lifting the level back up mid-hold so the presses keep
+ *      producing changes.
  * </ol>
  *
  * <p>Neither path is a guarantee, and this is the honest statement of the
@@ -73,13 +72,39 @@ class PanicService : Service() {
         /** Abort a countdown that is already running. */
         const val ACTION_CANCEL = "org.orca.advisory.PANIC_CANCEL"
 
+        /** Raise the alarm now. Sent by PanicKeyService when the volume
+         *  key has genuinely been held for five seconds. */
+        const val ACTION_TRIGGER = "org.orca.advisory.PANIC_TRIGGER"
+
+        /**
+         * Fire the panic sequence from outside this service.
+         *
+         * Used by PanicKeyService, which measures the hold from real key
+         * up/down timestamps and so does not need this service's detector
+         * at all -- only its countdown, its alarm and its dispatch.
+         */
+        fun trigger(context: Context) {
+            val i = Intent(context, PanicService::class.java).setAction(ACTION_TRIGGER)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(i)
+            else context.startService(i)
+        }
+
         /** Stop the pending SOS. Safe to call when nothing is pending. */
         fun cancel(context: Context) {
             context.startService(
                 Intent(context, PanicService::class.java).setAction(ACTION_CANCEL),
             )
         }
-        private const val CHANNEL_ONGOING = "orca_panic_watch"
+        /**
+         * v2 because the importance changed, and Android ignores changes
+         * to a channel that already exists. The original channel was
+         * IMPORTANCE_LOW, which put ORCA's SOS notification in the
+         * collapsed "Silent" pile at the bottom of the shade -- observed
+         * on the test handset, below a Discord message. A distress control
+         * that has to be hunted for underneath chat notifications is not a
+         * distress control. A new id is the only way to raise it.
+         */
+        private const val CHANNEL_ONGOING = "orca_panic_watch_v2"
         private const val CHANNEL_ALARM = "orca_panic_alarm"
         private const val NOTIF_ONGOING = 4101
         private const val NOTIF_ALARM = 4102
@@ -100,8 +125,9 @@ class PanicService : Service() {
         }
     }
 
-    private var session: MediaSession? = null
-    private var observer: ContentObserver? = null
+    private var volumeReceiver: BroadcastReceiver? = null
+    private var screenReceiver: BroadcastReceiver? = null
+    private var powerState = PowerPressDetector.State()
     private var tts: TextToSpeech? = null
     /** Last seen level per watched stream, keyed by stream id. */
     private val lastVolume = mutableMapOf<Int, Int>()
@@ -129,6 +155,15 @@ class PanicService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_TRIGGER) {
+            // The accessibility service measured a real five-second hold.
+            // Make sure the notification channels exist before the alarm
+            // tries to use one, then raise it.
+            createChannels()
+            if (!running) startForeground(NOTIF_ONGOING, ongoingNotification())
+            fire()
+            return START_STICKY
+        }
         if (intent?.action == ACTION_CANCEL) {
             abortCountdown()
             // The watch itself keeps running: a crew who cancelled a false
@@ -137,8 +172,23 @@ class PanicService : Service() {
         }
         createChannels()
         startForeground(NOTIF_ONGOING, ongoingNotification())
-        armMediaSession()
+
+        // ARM ONCE. onStartCommand runs again on every start request, and
+        // there are several: the launch auto-arm, the BootReceiver (which
+        // also fires on package replace), the settings toggle, and START_STICKY
+        // restarts. Each pass used to build a NEW MediaSession and overwrite
+        // the reference without releasing the old one, leaving orphaned
+        // sessions competing for the volume keys -- after three arms in one
+        // second, `dumpsys media_session` reported "Media button session is
+        // null" and the feature was dead precisely because it had been
+        // started too often.
+        if (running) {
+            Log.i(TAG, "Panic watch already armed; ignoring duplicate start")
+            return START_STICKY
+        }
+
         armVolumeObserver()
+        armScreenWatcher()
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 runCatching { tts?.language = Locale("ta", "IN") }
@@ -146,6 +196,7 @@ class PanicService : Service() {
         }
         handler.postDelayed(expiry, 400)
         running = true
+        PanicStatus.onArm(true)
         Log.i(TAG, "Panic watch armed")
         // STICKY: if Android reclaims this service under memory pressure it
         // must come back. A panic watch that quietly stopped is worse than
@@ -156,95 +207,57 @@ class PanicService : Service() {
     override fun onDestroy() {
         running = false
         handler.removeCallbacksAndMessages(null)
-        session?.run { isActive = false; release() }
-        session = null
-        observer?.let { contentResolver.unregisterContentObserver(it) }
-        observer = null
+        restoreVolume()
+        volumeReceiver?.let { runCatching { unregisterReceiver(it) } }
+        volumeReceiver = null
+        screenReceiver?.let { runCatching { unregisterReceiver(it) } }
+        screenReceiver = null
         tts?.run { stop(); shutdown() }
         tts = null
+        PanicStatus.onDisarm()
         Log.i(TAG, "Panic watch stopped")
         super.onDestroy()
     }
 
-    // --- path 1: the media session --------------------------------------
-
-    private fun armMediaSession() {
-        try {
-            // Platform MediaSession, not MediaSessionCompat: the compat class
-            // lives in androidx.media, and CLAUDE.md rule 6 forbids adding a
-            // dependency for one class. minSdk is 24; this API is 21+.
-            val s = MediaSession(this, "orca-panic")
-            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            s.setPlaybackToRemote(object : VolumeProvider(VOLUME_CONTROL_RELATIVE, 100, 50) {
-                override fun onAdjustVolume(direction: Int) {
-                    // PASS THE PRESS THROUGH, then listen.
-                    //
-                    // A VolumeProvider does not observe the volume key, it
-                    // TAKES it: with the watch armed, the volume slider stopped
-                    // controlling the music stream and the system volume dialog
-                    // relabelled itself "ORCA". Breaking the volume button to
-                    // watch the volume button is not a trade a crew would accept,
-                    // and it is the kind of thing that gets an app uninstalled
-                    // before the emergency it was installed for.
-                    //
-                    // So the adjustment is forwarded to the real stream first and
-                    // the phone behaves exactly as it always did. Interception is
-                    // still what buys the accuracy: the stream stops changing once
-                    // it reaches zero, but this callback keeps firing, so a hold
-                    // that runs past silence is still measured as a hold.
-                    if (direction != 0) {
-                        runCatching {
-                            am.adjustStreamVolume(
-                                AudioManager.STREAM_MUSIC,
-                                if (direction < 0) AudioManager.ADJUST_LOWER else AudioManager.ADJUST_RAISE,
-                                AudioManager.FLAG_SHOW_UI,
-                            )
-                        }
-                    }
-                    when {
-                        direction < 0 -> onKey(PanicDetector.Key.DOWN)
-                        direction > 0 -> onKey(PanicDetector.Key.UP)
-                    }
-                }
-            })
-            // Registering a VolumeProvider is NOT enough. Android only
-            // routes volume keys to a session it considers ACTIVE, and
-            // "active" means it has a PlaybackState that is playing.
-            // Measured on an OPPO CPH2591: with setActive(true) alone the
-            // session appeared in `dumpsys media_session` with
-            // volumeType=REMOTE and never received a single onAdjustVolume.
-            s.setPlaybackState(
-                PlaybackState.Builder()
-                    .setActions(PlaybackState.ACTION_PLAY_PAUSE)
-                    .setState(PlaybackState.STATE_PLAYING, 0L, 1.0f)
-                    .build(),
-            )
-            s.setMetadata(
-                MediaMetadata.Builder()
-                    .putString(MediaMetadata.METADATA_KEY_TITLE, "ORCA emergency watch")
-                    .build(),
-            )
-            s.isActive = true
-            session = s
-        } catch (e: Exception) {
-            // Not fatal: the observer below still works. Logged loudly so
-            // a device that never takes this path is visible in a bug
-            // report rather than silently degraded.
-            Log.w(TAG, "MediaSession path unavailable: ${e.message}")
-        }
-    }
+    // --- REMOVED: the MediaSession + VolumeProvider path -----------------
+    //
+    // It is gone on purpose, and it must not come back. Three measured
+    // reasons, in order of how badly each one hurt:
+    //
+    //  1. IT BLOCKED THE VOLUME FROM CHANGING. Registering a remote
+    //     VolumeProvider makes ORCA's session the "media button session",
+    //     and every volume adjustment then routes to that provider instead
+    //     of the audio stream. Measured: with the watch armed, five
+    //     lower-volume commands left STREAM_MUSIC sitting at 110/160,
+    //     unmoved. The crew's volume keys were being eaten by the feature
+    //     that was supposed to be watching them.
+    //
+    //  2. BECAUSE OF (1), IT KILLED THE PATH THAT DOES WORK. If the volume
+    //     never changes, VOLUME_CHANGED_ACTION never fires, so the one
+    //     mechanism that still functions with the screen off was being
+    //     suppressed by the one that does not.
+    //
+    //  3. IT NEVER DELIVERED ANYTHING ANYWAY. onAdjustVolume is not called
+    //     when the app is backgrounded with the screen off -- a known
+    //     framework defect across Android 12-15. ORCA held the media button
+    //     session (confirmed in dumpsys) and received zero callbacks.
+    //
+    // It also required a silent AudioTrack looping forever to keep the
+    // session eligible, which cost battery for nothing.
+    //
+    // The two paths that remain are PanicKeyService (an accessibility
+    // service; works whenever the screen is on, including on the lock
+    // screen and over other apps) and the volume broadcast below (the only
+    // thing that still reports a press once the screen is off).
 
     // --- path 2: the volume setting -------------------------------------
 
     /**
      * Streams a volume key might actually be driving.
      *
-     * <p>THE BUG THIS LIST FIXES. The observer used to watch STREAM_MUSIC
-     * alone, and on a phone with nothing playing the volume keys do not
-     * touch STREAM_MUSIC at all -- they drive the ringer. So on an idle
-     * handset, which is every handset in a pocket, neither detection path
-     * saw a single press and the whole feature was dead. Measured on an
-     * OPPO CPH2591: a full five-second hold produced zero events.
+     * <p>Whichever one moves, a press happened. Which stream it is depends
+     * on what the phone is doing: media while something plays, the ringer
+     * when nothing does.
      */
     private val watchedStreams = listOf(
         AudioManager.STREAM_MUSIC,
@@ -252,27 +265,72 @@ class PanicService : Service() {
         AudioManager.STREAM_NOTIFICATION,
     )
 
+    /**
+     * The system's volume-changed broadcast.
+     *
+     * <h3>WHY NOT A ContentObserver, WHICH IS WHAT THIS USED TO BE</h3>
+     * The old code watched {@code Settings.System.CONTENT_URI} for volume
+     * changes. That has not worked since Android 7: stream volumes moved
+     * out of Settings.System into AudioService's own storage years ago, so
+     * the observer was registered against a URI that never fires for
+     * volume. It was dead code that looked like a safety net. Verified on
+     * an OPPO CPH2591 running Android 15 -- setting the music volume from
+     * 5 to 8 produced no callback at all.
+     *
+     * <p>{@code android.media.VOLUME_CHANGED_ACTION} is what the system
+     * actually broadcasts. It is not in the public SDK, which is why the
+     * action is written out as a string here rather than referenced as a
+     * constant, and it carries the stream, the new value and the previous
+     * value -- so the DIRECTION is read from the payload rather than
+     * inferred from a cached number that could drift.
+     *
+     * <p>This is the backstop, not the primary path. The MediaSession is
+     * more accurate because it keeps delivering events after the volume
+     * has bottomed out; this one goes quiet at the floor, which is what
+     * {@link #keepAlive} exists to work around.
+     */
     private fun armVolumeObserver() {
         try {
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             watchedStreams.forEach { lastVolume[it] = am.getStreamVolume(it) }
-            val o = object : ContentObserver(handler) {
-                override fun onChange(selfChange: Boolean) {
-                    watchedStreams.forEach { stream ->
-                        val now = am.getStreamVolume(stream)
-                        val before = lastVolume[stream] ?: now
-                        if (now == before) return@forEach
-                        lastVolume[stream] = now
-                        val key = if (now < before) PanicDetector.Key.DOWN else PanicDetector.Key.UP
-                        onKey(key)
-                        if (key == PanicDetector.Key.DOWN) keepAlive(am, stream, now)
-                    }
+            val r = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    // Logged BEFORE any filtering. Every early return below
+                    // used to be silent, so a receiver that was firing and
+                    // discarding looked identical to one that never fired
+                    // at all -- and those are opposite problems.
+                    val stream = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+                    Log.d(
+                        TAG,
+                        "VOLUME broadcast: stream=$stream extras=${intent.extras?.keySet()}",
+                    )
+                    if (stream !in watchedStreams) return
+                    val now = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_VALUE", -1)
+                    val prev = intent.getIntExtra("android.media.EXTRA_PREV_VOLUME_STREAM_VALUE", -1)
+                    if (now < 0 || prev < 0 || now == prev) return
+                    lastVolume[stream] = now
+                    val key = if (now < prev) PanicDetector.Key.DOWN else PanicDetector.Key.UP
+                    Log.d(TAG, "volume broadcast stream=$stream $prev->$now")
+                    onKey(key, "broadcast")
+                    if (key == PanicDetector.Key.DOWN) keepAlive(am, stream, now)
                 }
             }
-            contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, o)
-            observer = o
+            val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+            // RECEIVER_EXPORTED, and it has to be. VOLUME_CHANGED_ACTION is
+            // not a protected system broadcast, so NOT_EXPORTED restricts
+            // delivery to broadcasts sent by ORCA itself -- and the sender
+            // here is the system. Registered NOT_EXPORTED first time round,
+            // this receiver never fired once: the ring volume was driven
+            // from 16 to 0 and nothing arrived.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(r, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag") registerReceiver(r, filter)
+            }
+            volumeReceiver = r
+            Log.i(TAG, "Volume broadcast receiver armed")
         } catch (e: Exception) {
-            Log.w(TAG, "Volume observer unavailable: ${e.message}")
+            Log.w(TAG, "Volume broadcast unavailable: ${e.message}")
         }
     }
 
@@ -325,12 +383,61 @@ class PanicService : Service() {
         borrowed.clear()
     }
 
+    /**
+     * Watch the screen going on and off -- the power button, indirectly.
+     *
+     * <h3>THE ONE TRIGGER THAT WORKS WITH THE SCREEN OFF</h3>
+     * Everything else ORCA tried needed a key event, and no app on stock
+     * Android is given one while the display sleeps. This does not ask for
+     * the key. It listens for ACTION_SCREEN_ON and ACTION_SCREEN_OFF, which
+     * the system BROADCASTS to registered receivers whatever the display is
+     * doing, and infers the press from the consequence.
+     *
+     * <p>Registered at runtime on purpose: both actions are exempt from
+     * manifest registration and will not be delivered to a manifest-declared
+     * receiver at all. It lives as long as this foreground service does.
+     */
+    private fun armScreenWatcher() {
+        try {
+            val r = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    val action = intent.action ?: return
+                    if (action != Intent.ACTION_SCREEN_ON && action != Intent.ACTION_SCREEN_OFF) return
+                    val result = PowerPressDetector.accept(powerState, SystemClock.elapsedRealtime())
+                    powerState = result.state
+                    PanicStatus.onPowerPress(PowerPressDetector.progress(powerState))
+                    Log.d(
+                        TAG,
+                        "screen $action -- ${powerState.times.size}/${PowerPressDetector.PRESSES}",
+                    )
+                    if (result.fire) {
+                        Log.i(TAG, "PANIC: power button pressed ${PowerPressDetector.PRESSES} times")
+                        fire()
+                    }
+                }
+            }
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+            }
+            registerReceiver(r, filter)
+            screenReceiver = r
+            Log.i(TAG, "Power-button watcher armed (${PowerPressDetector.PRESSES} presses)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Screen watcher unavailable: ${e.message}")
+        }
+    }
+
     // --- the decision ----------------------------------------------------
 
-    private fun onKey(key: PanicDetector.Key) {
+    private fun onKey(key: PanicDetector.Key, path: String = "session") {
         val event = PanicDetector.Event(SystemClock.elapsedRealtime(), key)
         val result = PanicDetector.accept(state, event)
         state = result.state
+        // Surfaced on the SOS screen. This is the only instrument that can
+        // tell "the keys never arrive" from "they arrive but the hold is
+        // short", and those need different fixes.
+        PanicStatus.onKey(path, state.progress)
         Log.d(
             TAG,
             "panic key=$key run=${state.run.size} progress=${"%.2f".format(state.progress)}",
@@ -367,7 +474,7 @@ class PanicService : Service() {
             Log.i(TAG, "PANIC: already counting down, ignoring")
             return
         }
-        Log.i(TAG, "PANIC: volume key held -- ${SosCountdown.SECONDS}s to cancel")
+        Log.i(TAG, "PANIC raised -- ${SosCountdown.SECONDS}s to cancel")
         SosCountdown.start()
 
         // Long, unmistakable, and distinct from every notification pattern.
@@ -530,8 +637,18 @@ class PanicService : Service() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
             NotificationChannel(
-                CHANNEL_ONGOING, "Panic watch", NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = "Shown while ORCA is watching the volume key." },
+                CHANNEL_ONGOING, "SOS button", NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "The always-available SOS button on your lock screen."
+                // Silent: it is permanent, so a tone every time ORCA starts
+                // would be pure noise. DEFAULT importance is for placement,
+                // not for sound.
+                setSound(null, null)
+                enableVibration(false)
+                // Show the content on the lock screen rather than hiding it,
+                // which is the whole point of this notification.
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            },
         )
         nm.createNotificationChannel(
             NotificationChannel(
@@ -547,20 +664,68 @@ class PanicService : Service() {
         )
     }
 
+    /**
+     * The permanent notification, which is also the screen-off SOS.
+     *
+     * <h3>WHY THIS CARRIES AN SOS BUTTON</h3>
+     * With the screen genuinely off, no app on stock Android receives a
+     * volume key. Measured on this handset: accessibility gets nothing
+     * while the display sleeps, the MediaSession path is a known framework
+     * defect, and this ROM never delivers the volume broadcast to a third
+     * party at all. Three paths, three dead ends, so the honest conclusion
+     * is that a hardware key cannot be the screen-off trigger here.
+     *
+     * <p>What IS always reachable is this notification. It is ongoing, so
+     * it is always present; VISIBILITY_PUBLIC, so its content shows on the
+     * lock screen rather than being hidden; and CATEGORY_ALARM so it sorts
+     * to the top. Waking the phone with any button and tapping SOS is two
+     * actions with no unlock, no PIN and no app to find -- which is worse
+     * than a pocket key-hold and far better than nothing.
+     *
+     * <p>The action fires the same countdown as everything else, so a
+     * mis-tap is still cancellable for ten seconds.
+     */
     private fun ongoingNotification(): Notification {
         val stop = PendingIntent.getService(
             this, 1,
             Intent(this, PanicService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val sos = PendingIntent.getService(
+            this, 3,
+            Intent(this, PanicService::class.java).setAction(ACTION_TRIGGER),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         return Notification.Builder(this, CHANNEL_ONGOING)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("ORCA அவசர கண்காணிப்பு")
-            .setContentText("Hold the volume key 5 seconds to send an SOS.")
+            .setContentTitle("ORCA அவசர கண்காணிப்பு · SOS ready")
+            .setContentText(
+                "Press the power button ${PowerPressDetector.PRESSES} times, " +
+                    "or tap SEND SOS. No unlocking needed.",
+            )
+            .setStyle(
+                Notification.BigTextStyle().bigText(
+                    "Press the power button ${PowerPressDetector.PRESSES} times quickly — " +
+                        "this works with the screen off and the phone in your pocket. " +
+                        "Or tap SEND SOS below. Either way you get " +
+                        "${SosCountdown.SECONDS} seconds to cancel.",
+                ),
+            )
             .setOngoing(true)
+            // Content must be readable ON the lock screen. The default
+            // hides it there, which would make this useless for the one
+            // moment it exists for.
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .addAction(
+                Notification.Action.Builder(
+                    null as android.graphics.drawable.Icon?, "SEND SOS", sos,
+                ).build(),
+            )
             .addAction(
                 Notification.Action.Builder(null as android.graphics.drawable.Icon?, "Stop", stop).build(),
             )
             .build()
     }
+
 }

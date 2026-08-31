@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Configuration for PanicKeyService.
+
+    canRequestFilterKeyEvents is the whole point: without it the system
+    ignores flagRequestFilterKeyEvents and onKeyEvent is never called.
+
+    Note what is NOT requested. canRetrieveWindowContent is false and
+    accessibilityEventTypes is none, so ORCA cannot read what is on screen
+    in any app. The service sees key codes and nothing else, which is the
+    least power that can still do the job.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/panic_key_service_description"
+    android:summary="@string/panic_key_service_summary"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:canRequestFilterKeyEvents="true"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="100" />
