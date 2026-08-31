@@ -36,6 +36,7 @@ import java.time.Instant
 @Composable
 fun MapScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Boolean) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     var fix by remember { mutableStateOf<Location?>(null) }
     var showStorms by remember { mutableStateOf(true) }
@@ -87,9 +88,9 @@ fun MapScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Boolea
             markers = markers,
         )
 
-        Section("அடுக்குகள் / LAYERS") {
-            LayerToggle("கடல் எல்லை / Sea boundary (IMBL)", showBoundary) { showBoundary = it }
-            LayerToggle("புயல் எச்சரிக்கை / IMD warning areas", showStorms) { showStorms = it }
+        Section(bi("அடுக்குகள் / LAYERS", lang)) {
+            LayerToggle(bi("கடல் எல்லை / Sea boundary (IMBL)", lang), showBoundary) { showBoundary = it }
+            LayerToggle(bi("புயல் எச்சரிக்கை / IMD warning areas", lang), showStorms) { showStorms = it }
             Spacer(Modifier.height(8.dp))
             Text(
                 "Pinch to zoom, drag to pan. " +
@@ -99,7 +100,7 @@ fun MapScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Boolea
             )
         }
 
-        Section("குறியீடு / KEY") {
+        Section(bi("குறியீடு / KEY", lang)) {
             zones.forEach { z ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Box(
@@ -118,7 +119,7 @@ fun MapScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Boolea
             }
         }
 
-        Section("இது எதிலிருந்து / WHAT THIS IS DRAWN FROM") {
+        Section(bi("இது எதிலிருந்து / WHAT THIS IS DRAWN FROM", lang)) {
             SourceLine("Seabed", "NOAA NCEI ETOPO 2022, 4,760 soundings shipped in the app")
             SourceLine("Sea boundary", advisory.boundary?.source ?: "not loaded")
             SourceLine("Warning areas", advisory.alerts?.source ?: "not loaded")
@@ -137,6 +138,7 @@ fun MapScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Boolea
 @Composable
 private fun LayerToggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
@@ -155,6 +157,7 @@ private fun LayerToggle(label: String, on: Boolean, onChange: (Boolean) -> Unit)
 @Composable
 private fun SourceLine(what: String, from: String) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(what, color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Text(from, color = p.ink, fontSize = 13.sp, lineHeight = 18.sp)
@@ -184,6 +187,7 @@ private fun lastFix(context: Context): Location? = try {
 @Composable
 fun SignalScreen() {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     val available = remember { TorchSos.isAvailable(context) }
     var on by remember { mutableStateOf(TorchSos.isRunning()) }
@@ -224,7 +228,7 @@ fun SignalScreen() {
 
         Section("") {
             BigButton(
-                if (on) "நிறுத்து  ·  Stop signalling" else "SOS விளக்கை ஆரம்பி  ·  Start SOS light",
+                if (on) bi("நிறுத்து  ·  Stop signalling", lang) else bi("SOS விளக்கை ஆரம்பி  ·  Start SOS light", lang),
                 if (on) p.panel else p.deny,
             ) {
                 if (on) { TorchSos.stop(context); on = false }
@@ -240,7 +244,7 @@ fun SignalScreen() {
             }
         }
 
-        Section("இதை ஏன் பயன்படுத்த வேண்டும் / WHY A LIGHT") {
+        Section(bi("இதை ஏன் பயன்படுத்த வேண்டும் / WHY A LIGHT", lang)) {
             Text(
                 "COLREGS lists flashes among the recognised signals of distress. A boat " +
                     "that has lost its engine after dark often has no flare left and no " +

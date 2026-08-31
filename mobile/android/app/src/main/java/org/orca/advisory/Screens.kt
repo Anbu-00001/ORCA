@@ -32,6 +32,7 @@ fun VerdictScreen(
     onSelect: (String) -> Unit,
 ) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val zone = advisory?.zones?.firstOrNull { it.zone == selected } ?: advisory?.zones?.firstOrNull()
     if (advisory == null || zone == null) {
         EmptyState("No advisory stored", "Connect once in harbour to download one.")
@@ -66,7 +67,7 @@ fun VerdictScreen(
             Modifier.fillMaxWidth().background(p.colorForAction(zone.action))
                 .padding(horizontal = 20.dp, vertical = 28.dp),
         ) {
-            Text(actionTamil(zone.action), color = p.onAccent,
+            Text(actionWord(zone.action, lang), color = p.onAccent,
                 fontSize = 34.sp, fontWeight = FontWeight.Black, lineHeight = 42.sp)
             Text(zone.action, color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
@@ -78,11 +79,11 @@ fun VerdictScreen(
             }
         }
 
-        Section("ஏன்? · Why") { Text(zone.reason, color = p.ink, fontSize = 15.sp, lineHeight = 22.sp) }
+        Section(bi("ஏன்? · Why", lang)) { Text(zone.reason, color = p.ink, fontSize = 15.sp, lineHeight = 22.sp) }
 
         // Every reading with its source. CLAUDE.md rule 3 does not weaken
         // because the number is on a phone instead of a browser.
-        Section("அளவீடுகள் · Readings") {
+        Section(bi("அளவீடுகள் · Readings", lang)) {
             if (zone.readings.isEmpty()) {
                 Text("No readings for this zone. That is not the same as safe conditions.",
                     color = p.caution, fontSize = 14.sp, lineHeight = 21.sp)
@@ -93,24 +94,18 @@ fun VerdictScreen(
     }
 }
 
-private fun actionTamil(action: String) = when (action) {
-    "GO" -> "போகலாம்"
-    "DO NOT GO" -> "போக வேண்டாம்"
-    "SAFER ALTERNATIVE" -> "வேறு இடம் பாதுகாப்பானது"
-    "CANNOT ASSESS" -> "சொல்ல முடியவில்லை"
-    else -> "தெரியவில்லை"        // never renders as permission
-}
 
 @Composable
 private fun ReadingRow(r: OrcaRepository.Reading) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     var open by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().clickable { open = !open }
             .padding(vertical = 10.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(readableTamil(r.variable), color = p.ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text(readableTamil(r.variable, lang), color = p.ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
             Text("${trim(r.value)} ${r.unit}", color = p.ink,
                 fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
@@ -125,15 +120,15 @@ private fun ReadingRow(r: OrcaRepository.Reading) {
     HorizontalDivider(color = p.line)
 }
 
-private fun readableTamil(variable: String) = when (variable) {
-    "wave_height_m" -> "அலை உயரம் · wave height"
-    "wave_period_s" -> "அலை கால அளவு · wave period"
-    "wind_speed_kmh" -> "காற்றின் வேகம் · wind"
-    "wind_gusts_kmh" -> "காற்று சுழற்சி · gusts"
-    "sst_c" -> "கடல் வெப்பநிலை · sea temp"
-    "ocean_current_velocity_kmh" -> "நீரோட்டம் · current"
-    "chlorophyll_mg_m3" -> "பச்சையம் · chlorophyll"
-    "rain_mm", "precipitation_mm" -> "மழை · rain"
+private fun readableTamil(variable: String, lang: Lang) = when (variable) {
+    "wave_height_m" -> bi("அலை உயரம் · wave height", lang)
+    "wave_period_s" -> bi("அலை கால அளவு · wave period", lang)
+    "wind_speed_kmh" -> bi("காற்றின் வேகம் · wind", lang)
+    "wind_gusts_kmh" -> bi("காற்று சுழற்சி · gusts", lang)
+    "sst_c" -> bi("கடல் வெப்பநிலை · sea temp", lang)
+    "ocean_current_velocity_kmh" -> bi("நீரோட்டம் · current", lang)
+    "chlorophyll_mg_m3" -> bi("பச்சையம் · chlorophyll", lang)
+    "rain_mm", "precipitation_mm" -> bi("மழை · rain", lang)
     else -> variable
 }
 
@@ -149,6 +144,7 @@ private fun trim(v: Double): String {
 @Composable
 fun FishScreen(repo: OrcaRepository) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     var entries by remember { mutableStateOf<List<OrcaRepository.PfzEntry>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -165,7 +161,7 @@ fun FishScreen(repo: OrcaRepository) {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text("மீன் எங்கே இருக்கும்?", color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(str(S.T_FISH, lang), color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("Where conditions favour fish — chlorophyll and sea temperature from satellite",
             color = p.muted, fontSize = 13.sp, lineHeight = 19.sp)
         Spacer(Modifier.height(16.dp))
@@ -181,9 +177,9 @@ fun FishScreen(repo: OrcaRepository) {
                         null -> p.unknown     // unseen, NOT unproductive
                     }
                     val label = when (e.productive) {
-                        true -> "மீன் இருக்கலாம் · Likely"
-                        false -> "குறைவு · Unlikely"
-                        null -> "மேகம் · Cloud — not seen"
+                        true -> bi("மீன் இருக்கலாம் · Likely", lang)
+                        false -> bi("குறைவு · Unlikely", lang)
+                        null -> bi("மேகம் · Cloud — not seen", lang)
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
                         Box(Modifier.width(6.dp).height(56.dp).background(tint))
@@ -215,15 +211,13 @@ fun FishScreen(repo: OrcaRepository) {
 @Composable
 fun BoundaryScreen(repo: OrcaRepository, ensureLocation: () -> Boolean) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     var running by remember { mutableStateOf(BoundaryWatchService.isRunning()) }
     var note by remember { mutableStateOf<String?>(null) }
     val boundary = remember { repo.loadLocal()?.boundary }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text("கடல் எல்லை எச்சரிக்கை", color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("Sea boundary warning", color = p.muted, fontSize = 14.sp)
-        Spacer(Modifier.height(14.dp))
         Text(
             "The India–Sri Lanka maritime boundary is invisible and unmarked. " +
             "Turn this on and ORCA watches your position against it and warns you " +
@@ -237,7 +231,7 @@ fun BoundaryScreen(repo: OrcaRepository, ensureLocation: () -> Boolean) {
                 color = p.caution, fontSize = 14.sp, lineHeight = 21.sp)
         } else {
             BigButton(
-                label = if (running) "நிறுத்து · Stop watching" else "தொடங்கு · Start watching",
+                label = if (running) bi("நிறுத்து · Stop watching", lang) else bi("தொடங்கு · Start watching", lang),
                 tint = if (running) p.deny else p.go,
             ) {
                 if (running) {
@@ -264,12 +258,12 @@ fun BoundaryScreen(repo: OrcaRepository, ensureLocation: () -> Boolean) {
             note?.let { Spacer(Modifier.height(12.dp)); Text(it, color = p.muted, fontSize = 14.sp, lineHeight = 21.sp) }
 
             Spacer(Modifier.height(22.dp))
-            Text("எச்சரிக்கை தூரம் · Warning distances", color = p.ink,
+            Text(bi("எச்சரிக்கை தூரம் · Warning distances", lang), color = p.ink,
                 fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            BandRow("${trim(boundary.advisoryKm)} km", "கவனம் · Be careful", p.caution)
-            BandRow("${trim(boundary.warningKm)} km", "மேற்கு நோக்கித் திரும்பு · Turn west", p.caution)
-            BandRow("${trim(boundary.urgentKm)} km", "இப்போதே திரும்பு · Turn back now", p.deny)
+            BandRow(Units.distance(boundary.advisoryKm), bi("கவனம் · Be careful", lang), p.caution)
+            BandRow(Units.distance(boundary.warningKm), bi("மேற்கு நோக்கித் திரும்பு · Turn west", lang), p.caution)
+            BandRow(Units.distance(boundary.urgentKm), bi("இப்போதே திரும்பு · Turn back now", lang), p.deny)
             Spacer(Modifier.height(14.dp))
             // These distances are the SERVER's, read out of orca/agents.py.
             // The app owning its own copy would be a second safety
@@ -284,6 +278,7 @@ fun BoundaryScreen(repo: OrcaRepository, ensureLocation: () -> Boolean) {
 @Composable
 private fun BandRow(distance: String, meaning: String, tint: androidx.compose.ui.graphics.Color) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(6.dp).height(28.dp).background(tint))
         Text(distance, color = p.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold,
@@ -293,50 +288,255 @@ private fun BandRow(distance: String, meaning: String, tint: androidx.compose.ui
 }
 
 // =====================================================================
-// 4. SOS — position by SMS. Reaches where mobile data does not.
+// 4. SOS - one press, already sent.
 // =====================================================================
 
+/**
+ * The distress screen.
+ *
+ * <p>ONE PRESS. The button does not open a messaging app, does not ask
+ * "are you sure", and does not hand the crew a draft to address. It sends.
+ * Everything a person has to do between deciding they need help and help
+ * being asked for is a step that can go wrong on a pitching deck at night,
+ * so there is exactly one.
+ *
+ * <p>The position in that message comes from the GNSS receiver or the
+ * message says POSITION UNKNOWN. It is never taken from the advisory's
+ * harbour coordinates -- see SosDispatch's class comment for the bug that
+ * rule replaced.
+ */
 @Composable
 fun SosScreen(
     advisory: OrcaRepository.Advisory?,
     selected: String?,
-    onSms: (String, String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val p = LocalPalette.current
-    val zone = advisory?.zones?.firstOrNull { it.zone == selected } ?: advisory?.zones?.firstOrNull()
-    // Position first: whoever reads this on shore needs coordinates before
-    // anything else, and an SMS can be truncated.
-    val message = buildString {
-        append("ORCA EMERGENCY. ")
-        if (zone != null) append("Position ${zone.lat}, ${zone.lon} (near ${zone.zone}). ")
-        append("Need help. Sent from the ORCA app.")
-    }
+    val lang = LocalLang.current
+    val context = LocalContext.current
+
+    var settings by remember { mutableStateOf(Settings.load(context)) }
+    // Seeded from the last send, so arriving here after a home-screen
+    // hold or a volume-key alarm shows the outcome instead of a blank page.
+    var report by remember { mutableStateOf(SosDispatch.lastReport) }
+    var update by remember { mutableStateOf<SosDispatch.Report?>(null) }
+
+    // Re-read on every entry: the crew may have just set their number.
+    LaunchedEffect(Unit) { settings = Settings.load(context) }
+
+    // The nearest harbour is a NAME in the message, never a coordinate.
+    val zoneHint = (advisory?.zones?.firstOrNull { it.zone == selected }
+        ?: advisory?.zones?.firstOrNull())?.zone
+    val fix = remember(report) { SosDispatch.lastFix(context) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
 
-        // --- the volume-key watch --------------------------------------
         PanicWatchCard()
-        Text("அவசர உதவி", color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("Send my position for help", color = p.muted, fontSize = 14.sp)
-        Spacer(Modifier.height(14.dp))
-        Text(
-            "SMS reaches much further out to sea than mobile data. This opens your " +
-            "messaging app with the message already written — you choose who to send it to, " +
-            "and nothing is sent until you press send.",
-            color = p.ink, fontSize = 15.sp, lineHeight = 23.sp,
-        )
-        Spacer(Modifier.height(16.dp))
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(p.panel).padding(14.dp)) {
-            Text(message, color = p.ink, fontSize = 14.sp, lineHeight = 21.sp)
+
+        // --- an SOS is counting down ------------------------------------
+        // Rendered above everything, because while this is on screen it is
+        // the only thing that matters. Doing nothing SENDS; the one action
+        // available is to stop it.
+        SosCountdown.secondsLeft?.let { left ->
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                    .background(p.deny).padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(bi("அவசர அழைப்பு அனுப்பப்படுகிறது · SENDING SOS IN", lang),
+                    color = p.onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("$left", color = p.onAccent, fontSize = 64.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    bi("நிறுத்து · CANCEL", lang),
+                    color = p.deny, fontSize = 20.sp, fontWeight = FontWeight.Black,
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(androidx.compose.ui.graphics.Color.White)
+                        .clickable { PanicService.cancel(context) }
+                        .padding(vertical = 18.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(bi("எதுவும் செய்யாவிட்டால் அனுப்பப்படும் · Do nothing and it sends.", lang),
+                    color = p.onAccent, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(16.dp))
         }
-        Spacer(Modifier.height(18.dp))
-        BigButton("உதவி கேள் · Send for help", p.deny) { onSms("", message) }
+
+        if (SosCountdown.lastCancelled && !SosCountdown.running) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .background(p.caution.copy(alpha = 0.16f)).padding(14.dp)) {
+                Text(bi("நிறுத்தப்பட்டது · CANCELLED", lang), color = p.caution,
+                    fontSize = 17.sp, fontWeight = FontWeight.Black)
+                Text("You stopped it. Nothing was sent.",
+                    color = p.ink, fontSize = 13.sp, lineHeight = 19.sp)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // --- what will actually be sent, before it is sent -------------
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(p.panel).padding(14.dp)) {
+            Text(bi("இடம் · Your position", lang), color = p.muted,
+                fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            if (fix != null) {
+                Text(SosDispatch.formatPosition(fix.lat, fix.lon), color = p.ink,
+                    fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    buildString {
+                        append(fix.provider.uppercase())
+                        fix.accuracyM?.let { append("  +-").append(it.toInt()).append(" m") }
+                        append(if (fix.ageMinutes <= 0) "  just now" else "  ${fix.ageMinutes} min old")
+                    },
+                    color = if (fix.ageMinutes > SosDispatch.STALE_MINUTES) p.caution else p.muted,
+                    fontSize = 12.sp,
+                )
+            } else {
+                // Stated plainly. The alternative -- showing the harbour --
+                // is the bug this screen was rebuilt to remove.
+                Text(bi("இடம் தெரியவில்லை · Position unknown", lang), color = p.caution,
+                    fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("No GPS fix yet. ORCA will send POSITION UNKNOWN rather than a guess, " +
+                    "and will follow up the moment it gets a fix.",
+                    color = p.muted, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(bi("யாருக்கு · Sends to", lang), color = p.muted,
+                fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(
+                settings.contacts.joinToString(", ").ifBlank { "— nobody —" },
+                color = if (settings.contacts.isEmpty()) p.deny else p.ink,
+                fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 24.sp,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        if (settings.contacts.isEmpty()) {
+            // Nothing to send to. Said loudly and fixed in one tap, rather
+            // than discovered at the moment it matters.
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                    .background(p.deny.copy(alpha = 0.12f))
+                    .clickable { onOpenSettings() }.padding(14.dp),
+            ) {
+                Text(bi("அவசர எண்ணை சேர்க்கவும் · Add an emergency number", lang),
+                    color = p.deny, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("ORCA will not guess a number to send a distress call to. " +
+                    "Tap here to set one — family, or your harbour.",
+                    color = p.ink, fontSize = 13.sp, lineHeight = 19.sp)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // --- the button ------------------------------------------------
+        BigButton(bi("இப்போதே அனுப்பு · SEND SOS NOW", lang), p.deny) {
+            val r = SosDispatch.fire(context, settings.contacts, zoneHint,
+                settings.boatId.takeIf { it.isNotBlank() })
+            report = r
+            update = null
+            if (r.outcome == SosDispatch.Outcome.SENT) {
+                // The light costs nothing and works with a dead network.
+                runCatching { TorchSos.start(context) }
+                SosDispatch.requestUpdate(
+                    context, settings.contacts, zoneHint,
+                    settings.boatId.takeIf { it.isNotBlank() }, r.fix,
+                ) { update = it }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(bi("ஒரே அழுத்தத்தில் அனுப்பப்படும் · Sends immediately — no confirmation", lang),
+            color = p.muted, fontSize = 12.sp)
+
         Spacer(Modifier.height(14.dp))
-        BigButton("கடலோர காவல்படை 1554 · Coast Guard 1554", p.panel) { onSms("1554", message) }
-        Spacer(Modifier.height(12.dp))
+
+        // 1554 is a VOICE line, so this places a call. It used to open an
+        // SMS to 1554, which most likely went nowhere at all.
+        BigButton(bi("கடலோர காவல்படை 1554 அழை · Call Coast Guard 1554", lang), p.panel) {
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_CALL, android.net.Uri.parse("tel:${SosDispatch.COAST_GUARD}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.onFailure {
+                // Without CALL_PHONE granted, fall back to the dialler with
+                // the number already in it. Still one tap from a call.
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:${SosDispatch.COAST_GUARD}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            }
+        }
+
+        // --- what happened ---------------------------------------------
+        (update ?: report)?.let { r ->
+            Spacer(Modifier.height(18.dp))
+            val tint = when (r.outcome) {
+                SosDispatch.Outcome.SENT -> p.go
+                SosDispatch.Outcome.PARTIAL -> p.caution
+                else -> p.deny
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .background(tint.copy(alpha = 0.14f)).padding(14.dp)) {
+                Text(
+                    when (r.outcome) {
+                        SosDispatch.Outcome.SENT -> bi("அனுப்பப்பட்டது · SENT", lang)
+                        SosDispatch.Outcome.NO_CONTACT -> bi("எண் இல்லை · NO NUMBER SET", lang)
+                        SosDispatch.Outcome.NO_PERMISSION -> bi("அனுமதி இல்லை · SMS NOT ALLOWED", lang)
+                        SosDispatch.Outcome.FAILED -> bi("தோல்வி · NOT SENT", lang)
+                        SosDispatch.Outcome.PARTIAL -> bi("பகுதியாக · SENT TO SOME", lang)
+                    },
+                    color = tint, fontSize = 18.sp, fontWeight = FontWeight.Black,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(r.detail, color = p.ink, fontSize = 13.sp, lineHeight = 19.sp)
+                if (r.outcome == SosDispatch.Outcome.NO_PERMISSION) {
+                    Spacer(Modifier.height(6.dp))
+                    // The exact Android 15 sideload path, spelled out. A
+                    // vague "check permissions" is useless in an emergency.
+                    Text(
+                        "Android blocks SMS for apps installed outside the Play Store until " +
+                        "you allow it once: App info → ⋮ → Allow restricted settings, " +
+                        "then Permissions → SMS → Allow.",
+                        color = p.muted, fontSize = 12.sp, lineHeight = 18.sp,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(r.message, color = p.muted, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+            // The send starts the torch. Without this the crew has no way
+            // to stop it from the screen that started it.
+            if (TorchSos.isRunning) {
+                Spacer(Modifier.height(10.dp))
+                var lit by remember { mutableStateOf(true) }
+                if (lit) {
+                    Text(
+                        bi("விளக்கை நிறுத்து · SOS light is flashing — STOP IT", lang),
+                        color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(p.caution)
+                            .clickable { TorchSos.stop(context); lit = false }
+                            .padding(vertical = 16.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
+
+            if (update != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(bi("புதிய இடம் அனுப்பப்பட்டது · A fresher position was sent after the first message.", lang),
+                    color = p.muted, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
         Text(
-            "1554 is the Indian Coast Guard's toll-free maritime distress number. " +
-            "ORCA is not a substitute for a distress beacon.",
+            "SMS reaches much further out to sea than mobile data. " +
+            "ORCA is not a substitute for a distress beacon or VHF channel 16.",
             color = p.muted, fontSize = 12.sp, lineHeight = 18.sp,
         )
     }
@@ -349,6 +549,7 @@ fun SosScreen(
 @Composable
 fun AlertsScreen(advisory: OrcaRepository.Advisory?, onSms: (String, String) -> Unit) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     // Only zones ORCA is actually warning about. Forwarding a GO as an
     // "alert" would train people to ignore the real ones.
     val risky = advisory?.zones?.filter { it.action != "GO" } ?: emptyList()
@@ -358,9 +559,6 @@ fun AlertsScreen(advisory: OrcaRepository.Advisory?, onSms: (String, String) -> 
         // warning about the weather, this one forwards ORCA's own verdict
         // to a crew who cannot get it. Two cards both reading "storm" was
         // one feature as far as anyone tapping could tell.
-        Text("பிற படகுகளுக்குச் சொல்", color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("Pass ORCA's verdict to another boat", color = p.muted, fontSize = 14.sp)
-        Spacer(Modifier.height(14.dp))
         Text(
             "Most boats do not have this app, but every boat has SMS. " +
             "Send ORCA's warning to a crew who cannot get it themselves.",
@@ -401,12 +599,13 @@ fun AlertsScreen(advisory: OrcaRepository.Advisory?, onSms: (String, String) -> 
 @Composable
 fun AskScreen(onListen: () -> Unit) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("தமிழில் கேளுங்கள்", color = p.ink, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text(str(S.T_ASK, lang), color = p.ink, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text("Say the name of a harbour", color = p.muted, fontSize = 15.sp)
         Spacer(Modifier.height(32.dp))
@@ -432,6 +631,7 @@ fun AskScreen(onListen: () -> Unit) {
 @Composable
 fun BigButton(label: String, tint: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Box(
         Modifier.fillMaxWidth().heightIn(min = 72.dp)
             .clip(RoundedCornerShape(6.dp)).background(tint)
@@ -446,6 +646,7 @@ fun BigButton(label: String, tint: androidx.compose.ui.graphics.Color, onClick: 
 @Composable
 fun Section(title: String, content: @Composable () -> Unit) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
         Text(title, color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
@@ -456,14 +657,20 @@ fun Section(title: String, content: @Composable () -> Unit) {
 
 @Composable
 fun EmptyState(title: String, detail: String) {
+    // `title` is Tamil at every call site; the detail beneath it is
+    // English. In English or Hindi the Tamil headline is noise, so it is
+    // dropped rather than shown to someone who cannot read it.
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Column(
         Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(title, color = p.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
+        if (lang == Lang.TA) {
+            Text(title, color = p.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+        }
         Text(detail, color = p.muted, fontSize = 15.sp, lineHeight = 22.sp)
     }
 }
@@ -490,6 +697,7 @@ object TamilNames {
 @Composable
 fun WaveScreen() {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     val sensor = remember { WaveSensor(context) }
     var estimate by remember { mutableStateOf<WaveSensor.Estimate?>(null) }
@@ -509,9 +717,6 @@ fun WaveScreen() {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text("அலை அளவு", color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("The sea, sensed from your own boat", color = p.muted, fontSize = 14.sp)
-        Spacer(Modifier.height(16.dp))
 
         if (!sensor.available) {
             Text("This phone has no motion sensor, so ORCA cannot sense the sea here.",
@@ -534,7 +739,7 @@ fun WaveScreen() {
                 // it is "good enough to say the motion is closer to 2 m
                 // than 0.5 m, and not good enough to put a decimal on" --
                 // so the band is the headline and the number is secondary.
-                Text(seaBand(e.heightM), color = p.accent,
+                Text(seaBand(e.heightM, lang), color = p.accent,
                     fontSize = 40.sp, fontWeight = FontWeight.Black, lineHeight = 48.sp)
                 Text("roughly ${String.format("%.1f", e.heightM)} m  ·  " +
                      "period ${String.format("%.1f", e.periodS)} s  ·  ${e.windowS.toInt()} s of motion",
@@ -549,7 +754,7 @@ fun WaveScreen() {
         Spacer(Modifier.height(24.dp))
         HorizontalDivider(color = p.line)
         Spacer(Modifier.height(16.dp))
-        Text("இது எப்படி வேலை செய்கிறது · How this works", color = p.accent,
+        Text(bi("இது எப்படி வேலை செய்கிறது · How this works", lang), color = p.accent,
             fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
@@ -567,11 +772,11 @@ fun WaveScreen() {
  *  The boundaries are the Douglas sea-state degrees ORCA already uses on
  *  the web client's ruler, so the phone and the shore describe the same
  *  sea in the same words. */
-private fun seaBand(m: Double) = when {
-    m < 0.5 -> "அமைதி · Calm"
-    m < 1.25 -> "லேசான அலை · Slight"
-    m < 2.5 -> "மிதமான அலை · Moderate"
-    else -> "கடும் அலை · Rough"
+private fun seaBand(m: Double, lang: Lang) = when {
+    m < 0.5 -> bi("அமைதி · Calm", lang)
+    m < 1.25 -> bi("லேசான அலை · Slight", lang)
+    m < 2.5 -> bi("மிதமான அலை · Moderate", lang)
+    else -> bi("கடும் அலை · Rough", lang)
 }
 
 // =====================================================================
@@ -581,6 +786,7 @@ private fun seaBand(m: Double) = when {
 @Composable
 fun FleetScreen(advisory: OrcaRepository.Advisory?) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     val relay = remember { FleetRelay(context) }
     var on by remember { mutableStateOf(false) }
@@ -592,9 +798,6 @@ fun FleetScreen(advisory: OrcaRepository.Advisory?) {
     val ourAge = advisory?.readingAgeMinutes()?.toInt()
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text("படகுகள் இணைப்பு", color = p.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("Share the advisory with nearby boats", color = p.muted, fontSize = 14.sp)
-        Spacer(Modifier.height(14.dp))
         Text(
             "Mobile signal stops about 8 NM (15 km) from shore. But boats meet each other out " +
             "there. Turn this on and your phone quietly offers what it is carrying to any " +
@@ -609,7 +812,7 @@ fun FleetScreen(advisory: OrcaRepository.Advisory?) {
                 color = p.caution, fontSize = 15.sp, lineHeight = 22.sp)
         } else {
             BigButton(
-                label = if (on) "நிறுத்து · Stop sharing" else "தொடங்கு · Start sharing",
+                label = if (on) bi("நிறுத்து · Stop sharing", lang) else bi("தொடங்கு · Start sharing", lang),
                 tint = if (on) p.deny else p.go,
             ) {
                 if (on) { relay.stop(); on = false; note = "Sharing stopped." }
@@ -640,7 +843,7 @@ fun FleetScreen(advisory: OrcaRepository.Advisory?) {
         Spacer(Modifier.height(24.dp))
         HorizontalDivider(color = p.line)
         Spacer(Modifier.height(16.dp))
-        Text("பாதுகாப்பு · Is this safe?", color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(bi("பாதுகாப்பு · Is this safe?", lang), color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         // Nothing is trusted because it arrived. Saying so plainly is part
         // of the design, not a disclaimer.
@@ -671,6 +874,7 @@ fun FleetScreen(advisory: OrcaRepository.Advisory?) {
 @Composable
 fun PanicWatchCard() {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     var on by remember { mutableStateOf(PanicService.running) }
 
@@ -725,16 +929,18 @@ fun PanicWatchCard() {
 
         Spacer(Modifier.height(12.dp))
         Text(
-            "What it does NOT do: it cannot send an SMS by itself — Android blocks that " +
-                "for a sideloaded app, and a message sent by a pocket would send a rescue " +
-                "to empty sea. It vibrates hard, speaks in Tamil, starts the SOS light and " +
-                "puts the message one tap from sending, over your lock screen.",
+            "What happens: the phone vibrates hard, speaks in Tamil, starts the SOS " +
+                "light, and counts down ${SosCountdown.SECONDS} seconds on your lock " +
+                "screen. Touch CANCEL in that window and nothing is sent. Do nothing " +
+                "and your position goes to every number in your list.",
             color = p.muted, fontSize = 12.sp, lineHeight = 18.sp,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Limit: if another app is playing media AND your volume is already at zero, " +
-                "Android gives ORCA no key events and the hold will not be seen.",
+            "Limits, honestly: if another app is playing media AND your volume is " +
+                "already at zero, Android gives ORCA no key events and the hold will " +
+                "not be seen. And an APK installed by tapping the file may need SMS " +
+                "allowed once under App info → Allow restricted settings.",
             color = p.caution, fontSize = 12.sp, lineHeight = 18.sp,
         )
     }

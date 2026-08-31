@@ -104,6 +104,12 @@ object DriftModel {
         currentSpeedKmh: Double?,
         currentDirectionDeg: Double?,
         hours: Double,
+        /**
+         * The hull, from Settings. Defaults to the general fishing-vessel
+         * row so every existing caller and every test keeps the exact
+         * behaviour it had before the setting existed.
+         */
+        hull: Settings.Hull = Settings.Hull.GENERAL,
     ): Result {
         val missing = buildList {
             if (windSpeedKmh == null) add("wind speed")
@@ -144,12 +150,21 @@ object DriftModel {
         fun component(slope: Double, offset: Double, eps: Double) =
             ((slope + eps / 20.0) * windMs + offset + eps / 2.0) * 0.01
 
-        val dwMean = component(DWL_SLOPE, DWL_OFFSET, 0.0)
+        // Coefficients come from the chosen hull, not the constants: a
+        // gill-netter with a rear reel catches half again as much wind as
+        // a general hull, which moves the search box by kilometres over
+        // six hours. The constants remain as the documented default.
+        val dwlSlope = hull.dwlSlope
+        val dwlStd = hull.dwlStd
+        val cwlSlope = hull.cwlSlope
+        val cwlStd = hull.cwlStd
+
+        val dwMean = component(dwlSlope, DWL_OFFSET, 0.0)
         // A hull always drifts downwind; a negative bound would be
         // unphysical, so the low side is floored rather than reversed.
-        val dwLow = max(0.0, component(DWL_SLOPE, DWL_OFFSET, -DWL_STD))
-        val dwHigh = component(DWL_SLOPE, DWL_OFFSET, +DWL_STD)
-        val cwHigh = abs(component(CWL_SLOPE, CWL_OFFSET, +CWL_STD))
+        val dwLow = max(0.0, component(dwlSlope, DWL_OFFSET, -dwlStd))
+        val dwHigh = component(dwlSlope, DWL_OFFSET, +dwlStd)
+        val cwHigh = abs(component(cwlSlope, CWL_OFFSET, +cwlStd))
 
         fun corner(downwind: Double, crosswind: Double): Pair<Double, Double> {
             val east = (curEast + downwind * dwEast + crosswind * cwEast) * seconds

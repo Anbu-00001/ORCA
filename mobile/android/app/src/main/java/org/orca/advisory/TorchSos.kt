@@ -120,6 +120,16 @@ object TorchSos {
         return true
     }
 
+    /**
+     * Is the light signalling right now?
+     *
+     * <p>Exposed because the SOS screen starts the torch automatically
+     * when a distress message goes out, and a crew that cannot see it is
+     * flashing has no way to turn it off again. It ran for four minutes
+     * unnoticed during testing and flattened battery the emergency needed.
+     */
+    val isRunning: Boolean get() = running
+
     fun stop(context: Context) {
         running = false
         handler?.removeCallbacksAndMessages(null)

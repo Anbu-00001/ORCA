@@ -28,6 +28,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.draw.clip
@@ -86,12 +88,37 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
-        Log.i("ORCA", "Location permission granted=${granted.values.any { it }}")
+        Log.i("ORCA", "Permissions granted=$granted")
+    }
+
+    /**
+     * Ask for the distress permissions once, at launch.
+     *
+     * <p>Deliberately NOT at the moment the SOS is pressed. A permission
+     * dialog is the last thing that should stand between a crew and a
+     * distress call, so the asking happens now, in harbour, while nothing
+     * is wrong. If it is refused the SOS screen says so plainly and keeps
+     * the Coast Guard call working.
+     */
+    private fun askDistressPermissions() {
+        val need = listOf(
+            Manifest.permission.SEND_SMS,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (need.isNotEmpty()) permissionLauncher.launch(need.toTypedArray())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = OrcaRepository(this)
+        // Logs what this handset can actually hear and speak. Cheap, runs
+        // once, and it is the only honest source for "which languages
+        // work" -- that depends on installed packs, not on Android version.
+        VoiceProbe.probeRecognition(this)
+        VoiceProbe.probeTts(this)
+        askDistressPermissions()
         val openSos = intent?.getBooleanExtra(EXTRA_OPEN_SOS, false) == true
         setContent {
             OrcaApp(repo, ::listen, ::sendSms, ::ensureLocation, voiceResult, openSos) {
@@ -149,7 +176,7 @@ class MainActivity : ComponentActivity() {
 // reachable directly from home and nothing nests.
 // ---------------------------------------------------------------------
 
-enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT, MAP, SIGNAL, FENCE }
+enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT, MAP, SIGNAL, FENCE, SETTINGS }
 
 @Composable
 fun OrcaApp(
@@ -168,6 +195,7 @@ fun OrcaApp(
     // a control in the app, one tap, and it survives a restart.
     val context = LocalContext.current
     var lang by remember { mutableStateOf(Prefs.loadLang(context)) }
+    var settings by remember { mutableStateOf(Settings.load(context)) }
     var screen by remember { mutableStateOf(if (openSos) Screen.SOS else Screen.HOME) }
     var advisory by remember { mutableStateOf<OrcaRepository.Advisory?>(null) }
     var selectedZone by remember { mutableStateOf<String?>(null) }
@@ -178,7 +206,11 @@ fun OrcaApp(
     // Local first, always. The app is usable before any network attempt.
     LaunchedEffect(Unit) {
         advisory = repo.loadLocal()
-        selectedZone = selectedZone ?: advisory?.zones?.firstOrNull()?.zone
+        // The crew's OWN harbour, if they have set one. Opening every phone
+        // on Chennai is wrong for nine crews in ten.
+        selectedZone = selectedZone
+            ?: settings.homeZone?.takeIf { h -> advisory?.zones?.any { it.zone == h } == true }
+            ?: advisory?.zones?.firstOrNull()?.zone
         refreshing = true
         try {
             advisory = repo.refresh()
@@ -193,14 +225,20 @@ fun OrcaApp(
         }
     }
 
-    // A spoken question jumps straight to that zone's verdict.
+    // A spoken utterance is a COMMAND, a ZONE, or both.
+    //
+    // Order matters: the zone is applied first so "is Rameswaram safe"
+    // selects Rameswaram AND opens the verdict, rather than one or the
+    // other. An utterance matching no command is left alone -- navigating
+    // somewhere the crew did not ask for is worse than doing nothing.
     LaunchedEffect(voiceResult) {
         val spoken = voiceResult ?: return@LaunchedEffect
-        val match = advisory?.zones?.firstOrNull { z ->
-            spoken.contains(z.zone, ignoreCase = true) ||
-                TamilNames.stemFor(spoken) == z.zone
+        val zones = advisory?.zones?.map { it.zone } ?: emptyList()
+        VoiceCommands.zoneFor(spoken, zones)?.let {
+            selectedZone = it
+            screen = Screen.VERDICT
         }
-        if (match != null) { selectedZone = match.zone; screen = Screen.VERDICT }
+        VoiceCommands.screenFor(spoken)?.let { screen = it }
         onVoiceConsumed()
     }
 
@@ -219,7 +257,16 @@ fun OrcaApp(
     BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
 
     OrcaTheme(Palettes[paletteIndex]) {
-      CompositionLocalProvider(LocalLang provides lang) {
+      // Text size is applied ONCE, here, by overriding the density's
+      // fontScale. Every sp in every screen follows automatically -- the
+      // alternative was threading a multiplier through several hundred
+      // Text calls, which is exactly the kind of change that gets applied
+      // to nine of them and missed on the tenth.
+      val base = LocalDensity.current
+      CompositionLocalProvider(
+          LocalLang provides lang,
+          LocalDensity provides Density(base.density, base.fontScale * settings.textSize.scale),
+      ) {
         val palette = LocalPalette.current
 
         // The system's own status/nav icons are painted by Android, not by
@@ -253,17 +300,42 @@ fun OrcaApp(
                     onBack = { screen = Screen.HOME },
                     onCyclePalette = { paletteIndex = (paletteIndex + 1) % Palettes.size },
                     onCycleLang = { lang = lang.next().also { Prefs.saveLang(context, it) } },
+                    onSettings = { screen = Screen.SETTINGS },
+                    onListen = onListen,
                 )
                 Box(Modifier.weight(1f)) {
                     when (screen) {
                         Screen.HOME -> HomeScreen(
                             advisory, refreshing, refreshNote,
-                            onSos = { screen = Screen.SOS },
+                            // The hold IS the decision, so it sends. It
+                            // used to merely navigate to the SOS screen,
+                            // where two more taps were still needed --
+                            // four actions in total to ask for help.
+                            onSos = {
+                                val cfg = Settings.load(context)
+                                val hint = advisory?.zones
+                                    ?.firstOrNull { it.zone == selectedZone }?.zone
+                                    ?: advisory?.zones?.firstOrNull()?.zone
+                                val r = SosDispatch.fire(
+                                    context, cfg.contacts, hint,
+                                    cfg.boatId.takeIf { it.isNotBlank() },
+                                )
+                                if (r.outcome == SosDispatch.Outcome.SENT) {
+                                    runCatching { TorchSos.start(context) }
+                                    SosDispatch.requestUpdate(
+                                        context, cfg.contacts, hint,
+                                        cfg.boatId.takeIf { it.isNotBlank() }, r.fix,
+                                    ) { }
+                                }
+                                // Straight to the SOS screen, which shows
+                                // what actually happened and offers 1554.
+                                screen = Screen.SOS
+                            },
                         ) { screen = it }
                         Screen.VERDICT -> VerdictScreen(advisory, selectedZone) { selectedZone = it }
                         Screen.FISH -> FishScreen(repo)
                         Screen.BOUNDARY -> BoundaryScreen(repo, onEnsureLocation)
-                        Screen.SOS -> SosScreen(advisory, selectedZone, onSms)
+                        Screen.SOS -> SosScreen(advisory, selectedZone) { screen = Screen.SETTINGS }
                         Screen.ALERTS -> AlertsScreen(advisory, onSms)
                         Screen.ASK -> AskScreen(onListen)
                         Screen.WAVE -> WaveScreen()
@@ -273,6 +345,7 @@ fun OrcaApp(
                         Screen.MAP -> MapScreen(advisory, onEnsureLocation)
                         Screen.SIGNAL -> SignalScreen()
                         Screen.FENCE -> GeofenceScreen(advisory, onEnsureLocation)
+                        Screen.SETTINGS -> SettingsScreen(advisory, settings) { settings = it }
                     }
                 }
                 // The bar sits BELOW the content and carries the gesture-bar
@@ -295,6 +368,8 @@ private fun TopBar(
     onBack: () -> Unit,
     onCyclePalette: () -> Unit,
     onCycleLang: () -> Unit,
+    onSettings: () -> Unit,
+    onListen: () -> Unit,
 ) {
     val p = LocalPalette.current
     Row(
@@ -319,7 +394,14 @@ private fun TopBar(
             )
         } else {
             Column(Modifier.weight(1f)) {
-                Text(str(S.GREETING, lang), color = p.ink, fontWeight = FontWeight.Black, fontSize = 22.sp)
+                // maxLines on BOTH: at "very large" text the greeting wrapped
+                // to two lines and shoved the subtitle into an ellipsis, and
+                // the whole bar grew taller than the chips beside it.
+                Text(
+                    str(S.GREETING, lang), color = p.ink,
+                    fontWeight = FontWeight.Black, fontSize = 22.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     str(S.SUBTITLE, lang), color = p.muted, fontSize = 12.5.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -343,6 +425,17 @@ private fun TopBar(
             Text(lang.label, color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.width(8.dp))
+
+        Icon(
+            Icons.Filled.Mic, "voice", tint = p.accent,
+            modifier = Modifier.size(24.dp).clickable(onClick = onListen),
+        )
+        Spacer(Modifier.width(12.dp))
+        Icon(
+            Icons.Filled.Settings, "settings", tint = p.muted,
+            modifier = Modifier.size(22.dp).clickable(onClick = onSettings),
+        )
+        Spacer(Modifier.width(10.dp))
 
         // Day / dusk / night. One control, cycling, because a dropdown at
         // night is three taps you do not want to make.
@@ -382,6 +475,7 @@ private fun titleFor(s: Screen, lang: Lang) = when (s) {
     Screen.MAP -> str(S.T_CHART, lang)
     Screen.SIGNAL -> str(S.T_LIGHT, lang)
     Screen.FENCE -> str(S.T_FENCE, lang)
+    Screen.SETTINGS -> str(S.T_SETTINGS, lang)
     Screen.HOME -> "ORCA"
 }
 

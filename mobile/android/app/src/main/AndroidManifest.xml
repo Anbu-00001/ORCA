@@ -40,11 +40,22 @@
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- No SEND_SMS. The distress message is handed to the phone's own
-         messaging app via ACTION_SENDTO, which needs no permission and
-         puts the crew in the loop before anything is sent. Android 15
-         hard-restricts SEND_SMS for sideloaded apps anyway, so a
-         permission-based path would simply not work here. -->
+    <!-- DISTRESS. SEND_SMS, because the SOS must go out on ONE press.
+         The previous design handed a pre-filled message to the phone's
+         messaging app, which left the crew picking a recipient and
+         pressing send: three actions, on a pitching deck, in the dark.
+
+         Android 15 makes SEND_SMS a hard-restricted permission for a
+         sideloaded app, so the toggle starts greyed out and a human must
+         first allow it once under App info -> Allow restricted settings.
+         ORCA detects that state and says exactly that, rather than
+         failing quietly. See SosDispatch.kt.
+
+         CALL_PHONE is for 1554, the Indian Coast Guard's distress line.
+         It is a TELEPHONE number: ORCA used to open an SMS to it, which
+         most likely delivered to nothing at all. It dials now. -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
 
     <!-- Speech recognition lives in another app; this declares that we
          intend to talk to it (Android 11+ package visibility). -->

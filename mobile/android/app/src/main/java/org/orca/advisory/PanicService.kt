@@ -69,6 +69,16 @@ class PanicService : Service() {
     companion object {
         const val ACTION_START = "org.orca.advisory.PANIC_WATCH_START"
         const val ACTION_STOP = "org.orca.advisory.PANIC_WATCH_STOP"
+
+        /** Abort a countdown that is already running. */
+        const val ACTION_CANCEL = "org.orca.advisory.PANIC_CANCEL"
+
+        /** Stop the pending SOS. Safe to call when nothing is pending. */
+        fun cancel(context: Context) {
+            context.startService(
+                Intent(context, PanicService::class.java).setAction(ACTION_CANCEL),
+            )
+        }
         private const val CHANNEL_ONGOING = "orca_panic_watch"
         private const val CHANNEL_ALARM = "orca_panic_alarm"
         private const val NOTIF_ONGOING = 4101
@@ -93,7 +103,12 @@ class PanicService : Service() {
     private var session: MediaSession? = null
     private var observer: ContentObserver? = null
     private var tts: TextToSpeech? = null
-    private var lastVolume = -1
+    /** Last seen level per watched stream, keyed by stream id. */
+    private val lastVolume = mutableMapOf<Int, Int>()
+
+    /** Steps ORCA borrowed to keep the key repeating, per stream, so the
+     *  crew's own volume can be handed back exactly. */
+    private val borrowed = mutableMapOf<Int, Int>()
     private var state = PanicDetector.State()
     private val handler = Handler(Looper.getMainLooper())
 
@@ -110,8 +125,15 @@ class PanicService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            abortCountdown()
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_CANCEL) {
+            abortCountdown()
+            // The watch itself keeps running: a crew who cancelled a false
+            // alarm still wants the key to work the next time.
+            return START_STICKY
         }
         createChannels()
         startForeground(NOTIF_ONGOING, ongoingNotification())
@@ -214,17 +236,37 @@ class PanicService : Service() {
 
     // --- path 2: the volume setting -------------------------------------
 
+    /**
+     * Streams a volume key might actually be driving.
+     *
+     * <p>THE BUG THIS LIST FIXES. The observer used to watch STREAM_MUSIC
+     * alone, and on a phone with nothing playing the volume keys do not
+     * touch STREAM_MUSIC at all -- they drive the ringer. So on an idle
+     * handset, which is every handset in a pocket, neither detection path
+     * saw a single press and the whole feature was dead. Measured on an
+     * OPPO CPH2591: a full five-second hold produced zero events.
+     */
+    private val watchedStreams = listOf(
+        AudioManager.STREAM_MUSIC,
+        AudioManager.STREAM_RING,
+        AudioManager.STREAM_NOTIFICATION,
+    )
+
     private fun armVolumeObserver() {
         try {
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            lastVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            watchedStreams.forEach { lastVolume[it] = am.getStreamVolume(it) }
             val o = object : ContentObserver(handler) {
                 override fun onChange(selfChange: Boolean) {
-                    val now = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                    if (now == lastVolume) return
-                    val key = if (now < lastVolume) PanicDetector.Key.DOWN else PanicDetector.Key.UP
-                    lastVolume = now
-                    onKey(key)
+                    watchedStreams.forEach { stream ->
+                        val now = am.getStreamVolume(stream)
+                        val before = lastVolume[stream] ?: now
+                        if (now == before) return@forEach
+                        lastVolume[stream] = now
+                        val key = if (now < before) PanicDetector.Key.DOWN else PanicDetector.Key.UP
+                        onKey(key)
+                        if (key == PanicDetector.Key.DOWN) keepAlive(am, stream, now)
+                    }
                 }
             }
             contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, o)
@@ -232,6 +274,55 @@ class PanicService : Service() {
         } catch (e: Exception) {
             Log.w(TAG, "Volume observer unavailable: ${e.message}")
         }
+    }
+
+    /**
+     * Keep the key repeating after the volume hits the floor.
+     *
+     * <p>THE PHYSICS PROBLEM. This path sees volume CHANGES, not key
+     * presses. A held volume-down key auto-repeats down the scale and then
+     * the stream reaches zero, where nothing changes any more and the
+     * observer goes deaf -- so a fifteen-step stream runs out in about two
+     * seconds and a five-second hold can never be measured. That is not a
+     * tuning problem, it is the path running out of room.
+     *
+     * <p>THE FIX. When a run is under way and the stream lands on its
+     * minimum, ORCA lifts it a few steps back up, silently. The key is
+     * still down, so it keeps stepping back to zero, and the events keep
+     * arriving for as long as the crew is actually holding. Every step
+     * borrowed is counted and handed back in [restoreVolume], so a crew
+     * who cancels finds their volume exactly where they left it.
+     *
+     * <p>Only while a run is genuinely in progress. Somebody quietly
+     * muting their phone gets no interference at all.
+     */
+    private fun keepAlive(am: AudioManager, stream: Int, now: Int) {
+        if (state.run.size < 2) return          // a single tap is not a hold
+        if (now > am.getStreamMinVolume(stream)) return
+        val lift = 4
+        runCatching {
+            repeat(lift) {
+                // No FLAG_SHOW_UI: the crew is holding a key, not asking to
+                // see a slider, and a bouncing volume panel would be the
+                // most visible possible bug.
+                am.adjustStreamVolume(stream, AudioManager.ADJUST_RAISE, 0)
+            }
+            borrowed[stream] = (borrowed[stream] ?: 0) + lift
+            lastVolume[stream] = am.getStreamVolume(stream)
+        }.onFailure { Log.w(TAG, "Could not lift $stream: ${it.message}") }
+    }
+
+    /** Give back every step borrowed to keep the key repeating. */
+    private fun restoreVolume() {
+        if (borrowed.isEmpty()) return
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        borrowed.forEach { (stream, steps) ->
+            runCatching {
+                repeat(steps) { am.adjustStreamVolume(stream, AudioManager.ADJUST_LOWER, 0) }
+                lastVolume[stream] = am.getStreamVolume(stream)
+            }
+        }
+        borrowed.clear()
     }
 
     // --- the decision ----------------------------------------------------
@@ -244,22 +335,40 @@ class PanicService : Service() {
             TAG,
             "panic key=$key run=${state.run.size} progress=${"%.2f".format(state.progress)}",
         )
-        if (result.fire) fire()
+        if (result.fire) {
+            restoreVolume()
+            fire()
+        } else if (state.run.isEmpty()) {
+            // The run closed without firing -- a tap, or a hold let go
+            // early. Give the crew their volume back straight away.
+            restoreVolume()
+        }
     }
 
     /**
-     * What happens when the hold completes.
+     * What happens when the hold completes: the message goes out.
      *
-     * <p>It does NOT silently send anything. Android 15 hard-restricts
-     * SEND_SMS for a sideloaded app, and ORCA would not want it anyway: a
-     * distress message that goes out with nobody having seen it is how a
-     * pocket sends the Coast Guard to an empty patch of sea. So the phone
-     * makes itself impossible to ignore -- long vibration, a full-screen
-     * alarm notification, the Tamil announcement, and the torch already
-     * flashing SOS -- and the crew confirms the message with one tap.
+     * <p>This used to raise an alarm and wait for the crew to confirm.
+     * That was the wrong call. The five-second hold IS the confirmation --
+     * it is a deliberate, sustained action that no pocket performs, which
+     * is exactly why the threshold is five seconds and why a volume-UP
+     * press cancels it. Making somebody who has already held a button for
+     * five seconds then find, unlock and tap the phone is asking them to
+     * confirm twice, and the second one happens at the worst moment of
+     * their day.
+     *
+     * <p>So it sends, and THEN makes itself impossible to ignore: long
+     * vibration, the torch flashing SOS, the Tamil announcement, and a
+     * full-screen notification that now reports what was sent rather than
+     * asking permission to send it.
      */
     private fun fire() {
-        Log.i(TAG, "PANIC: volume key held")
+        if (SosCountdown.running) {
+            Log.i(TAG, "PANIC: already counting down, ignoring")
+            return
+        }
+        Log.i(TAG, "PANIC: volume key held -- ${SosCountdown.SECONDS}s to cancel")
+        SosCountdown.start()
 
         // Long, unmistakable, and distinct from every notification pattern.
         runCatching {
@@ -275,42 +384,143 @@ class PanicService : Service() {
             )
         }.onFailure { Log.w(TAG, "No vibrator: ${it.message}") }
 
-        // Start the light immediately. It costs almost nothing and it is
-        // the one signal that works with a dead network.
+        // The torch starts NOW rather than after the countdown. It is the
+        // one signal that costs nothing and works with a dead network, and
+        // if the countdown is cancelled it is turned straight back off.
         runCatching { TorchSos.start(this) }
             .onFailure { Log.w(TAG, "Torch failed at panic: ${it.message}") }
 
+        // Said out loud, because the crew this is for cannot see a screen.
         runCatching {
             tts?.speak(
-                "அவசர அழைப்பு. உங்கள் இடம் அனுப்பத் தயார். திரையைப் பாருங்கள்.",
+                "அவசர அழைப்பு. பத்து விநாடிகளில் அனுப்பப்படும். நிறுத்த திரையை தொடவும்.",
                 TextToSpeech.QUEUE_FLUSH, null, "orca-panic",
             )
         }
 
-        val open = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java)
-                .putExtra(MainActivity.EXTRA_OPEN_SOS, true)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        countdown()
+    }
 
+    /**
+     * Tick the abort window down, then send.
+     *
+     * <p>The notification is rewritten every second so a locked screen
+     * shows the same number the app does, and its one action is CANCEL.
+     */
+    private fun countdown() {
+        val left = SosCountdown.secondsLeft
+        if (left == null) return
+        showCountdownNotification(left)
+        handler.postDelayed({
+            if (!SosCountdown.running) return@postDelayed
+            if (SosCountdown.tick() == null) sendNow() else countdown()
+        }, 1000)
+    }
+
+    /** A person stopped it. Nothing is sent, and it says so. */
+    private fun abortCountdown() {
+        if (!SosCountdown.running) return
+        Log.i(TAG, "PANIC: cancelled by the crew -- nothing sent")
+        SosCountdown.cancel()
+        runCatching { TorchSos.stop(this) }
+        runCatching {
+            tts?.speak(
+                "அவசர அழைப்பு நிறுத்தப்பட்டது.",
+                TextToSpeech.QUEUE_FLUSH, null, "orca-panic-cancel",
+            )
+        }
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIF_ALARM)
+    }
+
+    /** The window closed with nobody stopping it. */
+    private fun sendNow() {
+        SosCountdown.finish()
+        // Fully qualified: this file imports android.provider.Settings for
+        // the volume ContentObserver, which shadows ORCA's own Settings.
+        val cfg = org.orca.advisory.Settings.load(this)
+        val report = SosDispatch.fire(
+            this, cfg.contacts,
+            zoneHint = cfg.homeZone,
+            boat = cfg.boatId.takeIf { it.isNotBlank() },
+        )
+        Log.i(TAG, "PANIC send outcome=${report.outcome}")
+        if (report.outcome == SosDispatch.Outcome.SENT ||
+            report.outcome == SosDispatch.Outcome.PARTIAL
+        ) {
+            // Chase a live fix and follow up. The first message may have
+            // carried an hours-old position from a phone that was in a
+            // pocket; this is the one that gets the boat found.
+            SosDispatch.requestUpdate(
+                this, cfg.contacts, cfg.homeZone,
+                cfg.boatId.takeIf { it.isNotBlank() }, report.fix,
+            ) { Log.i(TAG, "PANIC update outcome=${it.outcome}") }
+        }
+
+        runCatching {
+            tts?.speak(
+                if (report.outcome == SosDispatch.Outcome.FAILED ||
+                    report.outcome == SosDispatch.Outcome.NO_CONTACT ||
+                    report.outcome == SosDispatch.Outcome.NO_PERMISSION
+                ) {
+                    "அவசர அழைப்பு அனுப்ப முடியவில்லை. திரையைப் பாருங்கள்."
+                } else {
+                    "அவசர அழைப்பு அனுப்பப்பட்டது. உங்கள் இடம் அனுப்பப்பட்டது."
+                },
+                TextToSpeech.QUEUE_FLUSH, null, "orca-panic-sent",
+            )
+        }
+
+        val sent = report.outcome == SosDispatch.Outcome.SENT ||
+            report.outcome == SosDispatch.Outcome.PARTIAL
         val n = Notification.Builder(this, CHANNEL_ALARM)
             .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setContentTitle("SOS — அவசர அழைப்பு")
-            .setContentText("Volume key held. Tap to send your position.")
+            .setContentTitle(if (sent) "SOS SENT — அவசர அழைப்பு" else "SOS NOT SENT — அவசர அழைப்பு")
+            .setContentText(report.detail)
+            .setStyle(Notification.BigTextStyle().bigText(report.detail))
             .setPriority(Notification.PRIORITY_MAX)
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setContentIntent(open)
+            .setContentIntent(openSosIntent())
+            .setFullScreenIntent(openSosIntent(), true)
+            .build()
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ALARM, n)
+    }
+
+    private fun openSosIntent(): PendingIntent = PendingIntent.getActivity(
+        this, 0,
+        Intent(this, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_SOS, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    private fun showCountdownNotification(secondsLeft: Int) {
+        val cancel = PendingIntent.getService(
+            this, 2,
+            Intent(this, PanicService::class.java).setAction(ACTION_CANCEL),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = Notification.Builder(this, CHANNEL_ALARM)
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentTitle("SOS in $secondsLeft s — அவசர அழைப்பு")
+            .setContentText("Sending your position. Tap CANCEL to stop it.")
+            .setPriority(Notification.PRIORITY_MAX)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openSosIntent())
             // Full-screen so it takes over a locked screen rather than
             // queueing behind whatever else is on it.
-            .setFullScreenIntent(open, true)
+            .setFullScreenIntent(openSosIntent(), true)
+            .addAction(
+                Notification.Action.Builder(
+                    null as android.graphics.drawable.Icon?, "CANCEL", cancel,
+                ).build(),
+            )
             .build()
-
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(NOTIF_ALARM, n)
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ALARM, n)
     }
 
     // --- plumbing ---------------------------------------------------------

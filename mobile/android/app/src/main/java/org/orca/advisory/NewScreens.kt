@@ -51,6 +51,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun StormScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Boolean) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     var fix by remember { mutableStateOf<Location?>(null) }
     var fixError by remember { mutableStateOf<String?>(null) }
@@ -118,7 +119,7 @@ fun StormScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Bool
         val drawable = (match.covering + match.elsewhere)
             .filter { (it.polygon?.size ?: 0) >= 3 }
         if (drawable.isNotEmpty()) {
-            Section("வரைபடம் / WHERE THE WARNINGS ARE") {
+            Section(bi("வரைபடம் / WHERE THE WARNINGS ARE", lang)) {
                 OfflineMap(
                     heightDp = 260,
                     focusLat = lat,
@@ -144,14 +145,14 @@ fun StormScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Bool
 
         // --- warnings over the boat --------------------------------------
         if (match.covering.isNotEmpty()) {
-            Section("இங்கே / OVER YOU") {
+            Section(bi("இங்கே / OVER YOU", lang)) {
                 match.covering.forEach { AlertCard(it, covering = true) }
             }
         }
 
         // --- warnings IMD could not place --------------------------------
         if (match.ungeolocated.isNotEmpty()) {
-            Section("இடம் குறிப்பிடப்படவில்லை / AREA NOT GIVEN") {
+            Section(bi("இடம் குறிப்பிடப்படவில்லை / AREA NOT GIVEN", lang)) {
                 Text(
                     "IMD issued these without a map outline, so ORCA cannot tell " +
                         "whether they cover you. Read them yourself.",
@@ -164,13 +165,13 @@ fun StormScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Bool
 
         // --- everything else, so the screen never looks broken -----------
         if (match.checked && match.elsewhere.isNotEmpty()) {
-            Section("வேறு இடங்களில் / ELSEWHERE IN INDIA") {
+            Section(bi("வேறு இடங்களில் / ELSEWHERE IN INDIA", lang)) {
                 match.elsewhere.take(5).forEach { AlertCard(it, covering = false) }
             }
         }
 
         if (match.checked) {
-            Section("எங்கிருந்து / SOURCE") {
+            Section(bi("எங்கிருந்து / SOURCE", lang)) {
                 Text(match.source ?: "", color = p.ink, fontSize = 14.sp, lineHeight = 20.sp)
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -187,6 +188,7 @@ fun StormScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> Bool
 @Composable
 private fun AlertCard(alert: StormAlerts.Alert, covering: Boolean) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     var expanded by remember { mutableStateOf(covering) }
     val tint = when (alert.severity) {
         "Extreme" -> p.deny
@@ -227,7 +229,7 @@ private fun AlertCard(alert: StormAlerts.Alert, covering: Boolean) {
             }
             if (alert.instruction.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                Text("செய்ய வேண்டியது / DO", color = p.accent,
+                Text(bi("செய்ய வேண்டியது / DO", lang), color = p.accent,
                     fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
                 Text(readable(alert.instruction), color = p.ink, fontSize = 14.sp, lineHeight = 20.sp)
@@ -276,6 +278,7 @@ fun DriftScreen(
     onSms: (String, String) -> Unit,
 ) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val context = LocalContext.current
     var fix by remember { mutableStateOf<Location?>(null) }
     var hours by remember { mutableDoubleStateOf(6.0) }
@@ -304,11 +307,13 @@ fun DriftScreen(
     val originLat = lat ?: zone.lat
     val originLon = lon ?: zone.lon
 
+    val settings = remember { Settings.load(context) }
     val result = DriftModel.forecast(
         originLat, originLon,
         zone.windSpeedKmh, zone.windDirectionDeg,
         zone.currentSpeedKmh, zone.currentDirectionDeg,
         hours,
+        settings.hull,
     )
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -320,7 +325,7 @@ fun DriftScreen(
                 detail = result.reason ?: "",
                 tint = p.unknown,
             )
-            Section("ஏன் / WHY") {
+            Section(bi("ஏன் / WHY", lang)) {
                 Text(
                     "Missing: ${result.missing.joinToString(", ")}. A drift box " +
                         "built on an assumed wind direction is a made-up position, " +
@@ -341,7 +346,7 @@ fun DriftScreen(
         )
 
         // --- horizon ------------------------------------------------------
-        Section("எவ்வளவு நேரம் / HOW LONG ADRIFT") {
+        Section(bi("எவ்வளவு நேரம் / HOW LONG ADRIFT", lang)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(6.0, 12.0, 24.0).forEach { h ->
                     val selected = hours == h
@@ -361,7 +366,7 @@ fun DriftScreen(
         }
 
         // --- the position to read out ---------------------------------------
-        Section("சொல்ல வேண்டிய இடம் / POSITION TO REPORT") {
+        Section(bi("சொல்ல வேண்டிய இடம் / POSITION TO REPORT", lang)) {
             Text(coords(result.centreLat, result.centreLon),
                 color = p.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
@@ -372,7 +377,7 @@ fun DriftScreen(
                 color = p.muted, fontSize = 13.sp, lineHeight = 19.sp,
             )
             Spacer(Modifier.height(12.dp))
-            BigButton("இதை SMS அனுப்பு  ·  Send this as SMS", p.deny) {
+            BigButton(bi("இதை SMS அனுப்பு  ·  Send this as SMS", lang), p.deny) {
                 onSms("", driftSms(originLat, originLon, result, hours))
             }
         }
@@ -381,7 +386,7 @@ fun DriftScreen(
         // Four lat/lon pairs are unreadable as a shape. A crew needs to see
         // WHERE, relative to the coast and the boundary, and the whole point
         // of this screen is that they need it with no signal.
-        Section("தேடல் பெட்டி / SEARCH BOX") {
+        Section(bi("தேடல் பெட்டி / SEARCH BOX", lang)) {
             OfflineMap(
                 heightDp = 240,
                 focusLat = (originLat + result.centreLat) / 2,
@@ -412,13 +417,13 @@ fun DriftScreen(
         }
 
         // --- what it was computed from ---------------------------------------
-        Section("எதிலிருந்து / WORKED OUT FROM") {
-            InputRow("காற்று / Wind", "${Units.speed(zone.windSpeedKmh!!)} from " +
+        Section(bi("எதிலிருந்து / WORKED OUT FROM", lang)) {
+            InputRow(bi("காற்று / Wind", lang), "${Units.speed(zone.windSpeedKmh!!)} from " +
                 "${zone.windDirectionDeg!!.toInt()}°")
-            InputRow("நீரோட்டம் / Current", "${Units.speed(zone.currentSpeedKmh!!)} toward " +
+            InputRow(bi("நீரோட்டம் / Current", lang), "${Units.speed(zone.currentSpeedKmh!!)} toward " +
                 "${zone.currentDirectionDeg!!.toInt()}°")
-            InputRow("இடம் / Readings from", zone.zone)
-            InputRow("நேரம் / Measured", humanTime(zone.validTime))
+            InputRow(bi("இடம் / Readings from", lang), zone.zone)
+            InputRow(bi("நேரம் / Measured", lang), humanTime(zone.validTime))
             Spacer(Modifier.height(10.dp))
             Text(
                 "Leeway model — " + DriftModel.SOURCE + ". Wind and current are " +
@@ -433,6 +438,7 @@ fun DriftScreen(
 @Composable
 private fun InputRow(label: String, value: String) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
         Text(label, color = p.muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
         Text(value, color = p.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -467,14 +473,28 @@ private fun boxSpanKm(r: DriftModel.Result): Double {
 // shared bits
 // =====================================================================
 
+/**
+ * The big coloured answer at the top of a screen.
+ *
+ * <p>Takes BOTH languages and picks. Every call site was written
+ * Tamil-first with the English underneath, from before there was a
+ * language setting, so switching to English used to change the
+ * navigation and leave the actual answer in Tamil. Now the chosen
+ * language leads and the other is the subtitle -- which is still worth
+ * keeping, because the English words are the ones printed on every
+ * official form a crew has to deal with afterwards.
+ */
 @Composable
 fun Headline(tamil: String, english: String, detail: String, tint: Color) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
+    val lead = if (lang == Lang.TA) tamil else english
+    val sub = if (lang == Lang.TA) english else tamil
     Column(Modifier.fillMaxWidth().background(tint).padding(20.dp)) {
-        Text(tamil, color = p.onAccent, fontSize = 28.sp,
+        Text(lead, color = p.onAccent, fontSize = 28.sp,
             fontWeight = FontWeight.Black, lineHeight = 36.sp)
         Spacer(Modifier.height(6.dp))
-        Text(english, color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(sub, color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         if (detail.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
             Text(detail, color = p.onAccent, fontSize = 14.sp, lineHeight = 20.sp)
@@ -491,7 +511,8 @@ private fun PositionRow(
     fixError: String?,
 ) {
     val p = LocalPalette.current
-    Section("எந்த இடத்திற்கு / CHECKED FOR") {
+    val lang = LocalLang.current
+    Section(bi("எந்த இடத்திற்கு / CHECKED FOR", lang)) {
         Text(coords(lat, lon), color = p.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         Text(

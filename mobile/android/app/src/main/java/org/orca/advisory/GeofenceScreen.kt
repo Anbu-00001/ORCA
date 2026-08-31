@@ -124,18 +124,18 @@ fun GeofenceScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> B
         )
 
         // --- every fence, ranked -----------------------------------------
-        Section("எல்லைகள் / FENCES") {
+        Section(bi("எல்லைகள் / FENCES", lang)) {
             hazards.sortedBy { Geofence.severity(it.band) }.forEach { h ->
                 FenceRow(h, acks[h.kind], nowMs)
             }
         }
 
         // --- the reset ------------------------------------------------------
-        Section("அமைதி / SILENCE") {
+        Section(bi("அமைதி / SILENCE", lang)) {
             val active = hazards.any { it.band != Geofence.Band.CLEAR }
             BigButton(
-                if (acks.isEmpty()) "15 நிமிடம் அமைதி  ·  Silence for 15 min"
-                else "மீண்டும் அமை  ·  Reset all warnings",
+                if (acks.isEmpty()) bi("15 நிமிடம் அமைதி  ·  Silence for 15 min", lang)
+                else bi("மீண்டும் அமை  ·  Reset all warnings", lang),
                 if (acks.isEmpty()) p.panel else p.accent,
             ) {
                 acks = if (acks.isEmpty()) {
@@ -167,7 +167,7 @@ fun GeofenceScreen(advisory: OrcaRepository.Advisory?, onEnsureLocation: () -> B
             }
         }
 
-        Section("இது எதிலிருந்து / SOURCES") {
+        Section(bi("இது எதிலிருந்து / SOURCES", lang)) {
             SourceRow("Sea boundary", advisory?.boundary?.source ?: "not loaded")
             SourceRow(
                 "Marine park",
@@ -267,6 +267,7 @@ private fun livePolygons(advisory: OrcaRepository.Advisory?, tint: Color): List<
 @Composable
 private fun FenceRow(h: Geofence.Hazard, ack: Geofence.Ack?, nowMs: Long) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     val tint = tintFor(p, h.band)
     Row(
         Modifier.fillMaxWidth().padding(vertical = 7.dp),
@@ -307,6 +308,7 @@ private fun FenceRow(h: Geofence.Hazard, ack: Geofence.Ack?, nowMs: Long) {
 @Composable
 private fun SourceRow(what: String, from: String) {
     val p = LocalPalette.current
+    val lang = LocalLang.current
     Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
         Text(what, color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Text(from, color = p.muted, fontSize = 12.5.sp, lineHeight = 18.sp)

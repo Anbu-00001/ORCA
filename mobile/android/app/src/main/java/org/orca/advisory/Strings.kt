@@ -47,7 +47,7 @@ enum class S {
     IN_EMERGENCY, HOLD_2S, HOLDING, SOS_HINT_1, SOS_HINT_2,
     EVERYTHING_ELSE,
     T_CHART, T_STORM, T_FISH, T_BOUNDARY, T_DRIFT, T_LIGHT,
-    T_WAVE, T_FLEET, T_ASK, T_WARN, T_FENCE,
+    T_WAVE, T_FLEET, T_ASK, T_WARN, T_FENCE, T_SETTINGS,
     NAV_HOME, NAV_CHART, NAV_STORM, NAV_FENCE, NAV_SOS,
     AGE_UNKNOWN, REFRESHING, MIN, HOUR, DAY,
     ACT_GO, ACT_NO, ACT_ALT, ACT_UNKNOWN,
@@ -90,6 +90,7 @@ private val TABLE: Map<S, Triple<String, String, String>> = mapOf(
     S.T_ASK to Triple("குரலில் கேள்", "Ask by voice", "बोलकर पूछें"),
     S.T_WARN to Triple("பிறருக்கு", "Warn a boat", "दूसरी नाव को चेताएँ"),
     S.T_FENCE to Triple("தடை பகுதிகள்", "Restricted areas", "प्रतिबंधित क्षेत्र"),
+    S.T_SETTINGS to Triple("அமைப்புகள்", "Settings", "सेटिंग्स"),
 
     S.NAV_HOME to Triple("முகப்பு", "Home", "होम"),
     S.NAV_CHART to Triple("வரைபடம்", "Chart", "नक्शा"),
@@ -159,5 +160,51 @@ object Prefs {
     fun saveLang(context: android.content.Context, lang: Lang) {
         context.getSharedPreferences(FILE, android.content.Context.MODE_PRIVATE)
             .edit().putString(KEY_LANG, lang.code).apply()
+    }
+}
+
+/**
+ * Pick one half of a "Tamil / English" or "Tamil · English" label.
+ *
+ * <p>WHY THIS EXISTS. Most of this app was written Tamil-first with the
+ * English printed underneath, before there was a language setting. That
+ * left 122 hard-coded bilingual literals across the screens, so switching
+ * to English changed the navigation and nothing else: the Storm screen
+ * still headlined in Tamil and every section header still read
+ * "எங்கிருந்து / SOURCE".
+ *
+ * <p>Machine-translating a hundred safety strings into two languages
+ * unreviewed would have been the worse fix. These labels ALREADY contain
+ * a human-written pair, so this splits the pair rather than inventing
+ * anything: Tamil gets the Tamil, English gets the English.
+ *
+ * <p>Hindi falls back to the ENGLISH half, deliberately. An unreviewed
+ * Hindi guess at "Turn back now" is worse than English a reader can at
+ * least recognise — and the strings that genuinely matter (the four
+ * verdicts, the emergency wording) have real reviewed Hindi in TABLE
+ * above, which takes precedence because callers look there first.
+ *
+ * <p>A label with no separator is returned unchanged, so this is safe to
+ * apply anywhere.
+ */
+fun bi(label: String, lang: Lang): String {
+    val sep = when {
+        label.contains(" / ") -> " / "
+        label.contains(" · ") -> " · "
+        else -> return label
+    }
+    val i = label.indexOf(sep)
+    val first = label.substring(0, i).trim()
+    val second = label.substring(i + sep.length).trim()
+    if (first.isEmpty() || second.isEmpty()) return label
+
+    // Which half is Tamil? Tamil script starts at U+0B80.
+    val firstIsTamil = first.any { it.code in 0x0B80..0x0BFF }
+    val tamil = if (firstIsTamil) first else second
+    val other = if (firstIsTamil) second else first
+
+    return when (lang) {
+        Lang.TA -> tamil
+        Lang.EN, Lang.HI -> other
     }
 }

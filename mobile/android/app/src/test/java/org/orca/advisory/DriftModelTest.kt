@@ -182,4 +182,46 @@ class DriftModelTest {
         assertEquals(2.47, DriftModel.DWL_SLOPE, 0.0)
         assertEquals(2.76, DriftModel.CWL_SLOPE, 0.0)
     }
+
+    // --- the hull setting actually changes the answer ---------------------
+
+    @Test
+    fun `a windier hull drifts further downwind`() {
+        // The gill-netter's published downwind slope is 3.72 against the
+        // general hull's 2.47. If the setting did not reach the model,
+        // these two would be identical and the setting would be theatre.
+        val general = DriftModel.forecast(
+            13.0, 80.3, 20.0, 0.0, 0.0, 0.0, 6.0, Settings.Hull.GENERAL,
+        )
+        val netter = DriftModel.forecast(
+            13.0, 80.3, 20.0, 0.0, 0.0, 0.0, 6.0, Settings.Hull.GILL_NETTER,
+        )
+        assertTrue(netter.distanceKm > general.distanceKm)
+    }
+
+    @Test
+    fun `the small-vessel row drifts less than the general one`() {
+        val general = DriftModel.forecast(13.0, 80.3, 20.0, 0.0, 0.0, 0.0, 6.0, Settings.Hull.GENERAL)
+        val small = DriftModel.forecast(13.0, 80.3, 20.0, 0.0, 0.0, 0.0, 6.0, Settings.Hull.SMALL)
+        assertTrue(small.distanceKm < general.distanceKm)
+    }
+
+    @Test
+    fun `omitting the hull keeps the documented default exactly`() {
+        // Every existing caller and test must be unaffected.
+        val implicit = DriftModel.forecast(13.0, 80.3, 20.0, 0.0, 1.0, 90.0, 6.0)
+        val explicit = DriftModel.forecast(
+            13.0, 80.3, 20.0, 0.0, 1.0, 90.0, 6.0, Settings.Hull.GENERAL,
+        )
+        assertEquals(explicit.distanceKm, implicit.distanceKm, 0.0)
+    }
+
+    @Test
+    fun `every offered hull carries the published coefficients, not invented ones`() {
+        // GENERAL must still be the CG-D-08-99 FISHING-VESSEL-1 row.
+        assertEquals(DriftModel.DWL_SLOPE, Settings.Hull.GENERAL.dwlSlope, 0.0)
+        assertEquals(DriftModel.CWL_SLOPE, Settings.Hull.GENERAL.cwlSlope, 0.0)
+        assertEquals(3.72, Settings.Hull.GILL_NETTER.dwlSlope, 0.0)
+        assertEquals(1.80, Settings.Hull.SMALL.dwlSlope, 0.0)
+    }
 }

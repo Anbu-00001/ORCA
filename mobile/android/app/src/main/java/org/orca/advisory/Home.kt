@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -125,7 +126,10 @@ private fun VerdictCard(
             Text(
                 str(S.TODAYS_VERDICT, lang),
                 color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            Spacer(Modifier.width(8.dp))
             Spacer(Modifier.weight(1f))
             AgeChip(advisory, refreshing)
         }
@@ -239,7 +243,11 @@ private fun Metric(icon: ImageVector, label: String, r: OrcaRepository.Reading?,
             if (r == null) "—" else Units.convertedValue(r.variable, r.value)?.first ?: trimNum(r.value),
             color = p.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold,
         )
-        Text(if (r == null) label else "$label · $unit", color = p.muted, fontSize = 11.sp)
+        Text(
+            if (r == null) label else "$label · $unit",
+            color = p.muted, fontSize = 11.sp,
+            maxLines = 2, textAlign = TextAlign.Center, lineHeight = 14.sp,
+        )
     }
 }
 
@@ -272,7 +280,12 @@ private fun AgeChip(advisory: OrcaRepository.Advisory?, refreshing: Boolean) {
     ) {
         Icon(Icons.Outlined.Schedule, null, tint = tone, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(5.dp))
-        Text(text, color = tone, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        // Never wraps. At large text "43 மணி" broke across three lines and
+        // the chip grew down over the heading beside it.
+        Text(
+            text, color = tone, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+            maxLines = 1, overflow = TextOverflow.Clip,
+        )
     }
 }
 
