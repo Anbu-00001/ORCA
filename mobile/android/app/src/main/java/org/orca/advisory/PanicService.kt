@@ -72,6 +72,9 @@ class PanicService : Service() {
         /** Abort a countdown that is already running. */
         const val ACTION_CANCEL = "org.orca.advisory.PANIC_CANCEL"
 
+        /** Switch the SOS light off from a notification action. */
+        const val ACTION_TORCH_OFF = "org.orca.advisory.TORCH_OFF"
+
         /** Raise the alarm now. Sent by PanicKeyService when the volume
          *  key has genuinely been held for five seconds. */
         const val ACTION_TRIGGER = "org.orca.advisory.PANIC_TRIGGER"
@@ -154,6 +157,14 @@ class PanicService : Service() {
             abortCountdown()
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_TORCH_OFF) {
+            // Reachable from the lock screen, which matters: the torch is
+            // started BY the alarm, so the crew is holding a phone they
+            // have not unlocked when they need to stop it.
+            TorchSos.stop(this)
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIF_ALARM)
+            return START_STICKY
         }
         if (intent?.action == ACTION_TRIGGER) {
             // The accessibility service measured a real five-second hold.
@@ -609,6 +620,17 @@ class PanicService : Service() {
             .setAutoCancel(false)
             .setContentIntent(openSosIntent())
             .setFullScreenIntent(openSosIntent(), true)
+            .addAction(
+                Notification.Action.Builder(
+                    null as android.graphics.drawable.Icon?,
+                    "TURN OFF LIGHT",
+                    PendingIntent.getService(
+                        this, 4,
+                        Intent(this, PanicService::class.java).setAction(ACTION_TORCH_OFF),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    ),
+                ).build(),
+            )
             .build()
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ALARM, n)
     }

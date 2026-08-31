@@ -344,6 +344,26 @@ fun SosScreen(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
 
+        // The light is on. Say so first and give one tap to stop it.
+        // This used to live inside the "message sent" card, so once that
+        // card was gone -- a restart, or arriving from anywhere else --
+        // there was no off switch on this screen at all. Keyed on the
+        // hardware state, so a torch left burning by a killed process is
+        // still stoppable here.
+        if (TorchSos.running || TorchSos.hardwareOn) {
+            Text(
+                bi("விளக்கை நிறுத்து · SOS LIGHT IS ON — TAP TO STOP", lang),
+                color = p.onAccent, fontSize = 16.sp, fontWeight = FontWeight.Black,
+                modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(p.caution)
+                    .clickable { TorchSos.stop(context) }
+                    .padding(vertical = 18.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(14.dp))
+        }
+
         PanicWatchCard()
 
         // --- an SOS is counting down ------------------------------------
@@ -522,20 +542,6 @@ fun SosScreen(
             }
             // The send starts the torch. Without this the crew has no way
             // to stop it from the screen that started it.
-            if (TorchSos.running) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    bi("விளக்கை நிறுத்து · SOS light is flashing — STOP IT", lang),
-                    color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(p.caution)
-                        .clickable { TorchSos.stop(context) }
-                        .padding(vertical = 16.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            }
-
             if (update != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(bi("புதிய இடம் அனுப்பப்பட்டது · A fresher position was sent after the first message.", lang),
