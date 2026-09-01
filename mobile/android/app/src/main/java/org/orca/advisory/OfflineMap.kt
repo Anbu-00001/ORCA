@@ -223,6 +223,12 @@ fun OfflineMap(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val grid = remember { Bathymetry.load(context) }
+    // Indexed into a rectangular lattice ONCE, not per frame: the cached
+    // soundings arrive as unordered parallel arrays, which is fine for
+    // drawing squares and useless for interpolating between them.
+    val lattice = remember(grid) {
+        grid?.let { ChartRaster.lattice(it.lat, it.lon, it.elevM, it.strideDeg) }
+    }
 
     // Everything the caller gave us, so an un-focused map frames it all.
     val all = remember(polygons, lines, markers) {
@@ -274,25 +280,52 @@ fun OfflineMap(
                 y = MapProjection.yFor(lat, centreLat, halfLat, size.height),
             )
 
-            drawRect(seaColor, size = size)
+            // Ground = UNSURVEYED, not sea. Anywhere the raster does not
+            // cover is water nobody measured, and it must look like it.
+            drawRect(ChartRaster.UNSURVEYED_COLOR, size = size)
 
-            // --- the seabed, as measured -------------------------------
-            if (grid != null) {
-                val cell = grid.strideDeg
-                val w = (cell / (halfLon * 2) * size.width).toFloat() + 1.2f
-                val h = (cell / (halfLat * 2) * size.height).toFloat() + 1.2f
-                for (i in grid.elevM.indices) {
-                    val la = grid.lat[i]
-                    val lo = grid.lon[i]
-                    if (!MapProjection.visible(la, lo, centreLat, centreLon, halfLat, halfLon, cell)) continue
-                    val c = when (MapProjection.band(grid.elevM[i])) {
-                        MapProjection.LAND -> landColor
-                        MapProjection.SHELF -> shelfColor
-                        MapProjection.COASTAL -> seaColor
-                        else -> Color(0xFF0A2938)        // off the shelf edge
-                    }
-                    val p = px(la, lo)
-                    drawRect(c, topLeft = Offset(p.x - w / 2, p.y - h / 2), size = Size(w, h))
+            // --- the seabed, interpolated ------------------------------
+            // Was: one hard-edged rectangle per sounding in one of four
+            // colours, which on a 7.4 km grid is a mosaic of squares and is
+            // why the chart read as a toy. Now the SAME soundings are
+            // bilinearly interpolated into a small raster and scaled up, so
+            // depth reads as the continuous field it actually is.
+            if (lattice != null) {
+                val raster = ChartRaster.render(
+                    lattice, centreLat, centreLon, halfLat, halfLon,
+                    (size.width / 2).toInt(), (size.height / 2).toInt(),
+                )
+                if (raster != null) {
+                    drawImage(
+                        image = raster,
+                        dstSize = androidx.compose.ui.unit.IntSize(
+                            size.width.toInt(), size.height.toInt(),
+                        ),
+                        filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
+                    )
+                }
+            }
+
+            // --- graticule ---------------------------------------------
+            // Ruled lat/lon lines with real degree-and-minute labels. This
+            // single addition does more for "is this a real chart" than any
+            // amount of colour work: a map without a graticule is a picture,
+            // and a map with one is a chart you can take a bearing off.
+            run {
+                val stepLat = ChartRaster.graticuleStep(halfLat * 2)
+                val stepLon = ChartRaster.graticuleStep(halfLon * 2)
+                val gridColor = Color(0x33FFFFFF)
+                var la = kotlin.math.ceil((centreLat - halfLat) / stepLat) * stepLat
+                while (la <= centreLat + halfLat) {
+                    val y = MapProjection.yFor(la, centreLat, halfLat, size.height)
+                    drawLine(gridColor, Offset(0f, y), Offset(size.width, y), 1f)
+                    la += stepLat
+                }
+                var lo = kotlin.math.ceil((centreLon - halfLon) / stepLon) * stepLon
+                while (lo <= centreLon + halfLon) {
+                    val x = MapProjection.xFor(lo, centreLon, halfLon, size.width)
+                    drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), 1f)
+                    lo += stepLon
                 }
             }
 

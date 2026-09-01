@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The ground the ORCA mark was designed on. Kept pure white rather
+         than the app's ivory hull colour, because a launcher icon sits on
+         an unknown wallpaper and the mark needs maximum separation from it. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>

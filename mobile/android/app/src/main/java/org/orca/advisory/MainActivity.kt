@@ -196,7 +196,7 @@ class MainActivity : ComponentActivity() {
 // reachable directly from home and nothing nests.
 // ---------------------------------------------------------------------
 
-enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT, MAP, SIGNAL, FENCE, SETTINGS }
+enum class Screen { HOME, VERDICT, FISH, BOUNDARY, SOS, ALERTS, ASK, WAVE, FLEET, STORM, DRIFT, MAP, SIGNAL, FENCE, SETTINGS, VOICE }
 
 @Composable
 fun OrcaApp(
@@ -219,6 +219,12 @@ fun OrcaApp(
     var screen by remember { mutableStateOf(if (openSos) Screen.SOS else Screen.HOME) }
     var advisory by remember { mutableStateOf<OrcaRepository.Advisory?>(null) }
     var selectedZone by remember { mutableStateOf<String?>(null) }
+
+    // The last thing the recogniser returned, kept after voiceResult is
+    // cleared. voiceResult is a one-shot signal -- it is nulled the moment
+    // it has been acted on -- so rendering the answer card from it would
+    // blank the card the instant it appeared.
+    var lastSpoken by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var refreshNote by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -239,7 +245,11 @@ fun OrcaApp(
             // Never swallowed, and never fatal: the stored or seeded
             // advisory stays on screen, labelled with its real age.
             Log.w("ORCA", "Refresh failed, using stored advisory: ${e.message}")
-            refreshNote = "No connection — showing what is stored on this phone."
+            // Ask the SYSTEM whether we are offline rather than inferring it
+            // from a failed request. Saying "no connection" on a phone with
+            // full bars teaches a crew to distrust the one indicator that
+            // has to be believed at sea.
+            refreshNote = Connectivity.refreshFailureNote(context, e.message)
         } finally {
             refreshing = false
         }
@@ -253,6 +263,15 @@ fun OrcaApp(
     // somewhere the crew did not ask for is worse than doing nothing.
     LaunchedEffect(voiceResult) {
         val spoken = voiceResult ?: return@LaunchedEffect
+        lastSpoken = spoken
+        // One of the five demo commands answers IN PLACE on the voice
+        // screen rather than navigating, so the crew can see WHICH command
+        // was understood. Anything else falls through to navigation below.
+        if (VoiceDemo.match(spoken) != null) {
+            screen = Screen.VOICE
+            onVoiceConsumed()
+            return@LaunchedEffect
+        }
         val zones = advisory?.zones?.map { it.zone } ?: emptyList()
         VoiceCommands.zoneFor(spoken, zones)?.let {
             selectedZone = it
@@ -357,7 +376,13 @@ fun OrcaApp(
                         Screen.BOUNDARY -> BoundaryScreen(repo, onEnsureLocation)
                         Screen.SOS -> SosScreen(advisory, selectedZone) { screen = Screen.SETTINGS }
                         Screen.ALERTS -> AlertsScreen(advisory, onSms)
-                        Screen.ASK -> AskScreen(onListen)
+                        Screen.ASK, Screen.VOICE -> VoiceScreen(
+                            advisory = advisory,
+                            selected = selectedZone,
+                            spoken = lastSpoken,
+                            onListen = onListen,
+                            onOpenSos = { screen = Screen.SOS },
+                        )
                         Screen.WAVE -> WaveScreen()
                         Screen.FLEET -> FleetScreen(advisory)
                         Screen.STORM -> StormScreen(advisory, onEnsureLocation)
@@ -487,7 +512,7 @@ private fun titleFor(s: Screen, lang: Lang) = when (s) {
     Screen.BOUNDARY -> str(S.T_BOUNDARY, lang)
     Screen.SOS -> str(S.NAV_SOS, lang)
     Screen.ALERTS -> str(S.T_WARN, lang)
-    Screen.ASK -> str(S.T_ASK, lang)
+    Screen.ASK, Screen.VOICE -> str(S.T_ASK, lang)
     Screen.WAVE -> str(S.T_WAVE, lang)
     Screen.FLEET -> str(S.T_FLEET, lang)
     Screen.STORM -> str(S.T_STORM, lang)

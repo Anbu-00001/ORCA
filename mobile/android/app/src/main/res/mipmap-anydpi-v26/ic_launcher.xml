@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ORCA's adaptive launcher icon.
+
+    The supplied logo already had a rounded square, a white ground and a
+    drop shadow baked into it. Handing that straight to Android would have
+    it masked a SECOND time by the launcher, giving double-rounded corners
+    with a grey shadow ring trapped inside them. So the navy artwork is
+    extracted onto its own transparent layer and the white is supplied here
+    as a real background layer instead.
+
+    The foreground art sits at 62% of the 108dp canvas, inside the 66dp
+    safe zone every launcher mask is guaranteed to leave visible, so it
+    survives circle, squircle and teardrop masks without clipping.
+
+    monochrome drives Android 13+ themed icons, where the system recolours
+    the silhouette to the user's wallpaper palette.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
+</adaptive-icon>

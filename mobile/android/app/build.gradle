@@ -13,8 +13,8 @@ android {
         minSdk 24          // Android 7.0 -- covers the mid-range Android
                            // phones ORCA's users actually own
         targetSdk 35
-        versionCode 7
-        versionName "7.0-power-sos"
+        versionCode 9
+        versionName "9.0-voice-live-data"
     }
 
     sourceSets {

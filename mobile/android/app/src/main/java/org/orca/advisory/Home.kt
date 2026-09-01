@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -79,6 +80,13 @@ fun HomeScreen(
     ) {
         Spacer(Modifier.height(4.dp))
 
+        // The SOS light is on. This sits ABOVE the verdict, because a torch
+        // flashing unnoticed is burning the battery the emergency needs and
+        // the crew must not have to go looking for the off switch. It is
+        // driven by the hardware state, so a light left on by a process
+        // that has since been killed is still stoppable from here.
+        TorchBanner()
+
         VerdictCard(advisory, zone, refreshing, refreshNote) { go(Screen.VERDICT) }
 
         SosBlock(onSos)
@@ -86,6 +94,53 @@ fun HomeScreen(
         QuickGrid(go)
 
         Spacer(Modifier.height(20.dp))
+    }
+}
+
+/**
+ * A single, unmissable control for the SOS light.
+ *
+ * <p>Shown on the home screen only while the light is actually on, so it
+ * costs nothing the rest of the time. Before this, the only way to stop the
+ * torch was a button nested inside the SOS screen's "message sent" card --
+ * which disappeared the moment that card did, leaving a flashing phone with
+ * no off switch anywhere the crew would think to look.
+ */
+@Composable
+private fun TorchBanner() {
+    val p = LocalPalette.current
+    val lang = LocalLang.current
+    val context = LocalContext.current
+    if (!TorchSos.running && !TorchSos.hardwareOn) return
+
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.caution)
+            .clickable { TorchSos.stop(context) }
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.FlashlightOn, null, tint = p.onAccent, modifier = Modifier.size(30.dp))
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(
+                bi("SOS விளக்கு எரிகிறது · SOS LIGHT IS ON", lang),
+                color = p.onAccent, fontSize = 16.sp, fontWeight = FontWeight.Black,
+                lineHeight = 21.sp,
+            )
+            Text(
+                bi("நிறுத்த தட்டவும் · Tap anywhere here to turn it off", lang),
+                color = p.onAccent, fontSize = 13.sp, lineHeight = 18.sp,
+            )
+        }
+        Text(
+            bi("அணை · OFF", lang),
+            color = p.caution, fontSize = 15.sp, fontWeight = FontWeight.Black,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(androidx.compose.ui.graphics.Color.White)
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+        )
     }
 }
 
@@ -147,7 +202,10 @@ private fun VerdictCard(
                     fontWeight = FontWeight.Black, lineHeight = 30.sp,
                 )
                 Text(
-                    zone?.let { "${it.zone} · ${it.action}" } ?: "No advisory stored",
+                    // actionWord(), not the raw action: "SAFER ALTERNATIVE" is the
+                    // wire value policy.py emits, not language for a crew.
+                    zone?.let { "${it.zone} · ${actionWord(it.action, lang)}" }
+                        ?: str(S.NO_ADVISORY, lang),
                     color = tint, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                 )
                 if (zone?.reason?.isNotEmpty() == true) {

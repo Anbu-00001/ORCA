@@ -35,3 +35,7 @@ mobile/android/**/*.iml
 # named person running QC -- that is open question 4 in that document, and
 # gitignoring this is NOT an answer to it.
 data/observations/
+
+# Documents & Presentation slides export
+*.pdf
+

@@ -69,7 +69,10 @@ fun VerdictScreen(
         ) {
             Text(actionWord(zone.action, lang), color = p.onAccent,
                 fontSize = 34.sp, fontWeight = FontWeight.Black, lineHeight = 42.sp)
-            Text(zone.action, color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(
+                actionWord(zone.action, lang),
+                color = p.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            )
             Spacer(Modifier.height(10.dp))
             Text(zone.zone, color = p.onAccent, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
             if (zone.alternative != null) {
@@ -587,7 +590,9 @@ fun AlertsScreen(advisory: OrcaRepository.Advisory?, onSms: (String, String) -> 
                 color = p.muted, fontSize = 15.sp, lineHeight = 22.sp)
         } else {
             risky.forEach { z ->
-                val text = "ORCA: ${z.zone} — ${z.action}. ${z.reason}"
+                // Sent to a crew who does not have ORCA, so it must read as
+                // English rather than as an enum value off the wire.
+                val text = "ORCA: ${z.zone} — ${actionWord(z.action, lang)}. ${z.reason}"
                 Column(
                     Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         .clip(RoundedCornerShape(6.dp)).background(p.panel)
@@ -951,6 +956,82 @@ fun PanicWatchCard() {
                 "and your position goes to every number in your list.",
             color = p.muted, fontSize = 12.sp, lineHeight = 18.sp,
         )
+        // --- is the watch actually running? ------------------------------
+        // THE MOST IMPORTANT CARD ON THIS SCREEN. Every "it does not work"
+        // report traced back to the process being dead: installing an APK
+        // force-stops the app, and Android never auto-restarts a
+        // force-stopped app -- not via START_STICKY, not via BOOT_COMPLETED.
+        // The watch was off and nothing said so, because the app looked
+        // completely normal the next time it was opened.
+        val health = remember(PanicStatus.armed) { PanicHealth.checks(context) }
+        val lastExit = remember { PanicHealth.lastExitReason(context) }
+        Spacer(Modifier.height(12.dp))
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .background(if (PanicStatus.armed) p.go.copy(alpha = 0.14f) else p.deny.copy(alpha = 0.16f))
+                .padding(14.dp),
+        ) {
+            Text(
+                if (PanicStatus.armed) {
+                    bi("✓ காவல் இயங்குகிறது · PANIC WATCH IS RUNNING", lang)
+                } else {
+                    bi("✗ காவல் நிற்கிறது · PANIC WATCH IS NOT RUNNING", lang)
+                },
+                color = if (PanicStatus.armed) p.go else p.deny,
+                fontSize = 16.sp, fontWeight = FontWeight.Black, lineHeight = 22.sp,
+            )
+            lastExit?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(it, color = p.ink, fontSize = 13.sp, lineHeight = 19.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            health.forEach { c ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Text(
+                        when (c.ok) { true -> "✓"; false -> "✗"; null -> "?" },
+                        color = when (c.ok) { true -> p.go; false -> p.deny; null -> p.caution },
+                        fontSize = 15.sp, fontWeight = FontWeight.Black,
+                        modifier = Modifier.width(24.dp),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(c.label, color = p.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        if (c.ok != true) {
+                            Text(c.detail, color = p.muted, fontSize = 12.sp, lineHeight = 17.sp)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    bi("பேட்டரி · FIX BATTERY", lang),
+                    color = p.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                        .clip(RoundedCornerShape(6.dp)).background(p.accent)
+                        .clickable { PanicHealth.requestBatteryExemption(context) }
+                        .padding(vertical = 13.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Text(
+                    bi("தானியங்கு · AUTO-LAUNCH", lang),
+                    color = p.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                        .clip(RoundedCornerShape(6.dp)).background(p.accent)
+                        .clickable { PanicHealth.openAutostartSettings(context) }
+                        .padding(vertical = 13.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "After installing or updating ORCA you MUST open the app once. Android " +
+                    "force-stops an app when it is installed, and a force-stopped app " +
+                    "cannot start anything by itself — not even after a reboot warning. " +
+                    "This is the single most common reason the SOS button does nothing.",
+                color = p.ink, fontSize = 12.sp, lineHeight = 18.sp,
+            )
+        }
+
         // --- the screen-off trigger --------------------------------------
         // Given top billing because it is the ONLY one that works with the
         // display asleep, which is the state a phone in a pocket is in.

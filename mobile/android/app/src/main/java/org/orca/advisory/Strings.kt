@@ -67,15 +67,20 @@ private val TABLE: Map<S, Triple<String, String, String>> = mapOf(
     S.IN_EMERGENCY to Triple("அவசரம் என்றால்", "IN AN EMERGENCY", "आपात स्थिति में"),
     S.HOLD_2S to Triple("2 விநாடி பிடி", "Hold 2 sec", "2 सेकंड दबाएँ"),
     S.HOLDING to Triple("பிடித்திரு…", "Holding…", "दबाए रखें…"),
+    // Corrected: the volume key does NOT work with the screen off. Android
+    // gives no app a volume key once the display sleeps, so the old wording
+    // ("even with the app closed") promised something that cannot happen and
+    // would have been believed at exactly the wrong moment. The power button
+    // is the trigger that survives a sleeping screen.
     S.SOS_HINT_1 to Triple(
-        "2 விநாடி அழுத்திப் பிடி. அல்லது ஒலி பொத்தானை 5 விநாடி — செயலி மூடியிருந்தாலும்.",
-        "Hold for 2 seconds. Or hold the volume key for 5 seconds — even with the app closed.",
-        "2 सेकंड दबाए रखें। या वॉल्यूम बटन 5 सेकंड दबाएँ — ऐप बंद होने पर भी।",
+        "2 விநாடி அழுத்திப் பிடி. அல்லது பவர் பொத்தானை 5 முறை — திரை அணைந்திருந்தாலும்.",
+        "Hold for 2 seconds. Or press the power button 5 times — works with the screen off.",
+        "2 सेकंड दबाए रखें। या पावर बटन 5 बार दबाएँ — स्क्रीन बंद होने पर भी।",
     ),
     S.SOS_HINT_2 to Triple(
-        "ஒலி பொத்தான் காவல் இயக்கத்தில் இருக்க வேண்டும்.",
-        "The volume-key watch must be switched on first.",
-        "पहले वॉल्यूम-बटन निगरानी चालू करनी होगी।",
+        "பாக்கெட்டில் இருந்தாலும் வேலை செய்யும். 10 விநாடிக்குள் நிறுத்தலாம்.",
+        "Works from your pocket. You get 10 seconds to cancel.",
+        "जेब से भी काम करता है। रद्द करने के लिए 10 सेकंड मिलते हैं।",
     ),
     S.EVERYTHING_ELSE to Triple("மற்றவை", "EVERYTHING ELSE", "अन्य सब"),
 
@@ -109,7 +114,7 @@ private val TABLE: Map<S, Triple<String, String, String>> = mapOf(
     // sends a boat out in a sea that ORCA said to stay out of.
     S.ACT_GO to Triple("போகலாம்", "You may go", "जा सकते हैं"),
     S.ACT_NO to Triple("போக வேண்டாம்", "Do not go", "मत जाइए"),
-    S.ACT_ALT to Triple("வேறு இடம்", "Go elsewhere", "दूसरी जगह जाएँ"),
+    S.ACT_ALT to Triple("வேறு இடம்", "Better to avoid", "दूसरी जगह जाएँ"),
     S.ACT_UNKNOWN to Triple("தெரியவில்லை", "Cannot assess", "आकलन नहीं हो सका"),
 )
 
